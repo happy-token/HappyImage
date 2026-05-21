@@ -15,6 +15,7 @@ import sessionRoute from './routes/session'
 import accountsRoute from './routes/accounts'
 import projectsRoute from './routes/projects'
 import uploadRoute from './routes/upload'
+import skillsRootRoute from './routes/skills-root'
 import { readSettings, PROJECT_ROOT } from '@happyimage/core'
 
 const app = new Hono()
@@ -31,6 +32,7 @@ app.route('/api/accounts', accountsRoute)
 app.route('/api/projects', projectsRoute)
 app.route('/api/upload', uploadRoute)
 app.route('/api/settings', settingsRoute)
+app.route('/api/skills-root', skillsRootRoute)
 app.route('/api/export', exportRoute)
 app.get('/api/health', (c) => c.json({ status: 'ok' }))
 app.get('/api/image', async (c) => {

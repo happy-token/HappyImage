@@ -74,8 +74,8 @@ api.get('/dependencies', (c) => {
       description: skillsRoot.exists
         ? `当前技能目录：${skillsRoot.root}${skillsRoot.missing.length ? `，缺少 ${skillsRoot.missing.length} 个核心技能。` : ''}`
         : `未找到外部 baoyu-skills 目录。当前检查路径：${skillsRoot.root}`,
-      installLabel: '安装 baoyu-skills',
-      installUrl: 'https://github.com/JimLiu/baoyu-skills#安装',
+      installLabel: '安装或指定目录',
+      installUrl: '/settings',
     },
     {
       id: 'skill-runner',

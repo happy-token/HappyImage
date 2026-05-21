@@ -18,6 +18,9 @@ interface DependencyResponse {
 
 function ActionLink({ check }: { check: DependencyCheck }) {
   const className = 'inline-flex items-center justify-center rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1.5 text-xs font-semibold text-zinc-200 no-underline transition hover:border-indigo-500 hover:text-white'
+  if (check.id === 'baoyu-skills') {
+    return <Link to="/settings" className={className}>安装或指定目录</Link>
+  }
   if (check.installUrl.startsWith('/')) {
     return <Link to={check.installUrl} className={className}>{check.installLabel}</Link>
   }

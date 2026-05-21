@@ -96,6 +96,21 @@ describe('Commands API', () => {
   })
 })
 
+describe('Skills Root API', () => {
+  test('POST /api/skills-root/use saves an existing skills root', async () => {
+    const res = await fetch(`${BASE}/api/skills-root/use`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ root: skillsRoot }),
+    })
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data.success).toBe(true)
+    expect(data.skillsRoot.root).toBe(skillsRoot)
+    expect(data.skillsRoot.ready).toBe(true)
+  })
+})
+
 describe('Upload API', () => {
   test('POST /api/upload/source accepts markdown files', async () => {
     const form = new FormData()

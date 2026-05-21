@@ -408,13 +408,25 @@ export default function SettingsPage() {
   const [providerDialog, setProviderDialog] = useState<ProviderDialog | null>(null)
   const [providerDraft, setProviderDraft] = useState<Record<string, string>>({})
   const [providerStatus, setProviderStatus] = useState<string | null>(null)
+  const [skillsRootStatus, setSkillsRootStatus] = useState<string | null>(null)
+  const [isInstallingSkills, setIsInstallingSkills] = useState(false)
   const groupsByTitle = useMemo(() => Object.fromEntries(groups.map(group => [group.title, group])), [])
 
-  useEffect(() => {
-    fetch('/api/dependencies')
+  const refreshDependencies = () => {
+    return fetch('/api/dependencies')
       .then(r => r.json())
-      .then(setDependencies)
-      .catch(() => setDependencies(null))
+      .then(data => {
+        setDependencies(data)
+        return data
+      })
+      .catch(() => {
+        setDependencies(null)
+        return null
+      })
+  }
+
+  useEffect(() => {
+    refreshDependencies()
 
     fetch('/api/settings')
       .then(r => r.json())
@@ -474,13 +486,55 @@ export default function SettingsPage() {
       if (key === 'THEME_COLOR') applyAccent(value)
       if (key === 'THEME_MODE') applyTheme(value)
       if (key === 'BAOYU_SKILLS_ROOT') {
-        fetch('/api/dependencies')
-          .then(r => r.json())
-          .then(setDependencies)
-          .catch(() => setDependencies(null))
+        refreshDependencies()
       }
       window.setTimeout(() => setSaved(null), 1800)
     }
+  }
+
+  const useSkillsRoot = async (root?: string) => {
+    const value = root || drafts.BAOYU_SKILLS_ROOT || '~/.baoyu-skills'
+    setSkillsRootStatus('正在保存技能目录...')
+    const res = await fetch('/api/skills-root/use', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ root: value }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      setSkillsRootStatus(data.error || '保存技能目录失败')
+      return
+    }
+    setSettings(data.settings)
+    setDrafts(Object.fromEntries(
+      Object.entries(data.settings).map(([key, value]) => [key, isMasked(String(value)) ? '' : String(value)]),
+    ))
+    setDependencies(prev => prev ? { ...prev, skillsRoot: data.skillsRoot } : prev)
+    await refreshDependencies()
+    setSkillsRootStatus(`已使用技能目录：${data.skillsRoot.root}`)
+  }
+
+  const installSkillsRoot = async () => {
+    const root = drafts.BAOYU_SKILLS_ROOT || '~/.baoyu-skills'
+    setIsInstallingSkills(true)
+    setSkillsRootStatus(`正在安装 baoyu-skills 到 ${root}...`)
+    const res = await fetch('/api/skills-root/install', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ root }),
+    })
+    const data = await res.json()
+    setIsInstallingSkills(false)
+    if (!res.ok) {
+      setSkillsRootStatus(data.error || '安装失败')
+      return
+    }
+    setSettings(data.settings)
+    setDrafts(Object.fromEntries(
+      Object.entries(data.settings).map(([key, value]) => [key, isMasked(String(value)) ? '' : String(value)]),
+    ))
+    await refreshDependencies()
+    setSkillsRootStatus(`安装完成：${data.root}`)
   }
 
   const saveMany = async (values: Record<string, string>) => {
@@ -819,9 +873,32 @@ export default function SettingsPage() {
               placeholder="~/.baoyu-skills"
               onChange={e => setDrafts(prev => ({ ...prev, BAOYU_SKILLS_ROOT: e.target.value }))}
             />
-            <Button size="sm" onClick={() => save('BAOYU_SKILLS_ROOT')}>{saved === 'BAOYU_SKILLS_ROOT' ? '已保存' : '保存'}</Button>
+            <Button size="sm" onClick={() => useSkillsRoot()}>{saved === 'BAOYU_SKILLS_ROOT' ? '已保存' : '使用目录'}</Button>
           </div>
         </label>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button size="sm" variant="secondary" onClick={() => {
+            setDrafts(prev => ({ ...prev, BAOYU_SKILLS_ROOT: '~/.baoyu-skills' }))
+            useSkillsRoot('~/.baoyu-skills')
+          }}>
+            使用默认目录
+          </Button>
+          <Button size="sm" onClick={installSkillsRoot} disabled={isInstallingSkills}>
+            {isInstallingSkills ? '安装中...' : '安装到当前目录'}
+          </Button>
+          <a
+            href="https://github.com/JimLiu/baoyu-skills"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center justify-center rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-zinc-200 no-underline transition hover:border-indigo-500 hover:text-white"
+          >
+            查看安装说明
+          </a>
+        </div>
+        <p className="mt-2 text-xs leading-relaxed text-zinc-500">
+          如果你已经安装在其他位置，请把包含 baoyu-* 技能目录的路径填到上面；如果还没安装，可以直接安装到默认目录 ~/.baoyu-skills。
+        </p>
+        {skillsRootStatus && <div className="studio-project-path mt-3">{skillsRootStatus}</div>}
       </div>
       <div className="mt-4 grid gap-3 lg:grid-cols-2">
         {(dependencies?.checks || []).map(check => (
