@@ -1,12 +1,38 @@
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
-import { streamGenerate, generatePlan, type ProjectPlan, getSkill, resolveSourceContext } from '@happyimage/core'
+import { streamGenerate, generatePlan, type ProjectPlan, getSkill, resolveSourceContext, parseSlashCommand, resolveSkillDir } from '@happyimage/core'
 
 const generate = new Hono()
 
+type GenerateBody = { skillId?: string; selections?: Record<string, string>; content?: string; sourceMode?: string; sourceRef?: string; prebuiltPlan?: ProjectPlan }
+
+function normalizeGenerationRequest(body: GenerateBody): GenerateBody {
+  const parsed = parseSlashCommand(body.content || '')
+  if (!parsed) return body
+  if (!parsed.command) throw new Error(`Unknown slash command: ${parsed.commandId}`)
+  if (!resolveSkillDir(parsed.command.requiredSkill)) {
+    throw new Error(`Required skill not found: ${parsed.command.requiredSkill}. Configure BAOYU_SKILLS_ROOT or install baoyu-skills to ~/.baoyu-skills.`)
+  }
+  if (parsed.command.category !== 'content' || !parsed.command.skillId) {
+    throw new Error(`${parsed.commandId} is registered, but this chat flow currently supports content generation commands only.`)
+  }
+
+  const [firstArg, ...restArgs] = parsed.args
+  const next: GenerateBody = { ...body, skillId: parsed.command.skillId }
+  if (firstArg && /\.(md|markdown|txt)$/i.test(firstArg) && !body.sourceRef) {
+    next.sourceMode = 'file'
+    next.sourceRef = firstArg
+    next.content = restArgs.join(' ')
+  } else {
+    next.content = parsed.rest
+  }
+  return next
+}
+
 generate.post('/plan', async (c) => {
-  let body: { skillId?: string; selections?: Record<string, string>; content?: string; sourceMode?: string; sourceRef?: string }
+  let body: GenerateBody
   try { body = await c.req.json() } catch { return c.json({ error: 'Invalid JSON' }, 400) }
+  try { body = normalizeGenerationRequest(body) } catch (err: any) { return c.json({ error: err.message || String(err) }, 400) }
 
   const { skillId, selections, content } = body
   if (!skillId) return c.json({ error: 'skillId required' }, 400)
@@ -35,12 +61,13 @@ generate.post('/plan', async (c) => {
 })
 
 generate.post('/', async (c) => {
-  let body: { skillId?: string; selections?: Record<string, string>; content?: string; sourceMode?: string; sourceRef?: string; prebuiltPlan?: ProjectPlan }
+  let body: GenerateBody
   try {
     body = await c.req.json()
   } catch {
     return c.json({ error: 'Invalid JSON' }, 400)
   }
+  try { body = normalizeGenerationRequest(body) } catch (err: any) { return c.json({ error: err.message || String(err) }, 400) }
 
   const { skillId, selections, content } = body
   if (!skillId) return c.json({ error: 'skillId required' }, 400)

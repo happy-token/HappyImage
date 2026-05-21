@@ -60,6 +60,26 @@ function defaultImageCount(skill: SkillDefinition) {
   return 4
 }
 
+function parsePublishSlash(input: string) {
+  const match = input.trim().match(/^\/baoyu-post-to-(wechat|weibo|x)(?:\s+(.+))?$/)
+  if (!match) return null
+  return { platform: match[1], packagePath: (match[2] || '').trim() }
+}
+
+function parseContentSlashSkill(input: string) {
+  const command = input.trim().split(/\s+/, 1)[0]?.replace(/^\//, '')
+  const map: Record<string, string> = {
+    'baoyu-image-cards': 'image-cards',
+    'baoyu-cover-image': 'cover-image',
+    'baoyu-infographic': 'infographic',
+    'baoyu-article-illustrator': 'article-illustrator',
+    'baoyu-comic': 'comic',
+    'baoyu-slide-deck': 'slide-deck',
+    'baoyu-diagram': 'diagram',
+  }
+  return command ? map[command] : undefined
+}
+
 export default function StudioPage() {
   const { id: urlProjectId } = useParams<{ id?: string }>()
   const navigate = useNavigate()
@@ -130,6 +150,7 @@ export default function StudioPage() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [chatInput, setChatInput] = useState('')
   const [pendingGenerationContent, setPendingGenerationContent] = useState('')
+  const [pendingGenerationSkillId, setPendingGenerationSkillId] = useState(skill.id)
 
   // Generation stream hook (fresh creation)
   const sse = useSSE()
@@ -306,11 +327,18 @@ export default function StudioPage() {
   
   const handleStartGeneration = async () => {
     const query = chatInput.trim()
+    const publishCommand = parsePublishSlash(query)
+    if (publishCommand) {
+      await runPublishSlash(publishCommand.platform, publishCommand.packagePath)
+      return
+    }
     const hasSource = sourceMode !== 'text' && Boolean(sourceRef.trim())
     if (!query && !hasSource) return
     const generationContent = query || ''
+    const activeSkillId = parseContentSlashSkill(query) || skill.id
     setChatInput('')
     setPendingGenerationContent(generationContent)
+    setPendingGenerationSkillId(activeSkillId)
     setDisabledPlanPrompts(new Set())
 
     appendMessage('user', query || `使用${uploadedSourceName ? `上传文件 ${uploadedSourceName}` : '已选择的内容源'}生成图片`)
@@ -318,7 +346,7 @@ export default function StudioPage() {
 
     if (skipPlanConfirmation) {
       appendMessage('assistant', 'Launching generation process directly...', 'runner')
-      sse.start(skill.id, generationContent, payload, {
+      sse.start(activeSkillId, generationContent, payload, {
         onDone: (doneImages) => {
           appendMessage('assistant', `Generation completed! Created ${doneImages.length} images.`)
         },
@@ -337,7 +365,7 @@ export default function StudioPage() {
       const res = await fetch('/api/generate/plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ skillId: skill.id, content: generationContent, selections: payload, sourceMode, sourceRef }),
+        body: JSON.stringify({ skillId: activeSkillId, content: generationContent, selections: payload, sourceMode, sourceRef }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
@@ -370,7 +398,7 @@ export default function StudioPage() {
     // Add runner message bubble
     appendMessage('assistant', 'Launching generation process...', 'runner')
 
-    sse.start(skill.id, content, payload, {
+    sse.start(pendingGenerationSkillId || skill.id, content, payload, {
       onDone: (doneImages) => {
         appendMessage('assistant', `Generation completed! Created ${doneImages.length} images.`)
       },
@@ -381,12 +409,14 @@ export default function StudioPage() {
       }
     }, { sourceMode, sourceRef, prebuiltPlan: adjustedPlan as unknown as Record<string, unknown> })
     setPendingGenerationContent('')
+    setPendingGenerationSkillId(skill.id)
   }
 
   const cancelGeneratePlan = () => {
     setChatMessages(prev => prev.filter(msg => msg.id !== planningMsgId))
     setPlanningMsgId(null)
     setPendingGenerationContent('')
+    setPendingGenerationSkillId(skill.id)
     setDisabledPlanPrompts(new Set())
   }
 
@@ -394,6 +424,11 @@ export default function StudioPage() {
   const handleSendProjectEdit = () => {
     const query = chatInput.trim()
     if (!query || projectChat.isStreaming) return
+    const publishCommand = parsePublishSlash(query)
+    if (publishCommand) {
+      runPublishSlash(publishCommand.platform, publishCommand.packagePath)
+      return
+    }
     setChatInput('')
 
     appendMessage('user', query)
@@ -432,6 +467,29 @@ export default function StudioPage() {
   const canSubmit = projectData
     ? Boolean(chatInput.trim()) && !projectChat.isStreaming
     : (Boolean(chatInput.trim()) || (sourceMode !== 'text' && Boolean(sourceRef.trim()))) && !sse.isStreaming
+
+  const runPublishSlash = async (targetPlatform: string, explicitPackagePath = '') => {
+    const packagePath = explicitPackagePath || packageResult?.packagePath || ''
+    setChatInput('')
+    appendMessage('user', explicitPackagePath ? `/baoyu-post-to-${targetPlatform} ${explicitPackagePath}` : `/baoyu-post-to-${targetPlatform}`)
+    if (!packagePath) {
+      appendMessage('system', 'Publishing slash command needs a prepared package path. Run Asset Pack first, or pass a package path after the command.')
+      return
+    }
+    appendMessage('assistant', `Starting ${targetPlatform} publishing flow...`)
+    try {
+      const res = await fetch('/api/publish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ platform: targetPlatform, packagePath, accountAlias: publishingAccount }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
+      appendMessage('assistant', data.message || `${targetPlatform} publishing flow started.`)
+    } catch (err: any) {
+      appendMessage('system', err.message || 'Publishing command failed')
+    }
+  }
 
   const sourceInputHint = sourceMode === 'github'
     ? 'https://github.com/owner/repo'

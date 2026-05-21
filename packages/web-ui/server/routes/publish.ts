@@ -35,6 +35,14 @@ function platformProfile(platform: string, settings: Record<string, string>) {
   return value ? resolve(expandHome(value)) : ''
 }
 
+function requiredSkillDir(skillId: string) {
+  const skillDir = resolveSkillDir(skillId)
+  if (!skillDir) {
+    throw new Error(`Required skill not found: baoyu-${skillId}. Configure BAOYU_SKILLS_ROOT or install baoyu-skills to ~/.baoyu-skills.`)
+  }
+  return skillDir
+}
+
 function buildCommand(platform: string, packagePath: string, settings: Record<string, string>, accountAlias?: string) {
   if (platform === 'x') {
     const postPath = join(packagePath, 'x-post.md')
@@ -43,7 +51,7 @@ function buildCommand(platform: string, packagePath: string, settings: Record<st
     const profile = platformProfile(platform, settings)
     const args = [text, ...images.flatMap(path => ['--image', path])]
     if (profile) args.push('--profile', profile)
-    const skillDir = resolveSkillDir('post-to-x') || join(PROJECT_ROOT, 'skills/baoyu-post-to-x')
+    const skillDir = requiredSkillDir('post-to-x')
     return {
       script: join(skillDir, 'scripts/x-browser.ts'),
       args,
@@ -57,7 +65,7 @@ function buildCommand(platform: string, packagePath: string, settings: Record<st
     const profile = platformProfile(platform, settings)
     const args = [text, ...images.flatMap(path => ['--image', path])]
     if (profile) args.push('--profile', profile)
-    const skillDir = resolveSkillDir('post-to-weibo') || join(PROJECT_ROOT, 'skills/baoyu-post-to-weibo')
+    const skillDir = requiredSkillDir('post-to-weibo')
     return {
       script: join(skillDir, 'scripts/weibo-post.ts'),
       args,
@@ -69,7 +77,7 @@ function buildCommand(platform: string, packagePath: string, settings: Record<st
     const imagesDir = join(packagePath, 'imgs')
     const args = ['--markdown', markdownPath, '--images', imagesDir]
     if (accountAlias && accountAlias !== 'default') args.push('--account', accountAlias)
-    const skillDir = resolveSkillDir('post-to-wechat') || join(PROJECT_ROOT, 'skills/baoyu-post-to-wechat')
+    const skillDir = requiredSkillDir('post-to-wechat')
     return {
       script: join(skillDir, 'scripts/wechat-browser.ts'),
       args,
@@ -94,13 +102,21 @@ publishRoute.get('/probe', (c) => {
     if (['wechat', 'weibo', 'x'].includes(plat)) {
       const skillMap: Record<string, string> = { wechat: 'post-to-wechat', weibo: 'post-to-weibo', x: 'post-to-x' }
       const scriptFileMap: Record<string, string> = { wechat: 'wechat-browser.ts', weibo: 'weibo-post.ts', x: 'x-browser.ts' }
-      const skillDir = resolveSkillDir(skillMap[plat]) || join(PROJECT_ROOT, 'skills', `baoyu-${skillMap[plat]}`)
+      const skillDir = resolveSkillDir(skillMap[plat])
+      if (!skillDir) {
+        probeResults[plat] = { available: false, reason: `Post skill not found: baoyu-${skillMap[plat]}` }
+        continue
+      }
       const script = join(skillDir, 'scripts', scriptFileMap[plat])
       scriptPath = script
       available = existsSync(script)
       reason = available ? 'available' : `Post skill script not found at ${script}`
     } else if (plat === 'xiaohongshu') {
-      const skillDir = resolveSkillDir('post-to-xiaohongshu') || join(PROJECT_ROOT, 'skills', 'baoyu-post-to-xiaohongshu')
+      const skillDir = resolveSkillDir('post-to-xiaohongshu')
+      if (!skillDir) {
+        probeResults[plat] = { available: false, reason: 'Xiaohongshu publish skill not installed. Only material packaging is available.' }
+        continue
+      }
       const xhsScript = join(skillDir, 'scripts', 'xhs-browser.ts')
       scriptPath = xhsScript
       available = existsSync(xhsScript)
@@ -134,7 +150,13 @@ publishRoute.post('/', async (c) => {
 
   const settings = readSettings()
   const accountAlias = body.accountAlias ? String(body.accountAlias).replace(/[^a-zA-Z0-9_-]/g, '') : ''
-  const { script, args } = buildCommand(platform, packagePath, settings, accountAlias)
+  let command: { script: string; args: string[] }
+  try {
+    command = buildCommand(platform, packagePath, settings, accountAlias)
+  } catch (err: any) {
+    return c.json({ error: err.message || String(err) }, 500)
+  }
+  const { script, args } = command
   if (!existsSync(script)) return c.json({ error: `Publish script not found: ${script}` }, 500)
 
   const logsDir = join(root, '.happyimage-logs')

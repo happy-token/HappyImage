@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'fs'
 import fs from 'node:fs'
 import { tmpdir } from 'os'
-import { basename, join, relative, resolve } from 'path'
+import { basename, isAbsolute, join, relative, resolve } from 'path'
 import { spawnSync } from 'child_process'
 import { PROJECT_ROOT } from './settings.js'
 
@@ -113,14 +113,16 @@ export function resolveSourceContext(input: SourceInput): string {
   if (!ref || mode === 'text') return ''
 
   if (mode === 'local') {
-    const path = resolve(ref.replace('~', process.env.HOME || ''))
+    const expanded = ref.replace('~', process.env.HOME || '')
+    const path = isAbsolute(expanded) ? resolve(expanded) : resolve(PROJECT_ROOT, expanded)
     if (!isInside(WORKSPACE_ROOT, path)) throw new Error(`Project path must be inside ${WORKSPACE_ROOT}`)
     if (!existsSync(path) || !statSync(path).isDirectory()) throw new Error(`Project path not found: ${path}`)
     return summarizeProject(path, basename(path))
   }
 
   if (mode === 'file') {
-    const path = resolve(ref.replace('~', process.env.HOME || ''))
+    const expanded = ref.replace('~', process.env.HOME || '')
+    const path = isAbsolute(expanded) ? resolve(expanded) : resolve(PROJECT_ROOT, expanded)
     const allowed = isInside(WORKSPACE_ROOT, path) || isInside(UPLOAD_ROOT, path)
     if (!allowed) throw new Error(`Source file must be inside ${WORKSPACE_ROOT} or ${UPLOAD_ROOT}`)
     if (!existsSync(path) || !statSync(path).isFile()) throw new Error(`Source file not found: ${path}`)

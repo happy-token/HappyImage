@@ -4,44 +4,7 @@ import { resolve, join, basename } from 'path'
 import { spawn, type ChildProcess } from 'child_process'
 import { readApiKey, readBaseUrl, readModel, readSettings, PROJECT_ROOT } from './settings.js'
 import { getPreferenceInfo } from './preferences.js'
-
-export function resolveSkillDir(skillId: string): string | null {
-  const settings = readSettings()
-  const home = process.env.HOME || '/Users/forever'
-  const customRoot = settings.BAOYU_SKILLS_ROOT || process.env.BAOYU_SKILLS_ROOT || ''
-
-  const lookupDirs: string[] = []
-
-  // 1. Working Dir
-  lookupDirs.push(join(process.cwd(), 'skills'))
-
-  // 2. BAOYU_SKILLS_ROOT environment setting
-  if (customRoot) {
-    lookupDirs.push(resolve(customRoot.replace('~', home)))
-  }
-
-  // 3. User level directory (~/.baoyu-skills)
-  lookupDirs.push(join(home, '.baoyu-skills'))
-
-  // 4. Fallback (Workspace level)
-  lookupDirs.push(join(PROJECT_ROOT, 'skills'))
-
-  const nameCandidates = [
-    `baoyu-${skillId}`,
-    skillId,
-  ]
-
-  for (const baseDir of lookupDirs) {
-    for (const name of nameCandidates) {
-      const p = join(baseDir, name)
-      if (existsSync(p) && statSync(p).isDirectory()) {
-        return p
-      }
-    }
-  }
-
-  return null
-}
+import { resolveSkillDir } from './skills-root.js'
 
 function readSkillMd(skillId: string): string | null {
   const skillDir = resolveSkillDir(skillId)

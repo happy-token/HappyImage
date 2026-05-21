@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { existsSync, readdirSync, statSync } from 'fs'
 import { join, resolve } from 'path'
 import { spawnSync } from 'child_process'
-import { skills, getSkill, readSettings, PROJECT_ROOT } from '@happyimage/core'
+import { skills, getSkill, readSettings, resolveSkillsRoot, CORE_COMMANDS, parseSlashCommand } from '@happyimage/core'
 
 const api = new Hono()
 
@@ -59,26 +59,21 @@ function hasAnyImageBackend(settings: Record<string, string>) {
 }
 
 function hasBaoyuSkills() {
-  const skillsDir = resolve(PROJECT_ROOT, 'skills')
-  const required = [
-    'baoyu-image-cards',
-    'baoyu-imagine',
-    'baoyu-post-to-wechat',
-    'baoyu-post-to-weibo',
-    'baoyu-post-to-x',
-  ]
-  return existsSync(skillsDir) && required.every(name => existsSync(join(skillsDir, name, 'SKILL.md')))
+  return resolveSkillsRoot().ready
 }
 
 api.get('/dependencies', (c) => {
   const settings = readSettings()
+  const skillsRoot = resolveSkillsRoot()
   const checks = [
     {
       id: 'baoyu-skills',
       label: 'baoyu-skills',
       ok: hasBaoyuSkills(),
       required: true,
-      description: 'HappyImage 的生成能力来自 baoyu-skills。未安装时，请先安装完整技能集。',
+      description: skillsRoot.exists
+        ? `当前技能目录：${skillsRoot.root}${skillsRoot.missing.length ? `，缺少 ${skillsRoot.missing.length} 个核心技能。` : ''}`
+        : `未找到外部 baoyu-skills 目录。当前检查路径：${skillsRoot.root}`,
       installLabel: '安装 baoyu-skills',
       installUrl: 'https://github.com/JimLiu/baoyu-skills#安装',
     },
@@ -139,8 +134,22 @@ api.get('/dependencies', (c) => {
   ]
   return c.json({
     ok: checks.filter(check => check.required).every(check => check.ok),
+    skillsRoot,
     checks,
   })
+})
+
+api.get('/commands', (c) => {
+  return c.json(CORE_COMMANDS)
+})
+
+api.post('/commands/parse', async (c) => {
+  let body: { input?: string }
+  try { body = await c.req.json() } catch { return c.json({ error: 'Invalid JSON' }, 400) }
+  const parsed = parseSlashCommand(body.input || '')
+  if (!parsed) return c.json({ error: 'slash command required' }, 400)
+  if (!parsed.command) return c.json({ error: `Unknown command: ${parsed.commandId}`, parsed }, 404)
+  return c.json(parsed)
 })
 
 api.get('/skills', (c) => {

@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'fs'
 import { join, resolve, dirname, basename } from 'path'
 import { spawn, spawnSync, type ChildProcess } from 'child_process'
 import { fileURLToPath } from 'url'
-import { readSettings, PROJECT_ROOT } from '@happyimage/core'
+import { readSettings, PROJECT_ROOT, resolveSkillsRoot } from '@happyimage/core'
 
 // Resolve @happyimage/web root directory
 const webUiEntryFile = fileURLToPath(import.meta.resolve('@happyimage/web'))
@@ -116,14 +116,22 @@ async function desktop() {
 
 function doctor() {
   const settings = readSettings()
+  const skillsRoot = resolveSkillsRoot()
   const checks: Array<[string, boolean, string]> = []
   checks.push(['Bun runtime', commandExists('bun'), 'Install from https://bun.sh'])
   checks.push(['Git', commandExists('git'), 'Required for GitHub URL project context'])
   checks.push(['Chrome', Boolean(chromeCommand()), 'Required for desktop mode and WeChat/Weibo/X publishing'])
   checks.push(['Built Web UI', existsSync(resolve(webUiRoot, 'dist', 'index.html')), 'Run happyimage build'])
-  checks.push(['Skills directory', existsSync(resolve(PROJECT_ROOT, 'skills')), 'Run from the baoyu-skills workspace or configure skills dir later'])
+  checks.push(['baoyu-skills root', skillsRoot.ready, skillsRoot.exists ? `Missing core skills: ${skillsRoot.missing.join(', ')}` : `Set BAOYU_SKILLS_ROOT or install skills to ${skillsRoot.root}`])
   checks.push(['ANTHROPIC key/token', Boolean(settings.ANTHROPIC_API_KEY || settings.ANTHROPIC_AUTH_TOKEN || process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN), 'Can also be configured in Settings UI'])
-  checks.push(['Image backend key', Boolean(settings.OPENAI_API_KEY || settings.GOOGLE_API_KEY || settings.DASHSCOPE_API_KEY || settings.REPLICATE_API_TOKEN || settings.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY || process.env.GOOGLE_API_KEY || process.env.DASHSCOPE_API_KEY || process.env.REPLICATE_API_TOKEN || process.env.OPENROUTER_API_KEY), 'Can also be configured in Settings UI'])
+  checks.push(['Image backend key', Boolean(
+    settings.OPENAI_API_KEY || settings.GOOGLE_API_KEY || settings.DASHSCOPE_API_KEY ||
+    settings.REPLICATE_API_TOKEN || settings.OPENROUTER_API_KEY || settings.ZAI_API_KEY ||
+    settings.MINIMAX_API_KEY || settings.ARK_API_KEY || (settings.JIMENG_ACCESS_KEY_ID && settings.JIMENG_SECRET_ACCESS_KEY) ||
+    process.env.OPENAI_API_KEY || process.env.GOOGLE_API_KEY || process.env.DASHSCOPE_API_KEY ||
+    process.env.REPLICATE_API_TOKEN || process.env.OPENROUTER_API_KEY || process.env.ZAI_API_KEY ||
+    process.env.MINIMAX_API_KEY || process.env.ARK_API_KEY || (process.env.JIMENG_ACCESS_KEY_ID && process.env.JIMENG_SECRET_ACCESS_KEY)
+  ), 'Can also be configured in Settings UI'])
 
   let failed = 0
   for (const [name, ok, hint] of checks) {
@@ -169,8 +177,11 @@ function init() {
       '# DASHSCOPE_API_KEY=',
       '# OPENROUTER_API_KEY=',
       '# REPLICATE_API_TOKEN=',
+      '# ZAI_API_KEY=',
+      '# MINIMAX_API_KEY=',
+      '# ARK_API_KEY=',
       '# AZURE_OPENAI_API_KEY=',
-      '# AZURE_OPENAI_ENDPOINT=',
+      '# AZURE_OPENAI_BASE_URL=',
       '',
       '# Output',
       `OUTPUT_DIR=~/output/happyimage`,
@@ -184,7 +195,8 @@ function init() {
       '# BAOYU_CHROME_PROFILE_DIR=',
       '',
       '# Skills lookup (optional)',
-      '# BAOYU_SKILLS_ROOT=',
+      '# Required when baoyu-skills is not installed at ~/.baoyu-skills',
+      '# BAOYU_SKILLS_ROOT=~/.baoyu-skills',
     ].join('\n')
     writeFileSync(envPath, template, 'utf-8')
     console.log(`\n.env template written to ${envPath}`)
@@ -204,15 +216,15 @@ function config() {
   const home = process.env.HOME || '/tmp'
   const xdgRoot = process.env.XDG_CONFIG_HOME || join(home, '.config')
   const settings = readSettings()
+  const skillsRoot = resolveSkillsRoot()
   const outputRoot = resolve((settings.OUTPUT_DIR || '~/output/happyimage').replace('~', home))
 
   console.log('HappyImage configuration paths:\n')
   const paths: Array<[string, string, boolean]> = [
     ['.env', join(PROJECT_ROOT, '.env'), false],
-    ['User skills', join(home, '.baoyu-skills'), false],
+    ['baoyu-skills root', skillsRoot.root, false],
     ['XDG config', join(xdgRoot, 'baoyu-skills'), false],
     ['Output dir', outputRoot, false],
-    ['Project skills', join(PROJECT_ROOT, 'skills'), false],
   ]
 
   for (const [label, path, _exists] of paths) {
@@ -222,6 +234,9 @@ function config() {
   }
 
   console.log('\nTo edit settings via Web UI: happyimage web --open')
+  if (!skillsRoot.ready) {
+    console.log(`\nbaoyu-skills is not ready. Missing: ${skillsRoot.missing.join(', ')}`)
+  }
 }
 
 function projects() {

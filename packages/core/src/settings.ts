@@ -30,6 +30,7 @@ interface EnvMap {
   JIMENG_SECRET_ACCESS_KEY: string
   CUSTOM_IMAGE_PROVIDER_NAME: string
   CUSTOM_EXECUTION_PROVIDER_NAME: string
+  BAOYU_SKILLS_ROOT: string
   OUTPUT_DIR: string
   DEFAULT_LANGUAGE: string
   DEFAULT_ASPECT_RATIO: string
@@ -77,6 +78,7 @@ export function readSettings(): EnvMap {
     JIMENG_SECRET_ACCESS_KEY: '',
     CUSTOM_IMAGE_PROVIDER_NAME: '',
     CUSTOM_EXECUTION_PROVIDER_NAME: '',
+    BAOYU_SKILLS_ROOT: '',
     OUTPUT_DIR: '~/output/happyimage',
     DEFAULT_LANGUAGE: 'zh',
     DEFAULT_ASPECT_RATIO: '1:1',

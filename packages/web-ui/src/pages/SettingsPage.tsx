@@ -212,6 +212,13 @@ interface DependencyCheck {
 
 interface DependencyResponse {
   ok: boolean
+  skillsRoot?: {
+    root: string
+    source: string
+    exists: boolean
+    missing: string[]
+    ready: boolean
+  }
   checks: DependencyCheck[]
 }
 
@@ -466,6 +473,12 @@ export default function SettingsPage() {
       setSaved(key)
       if (key === 'THEME_COLOR') applyAccent(value)
       if (key === 'THEME_MODE') applyTheme(value)
+      if (key === 'BAOYU_SKILLS_ROOT') {
+        fetch('/api/dependencies')
+          .then(r => r.json())
+          .then(setDependencies)
+          .catch(() => setDependencies(null))
+      }
       window.setTimeout(() => setSaved(null), 1800)
     }
   }
@@ -780,8 +793,36 @@ export default function SettingsPage() {
         <span>{dependencies?.ok ? 'ready' : 'check'}</span>
       </div>
       <p className="text-sm leading-relaxed text-zinc-500">
-        HappyImage 主要依赖 baoyu-skills。这里会在使用前检查技能集、脚本运行能力、图片后端和发布相关环境。
+        HappyImage 主要依赖外部 baoyu-skills。请安装到 ~/.baoyu-skills，或在这里配置 BAOYU_SKILLS_ROOT 指向完整技能目录。
       </p>
+      <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="studio-eyebrow">baoyu-skills root</p>
+            <h3 className="text-sm font-bold text-zinc-100">{dependencies?.skillsRoot?.ready ? '技能目录已就绪' : '技能目录未就绪'}</h3>
+            <p className="mt-1 break-all text-xs leading-relaxed text-zinc-500">{dependencies?.skillsRoot?.root || '~/.baoyu-skills'}</p>
+          </div>
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${dependencies?.skillsRoot?.ready ? 'bg-emerald-950/30 text-emerald-300' : 'bg-red-950 text-red-300'}`}>
+            {dependencies?.skillsRoot?.ready ? 'ready' : 'missing'}
+          </span>
+        </div>
+        {dependencies?.skillsRoot?.missing?.length ? (
+          <p className="mt-3 text-xs leading-relaxed text-red-300">
+            缺少核心技能：{dependencies.skillsRoot.missing.join(', ')}
+          </p>
+        ) : null}
+        <label className="mt-4 grid gap-1 text-xs font-bold text-zinc-400">
+          BAOYU_SKILLS_ROOT
+          <div className="flex gap-2">
+            <input
+              value={drafts.BAOYU_SKILLS_ROOT || ''}
+              placeholder="~/.baoyu-skills"
+              onChange={e => setDrafts(prev => ({ ...prev, BAOYU_SKILLS_ROOT: e.target.value }))}
+            />
+            <Button size="sm" onClick={() => save('BAOYU_SKILLS_ROOT')}>{saved === 'BAOYU_SKILLS_ROOT' ? '已保存' : '保存'}</Button>
+          </div>
+        </label>
+      </div>
       <div className="mt-4 grid gap-3 lg:grid-cols-2">
         {(dependencies?.checks || []).map(check => (
           <div key={check.id} className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">

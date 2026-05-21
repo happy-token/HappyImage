@@ -1,12 +1,36 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'fs'
+import { join } from 'path'
+import { tmpdir } from 'os'
 
 const BASE = 'http://localhost:3199'
 
 let serverPid: number | null = null
+let skillsRoot = ''
+
+const coreSkills = [
+  'baoyu-image-cards',
+  'baoyu-cover-image',
+  'baoyu-infographic',
+  'baoyu-article-illustrator',
+  'baoyu-comic',
+  'baoyu-slide-deck',
+  'baoyu-diagram',
+  'baoyu-imagine',
+  'baoyu-post-to-wechat',
+  'baoyu-post-to-weibo',
+  'baoyu-post-to-x',
+]
 
 beforeAll(async () => {
+  skillsRoot = mkdtempSync(join(tmpdir(), 'happyimage-skills-'))
+  for (const skill of coreSkills) {
+    const dir = join(skillsRoot, skill)
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'SKILL.md'), `---\nname: ${skill}\n---\n\n# ${skill}\n`, 'utf-8')
+  }
   const proc = Bun.spawn(['bun', 'run', 'server/index.ts'], {
-    env: { ...process.env, PORT: '3199', NODE_ENV: 'development' },
+    env: { ...process.env, PORT: '3199', NODE_ENV: 'development', BAOYU_SKILLS_ROOT: skillsRoot },
     stdout: 'pipe',
     stderr: 'pipe',
   })
@@ -31,9 +55,44 @@ describe('API Health', () => {
     expect(res.status).toBe(200)
     const data = await res.json()
     expect(data).toHaveProperty('ok')
+    expect(data.skillsRoot.ready).toBe(true)
+    expect(data.skillsRoot.root).toBe(skillsRoot)
     expect(Array.isArray(data.checks)).toBe(true)
     expect(data.checks.some((check: any) => check.id === 'baoyu-skills')).toBe(true)
     expect(data.checks.some((check: any) => check.id === 'skill-runner')).toBe(true)
+  })
+})
+
+describe('Commands API', () => {
+  test('GET /api/commands returns core command registry', async () => {
+    const res = await fetch(`${BASE}/api/commands`)
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(Array.isArray(data)).toBe(true)
+    expect(data.some((command: any) => command.id === 'baoyu-image-cards')).toBe(true)
+    expect(data.some((command: any) => command.id === 'baoyu-post-to-wechat')).toBe(true)
+  })
+
+  test('POST /api/commands/parse parses slash commands', async () => {
+    const res = await fetch(`${BASE}/api/commands/parse`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ input: '/baoyu-image-cards posts/ai-future/article.md' }),
+    })
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data.commandId).toBe('baoyu-image-cards')
+    expect(data.args[0]).toBe('posts/ai-future/article.md')
+    expect(data.command.skillId).toBe('image-cards')
+  })
+
+  test('POST /api/commands/parse rejects unknown slash commands', async () => {
+    const res = await fetch(`${BASE}/api/commands/parse`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ input: '/baoyu-not-real' }),
+    })
+    expect(res.status).toBe(404)
   })
 })
 
@@ -236,6 +295,17 @@ describe('Generate API', () => {
       body: JSON.stringify({}),
     })
     expect(res.status).toBe(400)
+  })
+
+  test('POST /api/generate/plan rejects unknown slash command', async () => {
+    const res = await fetch(`${BASE}/api/generate/plan`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ skillId: 'image-cards', content: '/baoyu-nope test' }),
+    })
+    expect(res.status).toBe(400)
+    const data = await res.json()
+    expect(data.error).toContain('Unknown slash command')
   })
 })
 
