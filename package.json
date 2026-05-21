@@ -1,0 +1,36 @@
+{
+  "name": "baoyu-skills",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "bun run --cwd packages/core build && bun run --cwd packages/web-ui build && bun run --cwd packages/cli build && bun run --cwd packages/desktop build",
+    "build:core": "bun run --cwd packages/core build",
+    "build:web": "bun run --cwd packages/web-ui build",
+    "build:cli": "bun run --cwd packages/cli build",
+    "build:desktop": "bun run --cwd packages/desktop build",
+    "dev:web": "bun run --cwd packages/web-ui dev",
+    "happyimage": "bun packages/cli/src/bin.ts",
+    "test:web": "bun run --cwd packages/web-ui test",
+    "test:web:e2e": "bun run --cwd packages/web-ui test:e2e",
+    "test": "node ./scripts/run-node-tests.mjs",
+    "test:coverage": "node ./scripts/run-node-tests.mjs --experimental-test-coverage"
+  },
+  "devDependencies": {
+    "@mozilla/readability": "^0.6.0",
+    "linkedom": "^0.18.12",
+    "turndown": "^7.2.2",
+    "turndown-plugin-gfm": "^1.0.2",
+    "tsx": "^4.20.5"
+  },
+  "dependencies": {
+    "pdf-lib": "^1.17.1",
+    "pptxgenjs": "^4.0.1",
+    "sharp": "^0.34.5"
+  },
+  "overrides": {
+    "@xmldom/xmldom": "0.8.13"
+  }
+}

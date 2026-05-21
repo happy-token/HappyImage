@@ -1,0 +1,78 @@
+<h2>生成中 & 结果怎么展示？</h2>
+<p class="subtitle">这是 C 方案最核心的 UX —— Anthropic SDK 流式输出，图片生成完毕后展示</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>流式日志 + 图片浮现</h3>
+      <div class="mockup">
+        <div class="mockup-header">生成中...</div>
+        <div class="mockup-body" style="display:flex;gap:0.75rem;min-height:160px">
+          <div style="flex:1;background:#0f172a;border-radius:6px;padding:0.75rem;font-family:monospace;font-size:0.7rem;color:#94a3b8;overflow:hidden">
+            <div style="color:#4ade80">✓ 分析内容结构...</div>
+            <div style="color:#4ade80">✓ 选择信息图布局...</div>
+            <div style="color:#93c5fd">⟳ 生成视觉 prompt...</div>
+            <div style="color:#475569">  调用 baoyu-imagine...</div>
+            <div style="color:#475569">  ...</div>
+          </div>
+          <div style="width:120px;display:flex;flex-direction:column;gap:0.5rem">
+            <div style="flex:1;background:#e2e8f0;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:0.7rem;color:#94a3b8">图片 1<br/>生成中…</div>
+            <div style="flex:1;background:#f1f5f9;border-radius:4px;opacity:0.4;display:flex;align-items:center;justify-content:center;font-size:0.7rem;color:#cbd5e1">图片 2</div>
+          </div>
+        </div>
+      </div>
+      <p>左边实时日志（精简版），右边图片生成完一张就显示一张。透明感强，能看到 AI 在做什么。</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>进度条 + 图片画廊</h3>
+      <div class="mockup">
+        <div class="mockup-header">生成中...</div>
+        <div class="mockup-body" style="min-height:160px;display:flex;flex-direction:column;gap:0.75rem">
+          <div>
+            <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:#64748b;margin-bottom:0.3rem">
+              <span>⟳ 正在生成信息图...</span><span>2/4 张</span>
+            </div>
+            <div style="background:#e2e8f0;border-radius:999px;height:6px">
+              <div style="background:#6366f1;width:50%;height:6px;border-radius:999px"></div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;flex:1">
+            <div style="background:#ddd6fe;border-radius:6px;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;font-size:0.7rem;color:#6d28d9">✓ 图1</div>
+            <div style="background:#ddd6fe;border-radius:6px;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;font-size:0.7rem;color:#6d28d9">✓ 图2</div>
+            <div style="background:#e2e8f0;border-radius:6px;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;font-size:0.7rem;color:#94a3b8;border:2px dashed #cbd5e1">生成中…</div>
+            <div style="background:#f1f5f9;border-radius:6px;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;font-size:0.7rem;color:#cbd5e1;opacity:0.5">待生成</div>
+          </div>
+        </div>
+      </div>
+      <p>干净的画廊网格，进度条说明状态。图片生成完就填入格子，不展示原始日志。</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>对话气泡 + 图片内嵌</h3>
+      <div class="mockup">
+        <div class="mockup-header">生成对话</div>
+        <div class="mockup-body" style="min-height:160px;display:flex;flex-direction:column;gap:0.5rem;padding:0.5rem">
+          <div style="align-self:flex-start;background:#f1f5f9;border-radius:12px 12px 12px 2px;padding:0.4rem 0.75rem;font-size:0.72rem;max-width:80%">
+            我来帮你生成一张科技风信息图，正在分析内容结构…
+          </div>
+          <div style="align-self:flex-start;background:#f1f5f9;border-radius:12px 12px 12px 2px;padding:0.4rem 0.75rem;font-size:0.72rem;max-width:80%">
+            已完成第一张，风格：极简暗色系 ↓
+            <div style="background:#ddd6fe;border-radius:6px;height:60px;margin-top:0.4rem;display:flex;align-items:center;justify-content:center;font-size:0.7rem;color:#6d28d9">图片预览</div>
+          </div>
+          <div style="align-self:flex-start;background:#e0e7ff;border-radius:12px 12px 12px 2px;padding:0.4rem 0.75rem;font-size:0.72rem;max-width:80%">
+            ⟳ 正在生成第二张…
+          </div>
+        </div>
+      </div>
+      <p>像 ChatGPT 一样的对话流，AI 说明它在做什么，图片直接嵌在对话里。自然、熟悉。</p>
+    </div>
+  </div>
+</div>

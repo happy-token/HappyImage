@@ -1,0 +1,38 @@
+<h2>设置数据存在哪里？</h2>
+<p class="subtitle">API Key 和用户偏好的存储方式决定架构。这是个本地单用户工具。</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>localStorage（纯前端）</h3>
+      <p>存在浏览器本地存储。无需后端改动，但换浏览器或清除缓存就丢失。API Key 明文存储在浏览器中。</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>优点</h4><ul><li>零后端改动</li><li>即时生效</li></ul></div>
+        <div class="cons"><h4>缺点</h4><ul><li>不跨会话/浏览器</li><li>浏览器清理即丢</li></ul></div>
+      </div>
+    </div>
+  </div>
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>服务端 JSON 文件（推荐）</h3>
+      <p>存在 <code>~/.baoyu-skills/config.json</code>，后端读写。重启不丢、跨浏览器，和其他 CLI 工具共享配置。</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>优点</h4><ul><li>持久化，重启不丢</li><li>跨浏览器共享</li><li>和 CLI 同一套 Key</li></ul></div>
+        <div class="cons"><h4>缺点</h4><ul><li>需要后端新增 API</li></ul></div>
+      </div>
+    </div>
+  </div>
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>服务端 .env 文件</h3>
+      <p>直接写入项目 <code>.env</code>，和其他工具共享同一套环境变量。</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>优点</h4><ul><li>与现有 env 体系一致</li></ul></div>
+        <div class="cons"><h4>缺点</h4><ul><li>修改后需重启服务器</li><li>容易误入 git 提交</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>

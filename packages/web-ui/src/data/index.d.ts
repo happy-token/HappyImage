@@ -1,0 +1,11 @@
+import type { SkillDefinition } from '../types/skills';
+import imageCards from './image-cards';
+import infographic from './infographic';
+import coverImage from './cover-image';
+import slideDeck from './slide-deck';
+import comic from './comic';
+import articleIllustrator from './article-illustrator';
+import diagram from './diagram';
+export declare const skills: SkillDefinition[];
+export declare function getSkill(id: string): SkillDefinition | undefined;
+export { imageCards, infographic, coverImage, slideDeck, comic, articleIllustrator, diagram };

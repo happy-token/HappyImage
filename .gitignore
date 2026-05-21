@@ -1,0 +1,27 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+.baoyu-skills/
+
+# Dependencies
+node_modules/
+packages/*/node_modules/
+
+# Build outputs
+packages/*/dist/
+packages/*/tsconfig.tsbuildinfo
+*.tsbuildinfo
+
+# Test and runtime artifacts
+coverage/
+test-results/
+playwright-report/
+packages/*/test-results/
+packages/*/playwright-report/
+tmp/
+output/
+
+# Local app state
+.happyimage-desktop-profile/
+.DS_Store

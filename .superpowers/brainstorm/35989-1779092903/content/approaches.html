@@ -1,0 +1,45 @@
+<h2>三个重设计方向</h2>
+<p class="subtitle">核心问题：image-cards、infographic 等主力技能没有 main.ts，必须在 Claude Code 会话中以 /slash 命令调用，<code>claude -p</code> 根本没有走技能逻辑。</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>命令导出优先 — 做好参数配置器</h3>
+      <p>放弃有问题的 in-browser 执行，专注把"浏览风格 → 填内容 → 生成命令"做到极致。用户复制命令到 Claude Code CLI 运行，质量和直接用 CLI 完全一致。</p>
+      <p><strong>新增：</strong>设置页面管理 API Key / 偏好；向导压缩为 3 步；全面视觉重设计；覆盖所有 22 个技能。</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>优点</h4><ul><li>结果质量和 CLI 完全一致</li><li>最简单可靠，可快速交付</li><li>不需要改执行架构</li></ul></div>
+        <div class="cons"><h4>缺点</h4><ul><li>用户仍需切换到终端执行</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>终端嵌入 — 浏览器里跑真实 Claude Code</h3>
+      <p>用 <strong>xterm.js</strong> 在浏览器嵌入终端，后端通过 PTY (node-pty) 启动真实 Claude Code 会话，自动输入 <code>/baoyu-xxx</code> 命令。用户看到和 CLI 完全相同的交互过程。</p>
+      <p><strong>新增：</strong>设置页 + 向导 + 终端面板三栏布局；API Key 配置；实时流式输出。</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>优点</h4><ul><li>执行质量和 CLI 完全一致</li><li>用户不离开浏览器</li><li>可以看到完整 Claude 思考过程</li></ul></div>
+        <div class="cons"><h4>缺点</h4><ul><li>需要 node-pty + xterm.js，工程量大</li><li>终端 UI 在浏览器里体验不一定好</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>SDK 直调 — 用 Anthropic API 重实现执行</h3>
+      <p>完全绕过 Claude Code CLI，后端用 <strong>Anthropic SDK</strong> 直接调用 API，把 SKILL.md 作为 system prompt 注入，Web UI 接管 AskUserQuestion 的 Q&amp;A 流程，变成向导步骤。</p>
+      <p><strong>新增：</strong>需要自己实现技能的 Q&amp;A 逻辑；streaming 流式展示结果；图片结果内嵌展示；无需安装 Claude Code CLI。</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>优点</h4><ul><li>完全浏览器内，体验流畅</li><li>不依赖本地 CLI</li><li>可以做精美的流式 UI</li></ul></div>
+        <div class="cons"><h4>缺点</h4><ul><li>工程量最大，需要重实现技能逻辑</li><li>结果可能和 CLI 仍有差距</li><li>依赖 API Key 直接消费（不走 Claude Code）</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:1.5rem">我的推荐：<strong>A 方案</strong>，先把命令配置器做到极致，稳定交付。B 方案可作为后续 P1 追加。</p>
