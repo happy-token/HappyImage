@@ -21,6 +21,28 @@ interface PreferenceInfo {
   summary: Array<{ key: string; value: string }>
 }
 
+interface SchemaField {
+  key: string
+  label: string
+  labelZh: string
+  type: 'text' | 'select' | 'number' | 'boolean' | 'password' | 'textarea' | 'object'
+  defaultValue?: string | number | boolean
+  options?: Array<{ value: string; label: string }>
+  placeholder?: string
+  sensitive?: boolean
+  hint?: string
+  min?: number
+  max?: number
+  step?: number
+}
+
+interface PreferenceSchema {
+  skillId: string
+  name: string
+  nameZh: string
+  fields: SchemaField[]
+}
+
 interface PublishingAccount {
   name: string
   alias: string
@@ -244,6 +266,10 @@ export default function StudioPage() {
   const [uploadStatus, setUploadStatus] = useState('')
 
   const [preferenceInfo, setPreferenceInfo] = useState<PreferenceInfo | null>(null)
+  const [preferenceSchema, setPreferenceSchema] = useState<PreferenceSchema | null>(null)
+  const [prefFormValues, setPrefFormValues] = useState<Record<string, unknown>>({})
+  const [prefSaving, setPrefSaving] = useState(false)
+  const [prefScope, setPrefScope] = useState<string>('user')
   const [usePreferences, setUsePreferences] = useState(true)
   const [skipPlanConfirmation, setSkipPlanConfirmation] = useState(false)
 
@@ -519,11 +545,34 @@ export default function StudioPage() {
   // Fetch skill preferences
   useEffect(() => {
     setPreferenceInfo(null)
+    setPreferenceSchema(null)
+    setPrefFormValues({})
     fetch(`/api/preferences/${skill.id}`)
       .then(res => res.json())
-      .then(data => setPreferenceInfo(data))
+      .then(data => {
+        setPreferenceInfo(data)
+        if (data.found) setPrefFormValues(data.values || {})
+      })
       .catch(() => setPreferenceInfo(null))
+    fetch(`/api/preferences/${skill.id}/schema`)
+      .then(res => res.json())
+      .then(data => setPreferenceSchema(data))
+      .catch(() => setPreferenceSchema(null))
   }, [skill.id])
+
+  const handleSavePreferences = async () => {
+    setPrefSaving(true)
+    try {
+      const res = await fetch(`/api/preferences/${skill.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ values: prefFormValues, scope: prefScope }),
+      })
+      const data = await res.json()
+      if (res.ok) setPreferenceInfo(data)
+    } catch { /* ignore */ }
+    setPrefSaving(false)
+  }
 
   const checkXhsAvailable = () => {
     fetch('/api/publish/probe?platform=xiaohongshu')
@@ -1091,7 +1140,7 @@ export default function StudioPage() {
         <div className="border border-zinc-850 p-3 rounded-xl bg-zinc-950/20">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[10px] font-bold text-zinc-400 uppercase">EXTEND.md Preferences</span>
-            <span className={`text-[9px] px-1.5 rounded font-bold uppercase ${preferenceInfo?.found ? 'bg-indigo-950 text-indigo-400 border border-indigo-900' : 'bg-zinc-900 text-zinc-550'}`}>{preferenceInfo?.found ? 'found' : 'none'}</span>
+            <span className={`text-[9px] px-1.5 rounded font-bold uppercase ${preferenceInfo?.found ? 'bg-emerald-950 text-emerald-400 border border-emerald-900' : 'bg-zinc-900 text-zinc-550'}`}>{preferenceInfo?.found ? 'found' : 'none'}</span>
           </div>
           {preferenceInfo?.found ? (
             <div className="flex flex-col gap-2">
@@ -1100,6 +1149,77 @@ export default function StudioPage() {
                 Apply EXTEND.md preferences
               </label>
               <code className="text-[10px] text-zinc-400 font-mono truncate bg-zinc-950 p-1.5 rounded border border-zinc-900">{preferenceInfo.path}</code>
+            </div>
+          ) : preferenceSchema && preferenceSchema.fields.length > 0 ? (
+            <div className="flex flex-col gap-2.5">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-[10px] text-zinc-500">Save to:</span>
+                <select
+                  value={prefScope}
+                  onChange={e => setPrefScope(e.target.value)}
+                  className="text-[10px] bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1 text-zinc-300 outline-none focus:border-indigo-500"
+                >
+                  <option value="user">~/.baoyu-skills (全局)</option>
+                  <option value="project">项目目录</option>
+                  <option value="xdg">XDG 配置</option>
+                  <option value="output">输出目录</option>
+                </select>
+              </div>
+              {preferenceSchema.fields.map(field => {
+                const val = prefFormValues[field.key] ?? field.defaultValue ?? ''
+                return (
+                  <div key={field.key} className="flex items-center gap-2">
+                    <label className="text-[10px] text-zinc-400 w-24 shrink-0 truncate" title={field.labelZh || field.label}>{field.labelZh || field.label}</label>
+                    {field.type === 'boolean' ? (
+                      <label className="flex items-center gap-1.5 text-[10px] text-zinc-300 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={!!val}
+                          onChange={e => setPrefFormValues(prev => ({ ...prev, [field.key]: e.target.checked }))}
+                          className="rounded text-indigo-600 focus:ring-0"
+                        />
+                        {field.hint || (field.labelZh || field.label)}
+                      </label>
+                    ) : field.type === 'select' && field.options ? (
+                      <select
+                        value={String(val)}
+                        onChange={e => setPrefFormValues(prev => ({ ...prev, [field.key]: e.target.value }))}
+                        className="flex-1 text-[10px] bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1.5 text-zinc-300 outline-none focus:border-indigo-500"
+                      >
+                        {field.options.map(opt => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                    ) : field.type === 'number' ? (
+                      <input
+                        type="number"
+                        value={String(val)}
+                        min={field.min}
+                        max={field.max}
+                        step={field.step}
+                        onChange={e => setPrefFormValues(prev => ({ ...prev, [field.key]: e.target.type === 'number' ? Number(e.target.value) : e.target.value }))}
+                        className="flex-1 text-[10px] bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1.5 text-zinc-300 outline-none focus:border-indigo-500"
+                        placeholder={field.placeholder}
+                      />
+                    ) : field.type === 'text' || field.type === 'password' ? (
+                      <input
+                        type={field.type}
+                        value={String(val)}
+                        onChange={e => setPrefFormValues(prev => ({ ...prev, [field.key]: e.target.value }))}
+                        className="flex-1 text-[10px] bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1.5 text-zinc-300 outline-none focus:border-indigo-500"
+                        placeholder={field.placeholder}
+                      />
+                    ) : null}
+                  </div>
+                )
+              })}
+              <button
+                onClick={handleSavePreferences}
+                disabled={prefSaving}
+                className="mt-1.5 text-[10px] font-semibold bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-700 text-white px-3 py-1.5 rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed"
+              >
+                {prefSaving ? 'Saving...' : 'Save Preferences'}
+              </button>
             </div>
           ) : (
             <p className="text-[10px] text-zinc-400 leading-normal m-0">No custom skill settings found. Standard values will apply.</p>
