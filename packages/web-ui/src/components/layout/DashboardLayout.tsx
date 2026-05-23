@@ -100,6 +100,11 @@ export default function DashboardLayout() {
 
   const handleNewChat = async () => {
     try {
+      const allSessions: SessionPreview[] = await fetch('/api/sessions').then(r => r.json())
+      const blank = Array.isArray(allSessions)
+        ? allSessions.find(s => !s.projectPath && !s.lastMessage && s.imageCount === 0)
+        : null
+      if (blank) { navigate(`/?session=${blank.id}`); return }
       const res = await fetch('/api/sessions', { method: 'POST' })
       const data = await res.json()
       if (data.session?.id) {
