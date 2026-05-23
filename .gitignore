@@ -25,3 +25,4 @@ output/
 # Local app state
 .happyimage-desktop-profile/
 .DS_Store
+.gstack/

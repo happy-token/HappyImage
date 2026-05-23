@@ -335,15 +335,24 @@ export default function StudioPage() {
   }, [])
 
   // Auto-create session on first visit if none in URL
+  // Reuses an existing blank session to prevent accumulation of empty New Chat entries
   const autoCreateRef = useRef(false)
   useEffect(() => {
     if (urlProjectId || activeSessionId) return
     if (autoCreateRef.current) return
     autoCreateRef.current = true
     let cancelled = false
-    fetch('/api/sessions', { method: 'POST' })
+    fetch('/api/sessions')
       .then(res => res.json())
-      .then(data => { if (!cancelled && data.session?.id) setActiveSessionId(data.session.id) })
+      .then(async (sessions: any[]) => {
+        if (cancelled) return
+        const blank = Array.isArray(sessions)
+          ? sessions.find(s => !s.projectPath && !s.lastMessage && s.imageCount === 0)
+          : null
+        if (blank) { setActiveSessionId(blank.id); return }
+        const data = await fetch('/api/sessions', { method: 'POST' }).then(r => r.json())
+        if (!cancelled && data.session?.id) setActiveSessionId(data.session.id)
+      })
       .catch(() => {})
     return () => { cancelled = true }
   }, [urlProjectId])
