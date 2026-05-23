@@ -2,7 +2,8 @@ import { Hono } from 'hono'
 import { existsSync, readdirSync, statSync } from 'fs'
 import { join, resolve } from 'path'
 import { spawnSync } from 'child_process'
-import { skills, getSkill, readSettings, resolveSkillsRoot, CORE_COMMANDS, parseSlashCommand } from '@happyimage/core'
+import { skills, getSkill, readSettings, resolveSkillsRoot, discoverSkillsRoots, CORE_COMMANDS, parseSlashCommand } from '@happyimage/core'
+import { checkImagineEnvironment } from '@happyimage/core'
 
 const api = new Hono()
 
@@ -16,6 +17,11 @@ function commandExists(command: string) {
 }
 
 function canRunBunScripts() {
+  if (process.versions?.bun) return true
+  const home = process.env.HOME || ''
+  if (existsSync(`${home}/.bun/bin/bun`)) return true
+  if (existsSync('/usr/local/bin/bun')) return true
+  if (existsSync('/opt/homebrew/bin/bun')) return true
   return commandExists('bun') || commandExists('npx')
 }
 
@@ -59,21 +65,37 @@ function hasAnyImageBackend(settings: Record<string, string>) {
 }
 
 function hasBaoyuSkills() {
-  return resolveSkillsRoot().ready
+  // Skills root is needed for SKILL.md reading (prompts/styles), but not for image generation
+  // Image generation uses vendored baoyu-imagine built into core
+  const skillsRoot = resolveSkillsRoot()
+  const imagineEnv = checkImagineEnvironment()
+  // Ready if either the skills root is valid OR the vendored imagine is available
+  return skillsRoot.ready || imagineEnv.vendorAvailable
 }
 
 api.get('/dependencies', (c) => {
   const settings = readSettings()
   const skillsRoot = resolveSkillsRoot()
+  const skillsRootCandidates = discoverSkillsRoots()
+  const readyCandidate = !skillsRoot.ready
+    ? skillsRootCandidates.find(candidate => candidate.ready && candidate.root !== skillsRoot.root)
+    : null
   const checks = [
     {
       id: 'baoyu-skills',
       label: 'baoyu-skills',
       ok: hasBaoyuSkills(),
       required: true,
-      description: skillsRoot.exists
-        ? `当前技能目录：${skillsRoot.root}${skillsRoot.missing.length ? `，缺少 ${skillsRoot.missing.length} 个核心技能。` : ''}`
-        : `未找到外部 baoyu-skills 目录。当前检查路径：${skillsRoot.root}`,
+      description: (() => {
+        const imagineEnv = checkImagineEnvironment()
+        if (imagineEnv.vendorAvailable && !skillsRoot.exists) {
+          return `内置 baoyu-imagine 已就绪（${imagineEnv.backend !== 'none' ? imagineEnv.backend + ' 后端' : '未配置 API Key'}）。如需完整 Skills 体验，可安装外部 baoyu-skills 目录。`
+        }
+        return skillsRoot.exists
+          ? `当前技能目录：${skillsRoot.root}${skillsRoot.missing.length ? `，缺少 ${skillsRoot.missing.length} 个核心技能。` : ''}`
+          : `未找到外部 baoyu-skills 目录（${skillsRoot.root}）。使用内置 baoyu-imagine 生成图片。`
+      })(),
+      hint: readyCandidate ? `检测到可用技能目录：${readyCandidate.root}` : '',
       installLabel: '安装或指定目录',
       installUrl: '/settings',
     },
@@ -135,6 +157,7 @@ api.get('/dependencies', (c) => {
   return c.json({
     ok: checks.filter(check => check.required).every(check => check.ok),
     skillsRoot,
+    skillsRootCandidates,
     checks,
   })
 })

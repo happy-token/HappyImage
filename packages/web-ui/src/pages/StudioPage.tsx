@@ -304,10 +304,11 @@ export default function StudioPage() {
     navigate(`${basePath}?${params.toString()}`, { replace: true })
   }
   const [disabledPlanPrompts, setDisabledPlanPrompts] = useState<Set<number>>(new Set())
+  const [isSending, setIsSending] = useState(false)
 
   const sse = useSSE()
   const projectChat = useProjectChat(urlProjectId || '')
-  const isStreaming = sse.isStreaming || projectChat.isStreaming
+  const isStreaming = sse.isStreaming || projectChat.isStreaming || chat.streamingMsgId !== null
 
   const hasWorkspaceContent = !!(projectData || sse.isStreaming || sse.images.length > 0)
   useEffect(() => {
@@ -493,7 +494,7 @@ export default function StudioPage() {
   // Load session history when switching sessions
   useEffect(() => {
     if (!activeSessionId || urlProjectId) return
-    fetch(`/api/sessions/${activeSessionId}`)
+    fetch(`/api/sessions/${activeSessionId}/events`)
       .then(res => res.json())
       .then(data => {
         const session = data.session
@@ -517,6 +518,7 @@ export default function StudioPage() {
           const runnerId = makeMessage('assistant', 'Task is still running... Reconnecting...', 'runner').id
           msgs.push({ id: runnerId, role: 'assistant', text: '', type: 'runner' })
           dispatch({ type: 'RESET_MESSAGES', messages: msgs })
+          dispatch({ type: 'SET_STREAMING', messageId: runnerId })
 
           // Connect to stream for live updates
           const lastSeq = events.length > 0 ? events[events.length - 1].seq : 0
@@ -530,10 +532,13 @@ export default function StudioPage() {
                   dispatch({ type: 'APPEND_TEXT', messageId: runnerId, text: msg.text || '' })
                 } else if (msg.type === 'done') {
                   dispatch({ type: 'SET_MESSAGE', messageId: runnerId, patch: { text: 'Task completed.', type: 'text' } })
+                  dispatch({ type: 'SET_STREAMING', messageId: null })
                 }
               })
             })
-            .catch(() => {})
+            .catch(() => {
+              dispatch({ type: 'SET_STREAMING', messageId: null })
+            })
           return
         }
 
@@ -658,13 +663,16 @@ export default function StudioPage() {
     const publishCommand = parsePublishSlash(query)
     if (publishCommand) {
       sendingRef.current = true
+      setIsSending(true)
       await runPublishSlash(publishCommand.platform, publishCommand.packagePath)
       sendingRef.current = false
+      setIsSending(false)
       return
     }
     const hasSource = sourceMode !== 'text' && Boolean(sourceRef.trim())
     if (!query && !hasSource) return
     sendingRef.current = true
+    setIsSending(true)
     const generationContent = query || ''
     const activeSkillId = parseContentSlashSkill(query) || skill.id
     setChatInput('')
@@ -708,6 +716,7 @@ export default function StudioPage() {
     if (skipPlanConfirmation) {
       const streamId = appendMessage('assistant', '', 'runner')
       dispatch({ type: 'SET_STREAMING', messageId: streamId })
+      setIsSending(false)
       sse.start(activeSkillId, generationContent, payload, {
         onText: (text) => dispatch({ type: 'APPEND_TEXT', messageId: streamId, text }),
         onError: (errMsg) => {
@@ -755,7 +764,11 @@ export default function StudioPage() {
       dispatch({ type: 'SET_MESSAGE', messageId: thinkingId, patch: {
         text: `Failed to prepare plan: ${err.message || 'Error occurred.'}`,
         role: 'system',
+        type: 'error',
       }})
+      dispatch({ type: 'CLEAR_PLANNING' })
+    } finally {
+      setIsSending(false)
     }
   }
 
@@ -807,18 +820,21 @@ export default function StudioPage() {
 
   // --- Incremental Edit Chat Flow ---
 
-  const handleSendProjectEdit = () => {
+  const handleSendProjectEdit = async () => {
     if (sendingRef.current) return
     const query = chatInput.trim()
     if (!query || projectChat.isStreaming) return
     const publishCommand = parsePublishSlash(query)
     if (publishCommand) {
       sendingRef.current = true
-      runPublishSlash(publishCommand.platform, publishCommand.packagePath)
+      setIsSending(true)
+      await runPublishSlash(publishCommand.platform, publishCommand.packagePath)
       sendingRef.current = false
+      setIsSending(false)
       return
     }
     sendingRef.current = true
+    setIsSending(true)
     setChatInput('')
 
     appendMessage('user', query)
@@ -831,7 +847,11 @@ export default function StudioPage() {
     }
 
     const target = selectedImage !== null ? { type: 'image', index: selectedImage } : undefined
-    projectChat.sendMessage(query, target)
+    try {
+      await projectChat.sendMessage(query, target)
+    } finally {
+      setIsSending(false)
+    }
   }
 
   const handleSourceUpload = async (file: File | null) => {
@@ -893,11 +913,31 @@ export default function StudioPage() {
 
   // Watch for finished project chat stream
   const prevStreaming = useRef(false)
+  const chatErrorRef = useRef<string | null>(null)
+  useEffect(() => {
+    chatErrorRef.current = projectChat.error
+  }, [projectChat.error])
   useEffect(() => {
     if (prevStreaming.current && !projectChat.isStreaming && urlProjectId) {
+      const capturedError = chatErrorRef.current
       fetch(`/api/projects/${urlProjectId}`)
         .then(res => res.json())
-        .then(data => { if (!data.error) setProjectData(data) })
+        .then(data => {
+          if (!data.error) {
+            setProjectData(data)
+            const lastConv = data.conversations?.[data.conversations.length - 1]
+            if (lastConv && lastConv.plan) {
+              appendMessage('assistant', lastConv.plan)
+            } else if (capturedError) {
+              appendMessage('assistant', `Error: ${capturedError}`)
+            }
+          } else if (capturedError) {
+            appendMessage('assistant', `Error: ${capturedError}`)
+          }
+        })
+        .catch(() => {
+          if (capturedError) appendMessage('assistant', `Error: ${capturedError}`)
+        })
     }
     prevStreaming.current = projectChat.isStreaming
   }, [projectChat.isStreaming, urlProjectId])
@@ -1350,7 +1390,7 @@ export default function StudioPage() {
           onInputChange={setChatInput}
           onSend={projectData ? handleSendProjectEdit : handleStartGeneration}
           canSubmit={canSubmit}
-          isStreaming={isStreaming}
+          isStreaming={isStreaming || isSending}
           isPlanning={chat.planningMsgId !== null}
           onStop={() => { sse.stop(); projectChat.stop(); cancelGeneratePlan() }}
           projectData={projectData}

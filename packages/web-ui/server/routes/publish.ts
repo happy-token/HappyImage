@@ -30,7 +30,10 @@ function expandHome(value: string) {
 }
 
 function platformProfile(platform: string, settings: Record<string, string>) {
-  const key = platform === 'weibo' ? 'WEIBO_BROWSER_PROFILE_DIR' : platform === 'x' ? 'X_BROWSER_PROFILE_DIR' : ''
+  const key = 
+    platform === 'weibo' ? 'WEIBO_BROWSER_PROFILE_DIR' : 
+    platform === 'x' ? 'X_BROWSER_PROFILE_DIR' : 
+    platform === 'xiaohongshu' ? 'XHS_BROWSER_PROFILE_DIR' : ''
   const value = key ? settings[key] : ''
   return value ? resolve(expandHome(value)) : ''
 }
@@ -80,6 +83,20 @@ function buildCommand(platform: string, packagePath: string, settings: Record<st
     const skillDir = requiredSkillDir('post-to-wechat')
     return {
       script: join(skillDir, 'scripts/wechat-browser.ts'),
+      args,
+    }
+  }
+
+  if (platform === 'xiaohongshu') {
+    const postPath = join(packagePath, 'xhs-post.md')
+    const text = existsSync(postPath) ? readFileSync(postPath, 'utf-8') : ''
+    const images = imagesIn(join(packagePath, 'images'), 18)
+    const profile = platformProfile(platform, settings)
+    const args = [text, ...images.flatMap(path => ['--image', path])]
+    if (profile) args.push('--profile', profile)
+    const skillDir = requiredSkillDir('post-to-xiaohongshu')
+    return {
+      script: join(skillDir, 'scripts/xhs-browser.ts'),
       args,
     }
   }
@@ -138,8 +155,8 @@ publishRoute.post('/', async (c) => {
   }
 
   const platform = body.platform || ''
-  if (!['wechat', 'weibo', 'x'].includes(platform)) {
-    return c.json({ error: 'Only wechat, weibo, and x publishing are currently supported' }, 400)
+  if (!['wechat', 'weibo', 'x', 'xiaohongshu'].includes(platform)) {
+    return c.json({ error: 'Only wechat, weibo, x, and xiaohongshu publishing are currently supported' }, 400)
   }
 
   const root = outputRoot()

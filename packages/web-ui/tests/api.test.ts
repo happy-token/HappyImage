@@ -1,12 +1,15 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
-import { mkdirSync, mkdtempSync, writeFileSync } from 'fs'
-import { join } from 'path'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import { join, resolve } from 'path'
 import { tmpdir } from 'os'
 
 const BASE = 'http://localhost:3199'
 
 let serverPid: number | null = null
 let skillsRoot = ''
+let sessionDb = ''
+const envPath = resolve(import.meta.dir, '..', '.env')
+let originalEnv: string | null = null
 
 const coreSkills = [
   'baoyu-image-cards',
@@ -20,26 +23,60 @@ const coreSkills = [
   'baoyu-post-to-wechat',
   'baoyu-post-to-weibo',
   'baoyu-post-to-x',
+  'baoyu-post-to-xiaohongshu',
 ]
 
+const logFilePath = join(tmpdir(), 'happyimage-test-server.log')
+
 beforeAll(async () => {
+  originalEnv = existsSync(envPath) ? readFileSync(envPath, 'utf-8') : null
   skillsRoot = mkdtempSync(join(tmpdir(), 'happyimage-skills-'))
   for (const skill of coreSkills) {
     const dir = join(skillsRoot, skill)
     mkdirSync(dir, { recursive: true })
     writeFileSync(join(dir, 'SKILL.md'), `---\nname: ${skill}\n---\n\n# ${skill}\n`, 'utf-8')
+
+    // Mock the browser scripts for post skills so that the probe check resolves to available: true
+    if (skill === 'baoyu-post-to-xiaohongshu') {
+      const scriptsDir = join(dir, 'scripts')
+      mkdirSync(scriptsDir, { recursive: true })
+      writeFileSync(join(scriptsDir, 'xhs-browser.ts'), 'console.log("mock xhs script")', 'utf-8')
+    }
+    if (skill === 'baoyu-post-to-wechat') {
+      const scriptsDir = join(dir, 'scripts')
+      mkdirSync(scriptsDir, { recursive: true })
+      writeFileSync(join(scriptsDir, 'wechat-browser.ts'), 'console.log("mock wechat script")', 'utf-8')
+    }
+    if (skill === 'baoyu-post-to-weibo') {
+      const scriptsDir = join(dir, 'scripts')
+      mkdirSync(scriptsDir, { recursive: true })
+      writeFileSync(join(scriptsDir, 'weibo-post.ts'), 'console.log("mock weibo script")', 'utf-8')
+    }
+    if (skill === 'baoyu-post-to-x') {
+      const scriptsDir = join(dir, 'scripts')
+      mkdirSync(scriptsDir, { recursive: true })
+      writeFileSync(join(scriptsDir, 'x-browser.ts'), 'console.log("mock x script")', 'utf-8')
+    }
   }
+  sessionDb = join(mkdtempSync(join(tmpdir(), 'happyimage-session-')), 'sessions.sqlite')
+  if (existsSync(logFilePath)) rmSync(logFilePath, { force: true })
+  const logFile = Bun.file(logFilePath)
   const proc = Bun.spawn(['bun', 'run', 'server/index.ts'], {
-    env: { ...process.env, PORT: '3199', NODE_ENV: 'development', BAOYU_SKILLS_ROOT: skillsRoot },
-    stdout: 'pipe',
-    stderr: 'pipe',
+    env: { ...process.env, PORT: '3199', NODE_ENV: 'development', BAOYU_SKILLS_ROOT: skillsRoot, HAPPYIMAGE_SESSION_DB: sessionDb },
+    stdout: logFile,
+    stderr: logFile,
   })
   serverPid = proc.pid
   await new Promise(resolve => setTimeout(resolve, 2000))
 })
 
 afterAll(() => {
-  if (serverPid) process.kill(serverPid, 'SIGTERM')
+  if (serverPid) {
+    try { process.kill(serverPid, 'SIGTERM') } catch {}
+  }
+  if (originalEnv === null) rmSync(envPath, { force: true })
+  else writeFileSync(envPath, originalEnv, 'utf-8')
+  if (sessionDb) rmSync(resolve(sessionDb, '..'), { recursive: true, force: true })
 })
 
 describe('API Health', () => {
@@ -86,6 +123,18 @@ describe('Commands API', () => {
     expect(data.command.skillId).toBe('image-cards')
   })
 
+  test('POST /api/commands/parse maps deprecated xhs command to image cards', async () => {
+    const res = await fetch(`${BASE}/api/commands/parse`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ input: '/baoyu-xhs-images posts/a.md' }),
+    })
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data.commandId).toBe('baoyu-image-cards')
+    expect(data.command.requiredSkill).toBe('baoyu-image-cards')
+  })
+
   test('POST /api/commands/parse rejects unknown slash commands', async () => {
     const res = await fetch(`${BASE}/api/commands/parse`, {
       method: 'POST',
@@ -108,6 +157,161 @@ describe('Skills Root API', () => {
     expect(data.success).toBe(true)
     expect(data.skillsRoot.root).toBe(skillsRoot)
     expect(data.skillsRoot.ready).toBe(true)
+  })
+
+  test('POST /api/skills-root/install installs skills root', async () => {
+    const tempTargetRoot = join(tmpdir(), `happyimage-test-install-${Date.now()}`)
+    const res = await fetch(`${BASE}/api/skills-root/install`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ root: tempTargetRoot }),
+    })
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data.success).toBe(true)
+    expect(data.root).toBe(tempTargetRoot)
+    expect(existsSync(join(tempTargetRoot, 'baoyu-image-cards', 'SKILL.md'))).toBe(true)
+    expect(existsSync(join(tempTargetRoot, 'baoyu-post-to-xiaohongshu', 'scripts', 'xhs-browser.ts'))).toBe(true)
+    rmSync(tempTargetRoot, { recursive: true, force: true })
+  }, 120_000)
+})
+
+describe('Sessions API', () => {
+  test('POST /api/sessions creates an interactive session with command request', async () => {
+    const res = await fetch(`${BASE}/api/sessions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: 'Gallery preset',
+        commandRequest: {
+          commandId: 'baoyu-image-cards',
+          source: { type: 'text', value: 'AI future' },
+          options: { style: 'study-notes' },
+        },
+      }),
+    })
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data.session.id).toBeDefined()
+    expect(data.session.commandRequest.commandId).toBe('baoyu-image-cards')
+    expect(data.session.events.some((event: any) => event.type === 'message')).toBe(true)
+  })
+
+  test('POST /api/sessions/:id/messages converts slash commands to command requests', async () => {
+    const create = await fetch(`${BASE}/api/sessions`, { method: 'POST' })
+    const { session } = await create.json()
+    const res = await fetch(`${BASE}/api/sessions/${session.id}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: '/baoyu-image-cards posts/a.md make it concise' }),
+    })
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data.session.commandRequest.commandId).toBe('baoyu-image-cards')
+    expect(data.session.commandRequest.source.type).toBe('file')
+    expect(data.session.commandRequest.source.value).toBe('posts/a.md')
+  })
+
+  test('POST /api/sessions/:id/messages asks a structured question for natural language', async () => {
+    const create = await fetch(`${BASE}/api/sessions`, { method: 'POST' })
+    const { session } = await create.json()
+    const res = await fetch(`${BASE}/api/sessions/${session.id}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: '帮我做一组小红书图片' }),
+    })
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data.session.status).toBe('asking')
+    expect(data.session.events.some((event: any) => event.type === 'question' && event.question.control === 'single-choice')).toBe(true)
+  })
+})
+
+describe('Chat Session API', () => {
+  test('POST /api/sessions creates a persisted chat session', async () => {
+    const res = await fetch(`${BASE}/api/sessions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: 'Chat runtime test',
+        message: 'Start from gallery',
+        commandRequest: {
+          commandId: 'baoyu-image-cards',
+          source: { type: 'text', value: 'AI launch' },
+          options: { style: 'fresh' },
+        },
+      }),
+    })
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data.session.id).toBeDefined()
+    expect(data.session.events.some((event: any) => event.type === 'command')).toBe(true)
+
+    const loaded = await fetch(`${BASE}/api/sessions/${data.session.id}`).then(res => res.json())
+    expect(loaded.session.id).toBe(data.session.id)
+    expect(loaded.session.commandRequest.commandId).toBe('baoyu-image-cards')
+  })
+
+  test('GET /api/sessions/:id/events supports seq resume', async () => {
+    const created = await fetch(`${BASE}/api/sessions`, { method: 'POST' }).then(res => res.json())
+    await fetch(`${BASE}/api/sessions/${created.session.id}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: '/baoyu-xhs-images posts/a.md' }),
+    })
+    const all = await fetch(`${BASE}/api/sessions/${created.session.id}/events`).then(res => res.json())
+    expect(all.events.length).toBeGreaterThan(0)
+    const firstSeq = all.events[0].seq
+    const resumed = await fetch(`${BASE}/api/sessions/${created.session.id}/events?after=${firstSeq}`).then(res => res.json())
+    expect(resumed.events.every((event: any) => event.seq > firstSeq)).toBe(true)
+  })
+
+  test('POST /api/sessions/:id/messages asks structured question for natural language', async () => {
+    const created = await fetch(`${BASE}/api/sessions`, { method: 'POST' }).then(res => res.json())
+    const res = await fetch(`${BASE}/api/sessions/${created.session.id}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: '帮我生成一张封面图' }),
+    })
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data.session.status).toBe('asking')
+    expect(data.session.events.some((event: any) => event.type === 'question')).toBe(true)
+  })
+  test('GET /api/sessions/:id/stream replays missed events', async () => {
+    const create = await fetch(`${BASE}/api/sessions`, { method: 'POST' }).then(res => res.json())
+    await fetch(`${BASE}/api/sessions/${create.session.id}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: '/baoyu-image-cards posts/test.md' }),
+    })
+    const res = await fetch(`${BASE}/api/sessions/${create.session.id}/stream?after=0`)
+    expect(res.status).toBe(200)
+    const text = await res.text()
+    expect(text).toContain('replay')
+  })
+
+  test('GET /api/sessions/:id/stream returns 404 for unknown sessions', async () => {
+    const res = await fetch(`${BASE}/api/sessions/nonexistent/stream?after=0`)
+    expect(res.status).toBe(404)
+  })
+
+  test('POST /api/generate returns sessionId in done event', async () => {
+    const res = await fetch(`${BASE}/api/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ skillId: 'image-cards', content: '/baoyu-image-cards test prompt', selections: { style: 'fresh', layout: 'single' } }),
+    })
+    expect(res.status).toBe(200)
+    const text = await res.text()
+    expect(text).toContain('sessionId')
+  }, 120_000)
+
+  test('GET /api/sessions/:id returns 404 with error for missing session', async () => {
+    const res = await fetch(`${BASE}/api/sessions/nonexistent-session-id`)
+    expect(res.status).toBe(404)
+    const data = await res.json()
+    expect(data.error).toBeDefined()
   })
 })
 
@@ -192,6 +396,14 @@ describe('Preferences API', () => {
     expect(data).toHaveProperty('targets')
   })
 
+  test('GET /api/preferences/image-cards falls back to baoyu-xhs-images', async () => {
+    const res = await fetch(`${BASE}/api/preferences/image-cards`)
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data.found).toBe(true)
+    expect(data.values['watermark.content']).toBe('@happytoken')
+  })
+
   test('GET /api/preferences/:skillId/schema returns editable fields', async () => {
     const res = await fetch(`${BASE}/api/preferences/image-cards/schema`)
     expect(res.status).toBe(200)
@@ -261,7 +473,7 @@ describe('Publish API', () => {
     const res = await fetch(`${BASE}/api/publish`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ platform: 'xiaohongshu', packagePath: '/tmp/test' }),
+      body: JSON.stringify({ platform: 'instagram', packagePath: '/tmp/test' }),
     })
     expect(res.status).toBe(400)
   })

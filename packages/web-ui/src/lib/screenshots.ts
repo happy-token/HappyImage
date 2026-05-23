@@ -1,6 +1,91 @@
+import type { SkillDefinition, ConfigItem } from '../types/skills'
+
 const SCREENSHOT_BASE = '/screenshots'
 
 const KNOWN_SCREENSHOTS: Record<string, string[]> = {}
+
+export const generatedOptionPreviews: Record<string, Set<string>> = {
+  'image-cards.style': new Set(['study-notes', 'screen-print', 'sketch-notes']),
+  'image-cards.layout': new Set(['mindmap', 'quadrant']),
+  'image-cards.palette': new Set(['macaron', 'warm', 'neon']),
+  'xhs-images.style': new Set(['study-notes', 'screen-print', 'sketch-notes']),
+  'xhs-images.layout': new Set(['mindmap', 'quadrant']),
+  'xhs-images.palette': new Set(['macaron', 'warm', 'neon']),
+  'infographic.style': new Set(['pop-laboratory', 'morandi-journal', 'retro-pop-grid', 'hand-drawn-edu', 'retro-popup-pop']),
+  'infographic.layout': new Set([
+    'linear-progression',
+    'binary-comparison',
+    'comparison-matrix',
+    'hierarchical-layers',
+    'tree-branching',
+    'hub-spoke',
+    'structural-breakdown',
+    'bento-grid',
+    'isometric-map',
+    'dashboard',
+    'periodic-table',
+    'comic-strip',
+    'story-mountain',
+    'jigsaw',
+    'venn-diagram',
+    'winding-roadmap',
+    'dense-modules',
+  ]),
+  'cover-image.text': new Set(['none', 'title-only', 'title-subtitle', 'text-rich']),
+  'cover-image.mood': new Set(['subtle', 'balanced', 'bold']),
+  'slide-deck.style': new Set(['hand-drawn-edu']),
+  'slide-deck.texture': new Set(['clean', 'grid', 'organic', 'pixel', 'paper']),
+  'slide-deck.typography': new Set(['geometric', 'humanist', 'handwritten', 'editorial', 'technical']),
+  'comic.art': new Set(['ligne-claire', 'manga', 'ink-brush', 'chalk', 'minimalist']),
+  'comic.tone': new Set(['neutral', 'warm', 'dramatic', 'romantic', 'energetic', 'vintage', 'action']),
+  'comic.layout': new Set(['four-panel']),
+  'article-illustrator.type': new Set(['infographic', 'scene', 'flowchart', 'comparison', 'framework', 'timeline']),
+  'article-illustrator.palette': new Set(['default', 'macaron', 'warm', 'neon']),
+  'diagram.type': new Set(['architecture', 'flowchart', 'sequence', 'structural', 'mindmap', 'timeline', 'illustrative', 'state-machine', 'dataflow']),
+}
+
+export const optionPreviewOverrides: Record<string, string> = {
+  'slide-deck.mood.professional': '/screenshots/slide-deck-styles/corporate.webp',
+  'slide-deck.mood.warm': '/screenshots/cover-image-palettes/warm.webp',
+  'slide-deck.mood.cool': '/screenshots/cover-image-palettes/cool.webp',
+  'slide-deck.mood.vibrant': '/screenshots/cover-image-palettes/vivid.webp',
+  'slide-deck.mood.dark': '/screenshots/cover-image-palettes/dark.webp',
+  'slide-deck.mood.neutral': '/screenshots/cover-image-palettes/mono.webp',
+  'slide-deck.mood.macaron': '/screenshots/cover-image-palettes/macaron.webp',
+  'slide-deck.density.minimal': '/screenshots/xhs-images-layouts/sparse.webp',
+  'slide-deck.density.balanced': '/screenshots/xhs-images-layouts/balanced.webp',
+  'slide-deck.density.dense': '/screenshots/xhs-images-layouts/dense.webp',
+}
+
+export const skillPreviewImages: Record<string, string> = {
+  'image-cards': '/screenshots/gallery-types/image-cards.png?v=type-2',
+  'xhs-images': '/screenshots/gallery-types/xhs-images.png?v=type-2',
+  infographic: '/screenshots/gallery-types/infographic.png?v=type-2',
+  'cover-image': '/screenshots/gallery-types/cover-image.png?v=type-2',
+  'slide-deck': '/screenshots/gallery-types/slide-deck.png?v=type-2',
+  comic: '/screenshots/gallery-types/comic.png?v=type-2',
+  'article-illustrator': '/screenshots/gallery-types/article-illustrator.png?v=type-2',
+  diagram: '/screenshots/gallery-types/diagram.png?v=type-2',
+}
+
+export function previewForSkill(skill: SkillDefinition): string {
+  if (skillPreviewImages[skill.id]) return skillPreviewImages[skill.id]
+  const preferred = ['style', 'art', 'layout', 'type'].find(key => skill.dimensions[key])
+  if (!preferred) return ''
+  const itemId = skill.dimensions[preferred].defaultItem || skill.dimensions[preferred].items[0]?.id
+  const item = skill.dimensions[preferred].items.find(i => i.id === itemId) || skill.dimensions[preferred].items[0]
+  return item ? previewForItem(skill, preferred, item) : ''
+}
+
+export function previewForItem(skill: SkillDefinition, dimension: string, item: ConfigItem): string {
+  const override = optionPreviewOverrides[`${skill.id}.${dimension}.${item.id}`]
+  if (override) return override
+  if (generatedOptionPreviews[`${skill.id}.${dimension}`]?.has(item.id)) {
+    return `/screenshots/gallery-options/${skill.id}/${dimension}/${item.id}.png?v=option-5`
+  }
+  const dir = skill.screenshotDirs.find(d => d.dimension === dimension)
+  return dir ? `/screenshots/${dir.path}/${item.id}.webp` : ''
+}
 
 export function getScreenshotUrl(dir: string, itemId: string): string | null {
   const key = `${dir}/${itemId}`

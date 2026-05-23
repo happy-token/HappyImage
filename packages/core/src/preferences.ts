@@ -151,6 +151,28 @@ export function getPreferenceInfo(skillId: string): PreferenceInfo {
     }
   }
 
+  // Fallback to deprecated xhs-images preferences if this is image-cards
+  const skillName = skillId.startsWith('baoyu-') ? skillId : `baoyu-${skillId}`
+  if (skillName === 'baoyu-image-cards') {
+    const fallbackTargets = preferenceTargets('baoyu-xhs-images')
+    for (const target of fallbackTargets) {
+      const path = target.path
+      if (!existsSync(path)) continue
+      const raw = readFileSync(path, 'utf-8')
+      const values = parseLooseYaml(raw)
+      return {
+        skillId,
+        found: true,
+        path,
+        scope: target.scope,
+        raw,
+        values,
+        summary: summarize(values),
+        targets, // Return the main targets so any save will write to the new path
+      }
+    }
+  }
+
   return {
     skillId,
     found: false,

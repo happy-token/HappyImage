@@ -206,8 +206,18 @@ interface DependencyCheck {
   ok: boolean
   required: boolean
   description: string
+  hint?: string
   installLabel: string
   installUrl: string
+}
+
+interface SkillsRootCandidate {
+  label: string
+  root: string
+  source: string
+  exists: boolean
+  missing: string[]
+  ready: boolean
 }
 
 interface DependencyResponse {
@@ -219,6 +229,7 @@ interface DependencyResponse {
     missing: string[]
     ready: boolean
   }
+  skillsRootCandidates?: SkillsRootCandidate[]
   checks: DependencyCheck[]
 }
 
@@ -837,7 +848,12 @@ export default function SettingsPage() {
     )
   }
 
-  const renderEnvironment = () => (
+  const renderEnvironment = () => {
+    const readyCandidates = dependencies?.skillsRoot?.ready
+      ? []
+      : (dependencies?.skillsRootCandidates || []).filter(candidate => candidate.ready && candidate.root !== dependencies?.skillsRoot?.root)
+
+    return (
     <section className="studio-panel">
       <div className="studio-panel-head">
         <div>
@@ -847,7 +863,7 @@ export default function SettingsPage() {
         <span>{dependencies?.ok ? 'ready' : 'check'}</span>
       </div>
       <p className="text-sm leading-relaxed text-zinc-500">
-        HappyImage 主要依赖外部 baoyu-skills。请安装到 ~/.baoyu-skills，或在这里配置 BAOYU_SKILLS_ROOT 指向完整技能目录。
+        HappyImage 需要一个包含 baoyu-* 技能的目录。可以安装到 ~/.baoyu-skills，也可以直接选择 Claude 插件已经安装好的 skills 目录。
       </p>
       <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
         <div className="flex items-start justify-between gap-3">
@@ -864,6 +880,22 @@ export default function SettingsPage() {
           <p className="mt-3 text-xs leading-relaxed text-red-300">
             缺少核心技能：{dependencies.skillsRoot.missing.join(', ')}
           </p>
+        ) : null}
+        {readyCandidates.length ? (
+          <div className="mt-3 rounded-xl border border-emerald-900/50 bg-emerald-950/20 p-3">
+            <p className="text-xs font-bold text-emerald-200">检测到可用的 baoyu-skills 安装目录</p>
+            <div className="mt-2 grid gap-2">
+              {readyCandidates.map(candidate => (
+                <div key={candidate.root} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-900/40 bg-zinc-950/50 px-3 py-2">
+                  <div>
+                    <p className="text-xs font-semibold text-zinc-200">{candidate.label}</p>
+                    <p className="break-all text-[11px] leading-relaxed text-zinc-500">{candidate.root}</p>
+                  </div>
+                  <Button size="sm" variant="secondary" onClick={() => useSkillsRoot(candidate.root)}>使用这个目录</Button>
+                </div>
+              ))}
+            </div>
+          </div>
         ) : null}
         <label className="mt-4 grid gap-1 text-xs font-bold text-zinc-400">
           BAOYU_SKILLS_ROOT
@@ -896,7 +928,7 @@ export default function SettingsPage() {
           </a>
         </div>
         <p className="mt-2 text-xs leading-relaxed text-zinc-500">
-          如果你已经安装在其他位置，请把包含 baoyu-* 技能目录的路径填到上面；如果还没安装，可以直接安装到默认目录 ~/.baoyu-skills。
+          注意：~/.baoyu-skills 也常被 baoyu-skills 用作 Chrome/profile 等运行数据目录；真正的技能根目录必须直接包含 baoyu-image-cards、baoyu-imagine 等文件夹。
         </p>
         {skillsRootStatus && <div className="studio-project-path mt-3">{skillsRootStatus}</div>}
       </div>
@@ -910,6 +942,7 @@ export default function SettingsPage() {
                   <h3 className="text-sm font-bold text-zinc-100">{check.label}</h3>
                 </div>
                 <p className="mt-1 text-xs leading-relaxed text-zinc-500">{check.description}</p>
+                {check.hint ? <p className="mt-1 text-xs leading-relaxed text-emerald-300">{check.hint}</p> : null}
               </div>
               <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${check.ok ? 'bg-emerald-950/30 text-emerald-300' : check.required ? 'bg-red-950 text-red-300' : 'bg-amber-950 text-amber-300'}`}>
                 {check.ok ? 'ok' : check.required ? 'required' : 'optional'}
@@ -924,7 +957,8 @@ export default function SettingsPage() {
         ))}
       </div>
     </section>
-  )
+    )
+  }
 
   const renderPreferences = () => (
     <section className="studio-panel settings-preference-panel">

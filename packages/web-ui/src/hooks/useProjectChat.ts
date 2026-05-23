@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from 'react'
+import { parseSSEStream } from '../lib/sse'
 
 interface ChatMessage {
   type: 'plan' | 'file' | 'image' | 'error' | 'done'
@@ -13,6 +14,12 @@ interface ChatTarget {
   index?: number
 }
 
+interface LastSendParams {
+  message: string
+  target?: ChatTarget
+  sessionId?: string | null
+}
+
 export function useProjectChat(projectId: string) {
   const [isStreaming, setIsStreaming] = useState(false)
   const [plan, setPlan] = useState<string | null>(null)
@@ -21,14 +28,17 @@ export function useProjectChat(projectId: string) {
   const [newFiles, setNewFiles] = useState<{ path: string; kind: string }[]>([])
   const [error, setError] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+  const lastSendRef = useRef<LastSendParams | null>(null)
 
-  const sendMessage = useCallback(async (message: string, target?: ChatTarget) => {
+  const sendMessage = useCallback(async (message: string, target?: ChatTarget, sessionId?: string | null) => {
     setIsStreaming(true)
     setPlan(null)
     setLogs([])
     setNewImages([])
     setNewFiles([])
     setError(null)
+
+    lastSendRef.current = { message, target, sessionId }
 
     const controller = new AbortController()
     abortRef.current = controller
@@ -37,7 +47,7 @@ export function useProjectChat(projectId: string) {
       const res = await fetch(`/api/projects/${projectId}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, target }),
+        body: JSON.stringify({ message, target, sessionId }),
         signal: controller.signal,
       })
 
@@ -48,55 +58,32 @@ export function useProjectChat(projectId: string) {
         return
       }
 
-      const reader = res.body?.getReader()
-      if (!reader) { setError('Response body not readable'); setIsStreaming(false); return }
-
-      const decoder = new TextDecoder()
-      let buffer = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-
-        for (const line of lines) {
-          const trimmed = line.trim()
-          if (!trimmed.startsWith('data: ')) continue
-
-          try {
-            const msg: ChatMessage = JSON.parse(trimmed.slice(6))
-
-            switch (msg.type) {
-              case 'plan':
-                setPlan(msg.plan || null)
-                setLogs(prev => [...prev, `Plan: ${msg.plan || ''}`])
-                break
-              case 'file':
-                if (msg.path) {
-                  const fpath = msg.path
-                  const fkind = msg.kind || 'file'
-                  setNewFiles(prev => [...prev, { path: fpath, kind: fkind }])
-                  setLogs(prev => [...prev, `Updated: ${fpath}`])
-                }
-                break
-              case 'image':
-                if (msg.path) {
-                  const ipath = msg.path
-                  setNewImages(prev => [...prev, ipath])
-                }
-                break
-              case 'error':
-                setError(msg.error!)
-                break
-              case 'done':
-                break
+      await parseSSEStream<ChatMessage>(res, (msg) => {
+        switch (msg.type) {
+          case 'plan':
+            setPlan(msg.plan || null)
+            setLogs(prev => [...prev, `Plan: ${msg.plan || ''}`])
+            break
+          case 'file': {
+            const fpath = msg.path
+            if (fpath) {
+              setNewFiles(prev => [...prev, { path: fpath, kind: msg.kind || 'file' }])
+              setLogs(prev => [...prev, `Updated: ${fpath}`])
             }
-          } catch { /* skip parse errors */ }
+            break
+          }
+          case 'image': {
+            const ipath = msg.path
+            if (ipath) setNewImages(prev => [...prev, ipath])
+            break
+          }
+          case 'error':
+            setError(msg.error!)
+            break
+          case 'done':
+            break
         }
-      }
+      }, controller.signal)
     } catch (err: any) {
       if (err.name === 'AbortError') return
       setError(err.message || 'Chat connection failed')
@@ -104,6 +91,12 @@ export function useProjectChat(projectId: string) {
       setIsStreaming(false)
     }
   }, [projectId])
+
+  const retrySend = useCallback(() => {
+    const last = lastSendRef.current
+    if (!last) return
+    sendMessage(last.message, last.target, last.sessionId)
+  }, [sendMessage])
 
   const stop = useCallback(() => {
     abortRef.current?.abort()
@@ -130,5 +123,5 @@ export function useProjectChat(projectId: string) {
     setError(null)
   }, [])
 
-  return { sendMessage, stop, regenerate, clear, isStreaming, plan, logs, newImages, newFiles, error }
+  return { sendMessage, retrySend, stop, regenerate, clear, isStreaming, plan, logs, newImages, newFiles, error }
 }

@@ -1,4 +1,5 @@
 import Button from '../ui/Button'
+import Markdown from '../chat/Markdown'
 import type { ProjectPlan } from '@happyimage/core'
 
 interface PlanConfirmationProps {
@@ -37,7 +38,7 @@ export default function PlanConfirmation({ plan, imageCount, onConfirm, onCancel
 
         <div className="plan-confirm-outline">
           <strong>Outline</strong>
-          <p>{plan.outlineMarkdown.slice(0, 400)}{plan.outlineMarkdown.length > 400 ? '...' : ''}</p>
+          <Markdown text={plan.outlineMarkdown} />
         </div>
 
         <div className="plan-confirm-prompts">
@@ -59,7 +60,7 @@ export default function PlanConfirmation({ plan, imageCount, onConfirm, onCancel
 
         <div className="plan-confirm-preview">
           <strong>Style Preview</strong>
-          <p>{previewText}</p>
+          <Markdown text={firstPrompt.slice(0, 400)} />
         </div>
       </div>
 

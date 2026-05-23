@@ -5,6 +5,21 @@ import { spawn, type ChildProcess } from 'child_process'
 import { readApiKey, readBaseUrl, readModel, readSettings, PROJECT_ROOT } from './settings.js'
 import { getPreferenceInfo } from './preferences.js'
 import { resolveSkillDir } from './skills-root.js'
+import { isVendorAvailable, executeImagineVendored, findBunExecutable } from './imagine-builtin.js'
+
+function parseYamlFrontMatter(content: string): Record<string, string> {
+  const match = content.match(/^---\n([\s\S]*?)\n---/)
+  if (!match) return {}
+  const result: Record<string, string> = {}
+  for (const line of match[1].split('\n')) {
+    const colonIdx = line.indexOf(':')
+    if (colonIdx === -1) continue
+    const key = line.slice(0, colonIdx).trim()
+    const val = line.slice(colonIdx + 1).trim()
+    if (key && val) result[key] = val
+  }
+  return result
+}
 
 function readSkillMd(skillId: string): string | null {
   const skillDir = resolveSkillDir(skillId)
@@ -26,7 +41,9 @@ function readSkillMd(skillId: string): string | null {
     ]
     const parts: string[] = []
     for (const section of keepSections) {
-      const re = new RegExp(`## ${section}[^#]*`, 'i')
+      // Match the section heading and everything up to the next ## heading (but not ### sub-headings)
+      const escaped = section.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const re = new RegExp(`## ${escaped}[\\s\\S]*?(?=\\n## |$)`, 'i')
       const m = content.match(re)
       if (m) parts.push(m[0].trim())
     }
@@ -45,7 +62,17 @@ interface ImagineInput {
   signal?: AbortSignal
 }
 
-export function executeImagine(input: ImagineInput): Promise<string> {
+export async function executeImagine(input: ImagineInput): Promise<string> {
+  // 1. Try vendored built-in implementation (no external skills root required)
+  if (isVendorAvailable()) {
+    return executeImagineVendored(input)
+  }
+
+  // 2. Fallback: try external baoyu-imagine skill directory
+  return executeImagineExternal(input)
+}
+
+function executeImagineExternal(input: ImagineInput): Promise<string> {
   return new Promise((promiseResolve, promiseReject) => {
     if (input.signal?.aborted) {
       promiseReject(new DOMException('Aborted', 'AbortError'))
@@ -54,12 +81,12 @@ export function executeImagine(input: ImagineInput): Promise<string> {
 
     const imagineDir = resolveSkillDir('imagine')
     if (!imagineDir) {
-      promiseReject(new Error('baoyu-imagine skill directory not found'))
+      promiseReject(new Error('baoyu-imagine 未找到。请安装 baoyu-skills 或检查 BAOYU_SKILLS_ROOT 配置。'))
       return
     }
     const scriptPath = join(imagineDir, 'scripts', 'main.ts')
     if (!existsSync(scriptPath)) {
-      promiseReject(new Error('baoyu-imagine script not found'))
+      promiseReject(new Error('baoyu-imagine script not found at: ' + scriptPath))
       return
     }
 
@@ -78,7 +105,8 @@ export function executeImagine(input: ImagineInput): Promise<string> {
     if (input.aspect_ratio) args.push('--ar', input.aspect_ratio)
     if (backend && backend !== 'auto') args.push('--provider', backend)
 
-    const proc = spawn('bun', args, {
+    const bunExec = findBunExecutable()
+    const proc = spawn(bunExec, args, {
       cwd: PROJECT_ROOT,
       stdio: ['ignore', 'pipe', 'pipe'] as const,
       env: { ...process.env, ...settings },
@@ -109,7 +137,7 @@ export function executeImagine(input: ImagineInput): Promise<string> {
         } else {
           try {
             const parsed = JSON.parse(stdout)
-            const imgPath = parsed.image || parsed.output || parsed.path || outFile
+            const imgPath = parsed.savedImage || parsed.image || parsed.output || parsed.path || outFile
             promiseResolve(existsSync(imgPath) ? imgPath : outFile)
           } catch {
             promiseResolve(outFile)
@@ -127,7 +155,7 @@ export function executeImagine(input: ImagineInput): Promise<string> {
   })
 }
 
-function friendlyImageError(error: string): string {
+export function friendlyImageError(error: string): string {
   if (error.includes('Throttling.RateQuota') || error.includes('DashScope API error (429)')) {
     return [
       'DashScope 图片生成遇到速率限制（429 Throttling.RateQuota）。',
@@ -139,6 +167,53 @@ function friendlyImageError(error: string): string {
   return error
 }
 
+function isRateLimitError(error: string) {
+  return error.includes('Throttling.RateQuota')
+    || error.includes('DashScope API error (429)')
+    || error.includes('Requests rate limit exceeded')
+}
+
+function sleep(ms: number, signal?: AbortSignal) {
+  return new Promise<void>((resolveSleep, rejectSleep) => {
+    if (signal?.aborted) {
+      rejectSleep(new DOMException('Aborted', 'AbortError'))
+      return
+    }
+    const timer = setTimeout(resolveSleep, ms)
+    signal?.addEventListener('abort', () => {
+      clearTimeout(timer)
+      rejectSleep(new DOMException('Aborted', 'AbortError'))
+    }, { once: true })
+  })
+}
+
+export async function executeImagineWithRateLimitRetry(
+  input: ImagineInput,
+  onText?: (text: string) => Promise<void> | void,
+  onRetry?: (retry: { attempt: number; delayMs: number; provider?: string; reason: string }) => Promise<void> | void,
+) {
+  const delays = [5000, 10000, 60000]
+  let lastError = ''
+
+  for (let attempt = 0; attempt <= delays.length; attempt++) {
+    try {
+      if (attempt > 0) await onText?.(`重试生图 ${attempt}/${delays.length}...\n`)
+      return await executeImagine(input)
+    } catch (err: any) {
+      const message = err.message || String(err)
+      lastError = message
+      if (!isRateLimitError(message) || attempt >= delays.length) throw err
+
+      const delay = delays[attempt]
+      await onRetry?.({ attempt: attempt + 1, delayMs: delay, provider: input.backend || 'auto', reason: message })
+      await onText?.(`生图服务限流，${Math.round(delay / 1000)} 秒后重试 ${attempt + 1}/${delays.length}。\n`)
+      await sleep(delay, input.signal)
+    }
+  }
+
+  throw new Error(lastError || 'Image generation failed')
+}
+
 interface GenerateOptions {
   skillId: string
   content: string
@@ -146,6 +221,7 @@ interface GenerateOptions {
   prebuiltPlan?: ProjectPlan
   onText?: (text: string) => Promise<void> | void
   onToolUse?: (name: string, input: Record<string, unknown>) => Promise<void> | void
+  onRetry?: (retry: { attempt: number; delayMs: number; provider?: string; reason: string }) => Promise<void> | void
   onToolResult?: (result: string) => Promise<void> | void
   onImage?: (path: string) => Promise<void> | void
   onFile?: (path: string, kind: string) => Promise<void> | void
@@ -354,6 +430,41 @@ export async function streamProjectChat(opts: ProjectChatOptions): Promise<void>
     const idx = up.index
     if (idx < 0 || idx >= promptFiles.length) continue
     const promptPath = join(promptsDir, promptFiles[idx])
+
+    // Parse the aspect ratio from the updated prompt front-matter
+    const fm = parseYamlFrontMatter(up.markdown || '')
+    let promptAspectRatio = fm.aspectRatio || fm.aspect_ratio || ''
+
+    // If not in the updated prompt, check the existing prompt file
+    if (!promptAspectRatio && existsSync(promptPath)) {
+      try {
+        const existingContent = readFileSync(promptPath, 'utf-8')
+        const existingFm = parseYamlFrontMatter(existingContent)
+        promptAspectRatio = existingFm.aspectRatio || existingFm.aspect_ratio || ''
+      } catch (err) {
+        // Ignore
+      }
+    }
+
+    // If still not found, check analysis.md front-matter
+    if (!promptAspectRatio) {
+      const analysisFilePath = join(projectPath, 'analysis.md')
+      if (existsSync(analysisFilePath)) {
+        try {
+          const analysisContent = readFileSync(analysisFilePath, 'utf-8')
+          const analysisFm = parseYamlFrontMatter(analysisContent)
+          promptAspectRatio = analysisFm.aspectRatio || analysisFm.aspect_ratio || ''
+        } catch (err) {
+          // Ignore
+        }
+      }
+    }
+
+    // Fall back to default '1:1' if none found
+    if (!promptAspectRatio) {
+      promptAspectRatio = '1:1'
+    }
+
     writeFileSync(promptPath, up.markdown, 'utf-8')
     await opts.onFile?.(promptPath, 'prompt')
 
@@ -373,13 +484,13 @@ export async function streamProjectChat(opts: ProjectChatOptions): Promise<void>
     const outputFile = `${imageBase}${versionSuffix}.png`
 
     try {
-      const imagePath = await executeImagine({
+      const imagePath = await executeImagineWithRateLimitRetry({
         prompt: up.prompt,
-        aspect_ratio: '1:1',
+        aspect_ratio: promptAspectRatio,
         output_dir: projectPath,
         output_file: outputFile,
         signal: opts.signal,
-      })
+      }, opts.onPlan)
       await opts.onImage?.(imagePath)
     } catch (err: any) {
       await opts.onError?.(`Image generation failed: ${friendlyImageError(err.message || String(err))}`)
@@ -423,13 +534,20 @@ export async function generatePlan(opts: { skillId: string; content: string; sel
 
   const requestedCount = Math.max(1, Math.min(10, Number(opts.selections.imageCount || opts.selections.count || 4) || 4))
   const aspectRatio = opts.selections.aspectRatio || opts.selections.aspect || settings.DEFAULT_ASPECT_RATIO || skill?.defaultAspectRatio || '1:1'
+  const selectedParameters = Object.entries(opts.selections)
+    .filter(([key]) => !['usePreferences', 'imageCount', 'count'].includes(key))
+    .map(([key, value]) => `${key}: ${value}`)
+    .join(', ')
 
   const userMessage = [
     `Generate content using the ${opts.skillId} skill.`,
     `Content: """${opts.content.slice(0, 4000)}"""`,
     `Requested image count: ${requestedCount}`,
     `Aspect ratio: ${aspectRatio}`,
-    `Language: ${settings.DEFAULT_LANGUAGE || 'zh'}`,
+    `Language: ${opts.selections.language || settings.DEFAULT_LANGUAGE || 'zh'}`,
+    selectedParameters ? `Selected Web UI parameters: ${selectedParameters}` : '',
+    selectedParameters ? 'Respect these selected parameters exactly unless they conflict with safety or platform constraints.' : '',
+    selectedParameters ? 'Do not replace selected style, layout, palette, language, aspectRatio, or imageCount with defaults. Every outline page and every prompt frontmatter must keep the selected values.' : '',
     '',
     'Return this exact JSON shape:',
     '{',
@@ -514,7 +632,7 @@ export async function streamGenerate(opts: GenerateOptions): Promise<void> {
     userMessage.push(`Parameters: ${selParts.join(', ')}`)
   }
 
-  userMessage.push(`Language: ${settings.DEFAULT_LANGUAGE || 'zh'}`)
+  userMessage.push(`Language: ${opts.selections.language || settings.DEFAULT_LANGUAGE || 'zh'}`)
 
   const baseURL = readBaseUrl()
   const model = readModel()
@@ -630,14 +748,14 @@ export async function streamGenerate(opts: GenerateOptions): Promise<void> {
       await opts.onText?.(`生成图片 ${i + 1}/${prompts.length}: ${imageName}\n`)
 
       try {
-        const imagePath = await executeImagine({
+        const imagePath = await executeImagineWithRateLimitRetry({
           prompt: prompt.prompt || prompt.markdown,
           aspect_ratio: aspectRatio,
           backend: opts.selections.backend || settings.IMAGE_BACKEND || 'auto',
           output_dir: projectDir,
           output_file: imageName,
           signal: opts.signal,
-        })
+        }, opts.onText, opts.onRetry)
         await opts.onImage?.(imagePath)
       } catch (err: any) {
         await opts.onError?.(`Image generation failed: ${friendlyImageError(err.message || String(err))}`)

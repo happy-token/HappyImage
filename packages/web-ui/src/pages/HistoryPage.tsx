@@ -117,24 +117,45 @@ export default function HistoryPage() {
                   >
                     
                     {/* Visual Preview Banner */}
-                    <div className="history-project-images aspect-[16/9] bg-zinc-950 flex gap-0.5 p-1 border-b border-zinc-800 overflow-hidden">
-                      {project.images.length > 0 ? (
-                        project.images.slice(0, 3).map((src, i) => (
-                          <img 
-                            key={`${src}-${i}`} 
-                            src={src} 
-                            alt="" 
-                            className="flex-1 object-cover h-full min-w-0 transition-transform group-hover:scale-[1.02]" 
-                            loading="lazy" 
-                          />
-                        ))
-                      ) : (
-                        <div className="flex-grow flex items-center justify-center text-zinc-500 text-xs gap-1.5 bg-zinc-900/40">
-                          <Image className="w-4 h-4 opacity-70" />
-                          <span>No Image Assets</span>
+                    {(() => {
+                      const isCover = project.skillDir === 'baoyu-cover-image' || project.skillDir === 'cover-image';
+                      const isCoverOrSingle = (isCover || project.images.length === 1) && project.images.length > 0;
+                      return (
+                        <div 
+                          className={`history-project-images bg-zinc-950 border-b border-zinc-800 overflow-hidden ${
+                            isCoverOrSingle ? 'aspect-auto h-auto p-0' : 'aspect-[16/9] gap-0.5 p-1'
+                          }`}
+                          style={isCoverOrSingle ? { display: 'block', minHeight: 'unset' } : undefined}
+                        >
+                          {project.images.length > 0 ? (
+                            isCoverOrSingle ? (
+                              <img 
+                                src={project.images[0]} 
+                                alt="" 
+                                className="w-full transition-transform group-hover:scale-[1.02]" 
+                                style={{ height: 'auto', minHeight: 'unset', objectFit: 'cover' }}
+                                loading="lazy" 
+                              />
+                            ) : (
+                              project.images.slice(0, 3).map((src, i) => (
+                                <img 
+                                  key={`${src}-${i}`} 
+                                  src={src} 
+                                  alt="" 
+                                  className="flex-1 object-cover h-full min-w-0 transition-transform group-hover:scale-[1.02]" 
+                                  loading="lazy" 
+                                />
+                              ))
+                            )
+                          ) : (
+                            <div className="flex-grow flex items-center justify-center text-zinc-500 text-xs gap-1.5 bg-zinc-900/40">
+                              <Image className="w-4 h-4 opacity-70" />
+                              <span>No Image Assets</span>
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
+                      );
+                    })()}
 
                     {/* Metadata body */}
                     <div className="p-4 pb-12 flex-grow flex flex-col justify-between gap-3">

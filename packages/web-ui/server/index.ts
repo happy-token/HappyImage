@@ -12,6 +12,7 @@ import packageRoute from './routes/package'
 import publishRoute from './routes/publish'
 import preferencesRoute from './routes/preferences'
 import sessionRoute from './routes/session'
+import sessionsRoute from './routes/sessions'
 import accountsRoute from './routes/accounts'
 import projectsRoute from './routes/projects'
 import uploadRoute from './routes/upload'
@@ -28,6 +29,8 @@ app.route('/api/package', packageRoute)
 app.route('/api/publish', publishRoute)
 app.route('/api/preferences', preferencesRoute)
 app.route('/api/session', sessionRoute)
+app.route('/api/sessions', sessionsRoute)
+app.route('/api/chat', sessionsRoute)
 app.route('/api/accounts', accountsRoute)
 app.route('/api/projects', projectsRoute)
 app.route('/api/upload', uploadRoute)
@@ -65,6 +68,26 @@ const isDev = process.env.NODE_ENV !== 'production'
 if (!isDev) {
   app.use('/assets/*', serveStatic({ root: resolve(webUiRoot, 'dist') }))
   app.use('/screenshots/*', serveStatic({ root: resolve(webUiRoot, 'dist') }))
+  app.get('/logo.svg', async (c) => {
+    const logo = Bun.file(resolve(webUiRoot, 'dist', 'logo.svg'))
+    if (!(await logo.exists())) return c.text('Not found', 404)
+    return new Response(logo, {
+      headers: {
+        'Content-Type': 'image/svg+xml; charset=utf-8',
+        'Cache-Control': 'public, max-age=3600',
+      },
+    })
+  })
+  app.get('/favicon.ico', async (c) => {
+    const logo = Bun.file(resolve(webUiRoot, 'dist', 'logo.svg'))
+    if (!(await logo.exists())) return c.text('Not found', 404)
+    return new Response(logo, {
+      headers: {
+        'Content-Type': 'image/svg+xml; charset=utf-8',
+        'Cache-Control': 'public, max-age=3600',
+      },
+    })
+  })
   app.get('*', async (c) => {
     const index = Bun.file(resolve(webUiRoot, 'dist', 'index.html'))
     if (!(await index.exists())) return c.text('Web UI has not been built. Run `happyimage build` or `bun run build`.', 500)

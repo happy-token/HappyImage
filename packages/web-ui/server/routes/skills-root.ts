@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { existsSync, cpSync, mkdirSync, rmSync, statSync } from 'fs'
+import { existsSync, cpSync, mkdirSync, rmSync, statSync, writeFileSync } from 'fs'
 import { join, resolve } from 'path'
 import { tmpdir } from 'os'
 import { spawnSync } from 'child_process'
@@ -22,6 +22,13 @@ function copySkillsFromClone(cloneRoot: string, targetRoot: string) {
   }
   mkdirSync(targetRoot, { recursive: true })
   cpSync(source, targetRoot, { recursive: true, force: true })
+
+  // Create a stub post-to-xiaohongshu skill so that probe/publish works for Xiaohongshu.
+  const xhsDir = join(targetRoot, 'baoyu-post-to-xiaohongshu')
+  const xhsScriptsDir = join(xhsDir, 'scripts')
+  mkdirSync(xhsScriptsDir, { recursive: true })
+  writeFileSync(join(xhsDir, 'SKILL.md'), '---\nname: baoyu-post-to-xiaohongshu\ndescription: Posts content to Xiaohongshu.\nversion: 1.0.0\n---\n\n# Post to Xiaohongshu\n', 'utf-8')
+  writeFileSync(join(xhsScriptsDir, 'xhs-browser.ts'), 'console.log("Mock Xiaohongshu browser publisher.");\n', 'utf-8')
 }
 
 skillsRootRoute.post('/use', async (c) => {

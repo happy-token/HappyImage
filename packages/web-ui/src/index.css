@@ -71,6 +71,37 @@ code, pre {
   border-radius: 4px;
 }
 
+/* 聊天输入框不需要 focus-visible 黑框 */
+textarea[aria-label="Chat message input"]:focus-visible,
+textarea[aria-label="Chat message input"]:focus {
+  outline: none !important;
+  outline-offset: 0;
+  border-radius: 0;
+}
+
+/* Session 侧边栏滚动条 */
+.session-sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(63, 63, 70) transparent;
+}
+
+.session-sidebar-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.session-sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.session-sidebar-scroll::-webkit-scrollbar-thumb {
+  background: rgb(63, 63, 70);
+  border-radius: 3px;
+}
+
+.session-sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgb(82, 82, 91);
+}
+
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }

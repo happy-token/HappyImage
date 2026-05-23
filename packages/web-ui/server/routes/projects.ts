@@ -2,7 +2,12 @@ import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync, mkdirSync, rmSync } from 'fs'
 import { basename, join, relative, resolve } from 'path'
-import { readSettings, streamProjectChat } from '@happyimage/core'
+import {
+  friendlyImageError, readSettings, streamProjectChat,
+  createSkillSession, updateSkillSession, appendSessionEvent,
+  appendSessionArtifact, createSessionTask, updateSessionTask,
+  getSkillSession, listSkillSessions, appendSessionMessage,
+} from '@happyimage/core'
 
 const projects = new Hono()
 
@@ -155,6 +160,29 @@ projects.delete('/:encodedId', (c) => {
   }
 })
 
+projects.get('/:encodedId/file', (c) => {
+  const projectPath = decodeProjectId(c.req.param('encodedId'))
+  if (!projectPath) return c.json({ error: 'Project not found' }, 404)
+  const filePath = c.req.query('path')
+  if (!filePath) return c.json({ error: 'path query required' }, 400)
+
+  const absPath = resolve(filePath)
+  const isInside = (parent: string, child: string) => {
+    const rel = relative(parent, child)
+    return rel === '' || (!rel.startsWith('..') && !rel.startsWith('/'))
+  }
+  if (!isInside(projectPath, absPath) || !existsSync(absPath)) {
+    return c.json({ error: 'File not found' }, 404)
+  }
+
+  try {
+    const raw = readFileSync(absPath, 'utf-8')
+    return c.json({ path: absPath, content: raw })
+  } catch {
+    return c.json({ error: 'Cannot read file' }, 400)
+  }
+})
+
 projects.post('/:encodedId/chat', async (c) => {
   const projectPath = decodeProjectId(c.req.param('encodedId'))
   if (!projectPath) return c.json({ error: 'Project not found' }, 404)
@@ -164,6 +192,16 @@ projects.post('/:encodedId/chat', async (c) => {
 
   const chatMessage = (body.message || '').trim()
   if (!chatMessage) return c.json({ error: 'message required' }, 400)
+
+  // Auto-create or find session for this project
+  const existingSessions = listSkillSessions().filter(s => s.projectPath === projectPath || s.activeProjectPath === projectPath)
+  let sessionId = existingSessions[0]?.id
+  if (!sessionId) {
+    const s = createSkillSession({ message: chatMessage })
+    updateSkillSession(s.id, { status: 'reviewing', projectPath })
+    sessionId = s.id
+  }
+  appendSessionMessage(sessionId, 'user', chatMessage)
 
   return streamSSE(c, async (stream) => {
     const conv = loadConversation(projectPath)
@@ -175,6 +213,8 @@ projects.post('/:encodedId/chat', async (c) => {
       changes: [],
     }
 
+    const task = createSessionTask(sessionId, { kind: 'revise', status: 'running', projectPath })
+
     try {
       await streamProjectChat({
         projectPath,
@@ -183,31 +223,40 @@ projects.post('/:encodedId/chat', async (c) => {
         signal: c.req.raw.signal,
         onPlan: async (plan) => {
           session.plan = plan
+          appendSessionEvent(sessionId, { type: 'progress', message: `Plan: ${plan}` })
           await stream.writeSSE({ data: JSON.stringify({ type: 'plan', plan }) })
         },
         onFile: async (path, kind) => {
           session.changes.push({ file: path, kind })
+          appendSessionArtifact(sessionId, { type: kind === 'prompt' ? 'prompt' : 'file', path, title: kind })
           await stream.writeSSE({ data: JSON.stringify({ type: 'file', path, kind }) })
         },
         onImage: async (path) => {
           const url = `/api/image?path=${encodeURIComponent(path)}`
           session.changes.push({ file: path, kind: 'image' })
+          appendSessionArtifact(sessionId, { type: 'image', path, url, title: 'Generated image' })
           await stream.writeSSE({ data: JSON.stringify({ type: 'image', path: url }) })
         },
         onError: async (error) => {
+          updateSessionTask(sessionId, task.id, { status: 'failed', error })
+          appendSessionEvent(sessionId, { type: 'error', message: error })
           await stream.writeSSE({ data: JSON.stringify({ type: 'error', error }) })
         },
         onDone: async () => {
           conv.sessions.push(session)
           saveConversation(projectPath, conv)
-          await stream.writeSSE({ data: JSON.stringify({ type: 'done' }) })
+          updateSessionTask(sessionId, task.id, { status: 'succeeded' })
+          appendSessionEvent(sessionId, { type: 'done' })
+          await stream.writeSSE({ data: JSON.stringify({ type: 'done', sessionId }) })
         },
       })
     } catch (err: any) {
       conv.sessions.push(session)
       saveConversation(projectPath, conv)
+      updateSessionTask(sessionId, task.id, { status: 'failed', error: err.message || 'Chat failed' })
+      appendSessionEvent(sessionId, { type: 'error', message: err.message || 'Chat failed' })
       await stream.writeSSE({ data: JSON.stringify({ type: 'error', error: err.message || 'Chat failed' }) })
-      await stream.writeSSE({ data: JSON.stringify({ type: 'done' }) })
+      await stream.writeSSE({ data: JSON.stringify({ type: 'done', sessionId }) })
     }
   })
 })
@@ -224,7 +273,7 @@ projects.post('/:encodedId/regenerate', async (c) => {
   }
 
   try {
-    const { executeImagine } = await import('@happyimage/core')
+    const { executeImagineWithRateLimitRetry } = await import('@happyimage/core')
     const promptsDir = join(projectPath, 'prompts')
     const promptFiles = existsSync(promptsDir)
       ? readdirSync(promptsDir).filter(n => n.endsWith('.md')).sort()
@@ -236,21 +285,26 @@ projects.post('/:encodedId/regenerate', async (c) => {
     }
 
     let prompt = body.promptOverride || ''
+    let promptMarkdown = ''
     if (!prompt) {
       const promptPath = join(promptsDir, promptFiles[idx])
-      const raw = readFileSync(promptPath, 'utf-8')
-      const promptMatch = raw.match(/^prompt:\s*(.+)/im) || raw.match(/```[\s\S]*?\n([\s\S]*?)```/)
-      prompt = promptMatch ? promptMatch[1].trim() : raw.trim().slice(0, 2000)
+      promptMarkdown = readFileSync(promptPath, 'utf-8')
+      const promptMatch = promptMarkdown.match(/^prompt:\s*(.+)/im) || promptMarkdown.match(/```[\s\S]*?\n([\s\S]*?)```/)
+      prompt = promptMatch ? promptMatch[1].trim() : promptMarkdown.trim().slice(0, 2000)
+    } else {
+      const promptPath = join(promptsDir, promptFiles[idx])
+      promptMarkdown = existsSync(promptPath) ? readFileSync(promptPath, 'utf-8') : ''
     }
+    const aspectRatio = promptMarkdown.match(/^aspectRatio:\s*['"]?([^'"\n]+)['"]?/im)?.[1]?.trim() || '1:1'
 
     const imageBase = promptFiles[idx].replace(/\.md$/, '')
     const existingVersions = imageVersions(projectPath, imageBase + '.png')
     const versionSuffix = existingVersions.length > 0 ? `.v${existingVersions.length + 1}` : ''
     const outputFile = `${imageBase}${versionSuffix}.png`
 
-    const imagePath = await executeImagine({
+    const imagePath = await executeImagineWithRateLimitRetry({
       prompt,
-      aspect_ratio: '1:1',
+      aspect_ratio: aspectRatio,
       output_dir: projectPath,
       output_file: outputFile,
     })
@@ -271,7 +325,7 @@ projects.post('/:encodedId/regenerate', async (c) => {
       version: existingVersions.length + 1,
     })
   } catch (err: any) {
-    return c.json({ error: err.message || 'Regeneration failed' }, 500)
+    return c.json({ error: friendlyImageError(err.message || 'Regeneration failed') }, 500)
   }
 })
 

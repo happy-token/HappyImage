@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Badge from '../ui/Badge'
 
 interface PlatformViolation {
@@ -25,6 +25,9 @@ interface PlatformPreviewProps {
   images: string[]
   caption: string
   imageCount: number
+  onCaptionChange?: (caption: string) => void
+  showHeader?: boolean
+  aspectRatio?: string
 }
 
 const platformNames: Record<string, string> = {
@@ -34,7 +37,21 @@ const platformNames: Record<string, string> = {
   x: 'X (Twitter)',
 }
 
-export default function PlatformPreview({ platform, projectPath, images, caption, imageCount }: PlatformPreviewProps) {
+const xiaohongshuAspectStyle = (aspectRatio: string = '1:1'): React.CSSProperties => {
+  const [w, h] = aspectRatio.split(':').map(Number)
+  if (w && h) return { aspectRatio: `${w}/${h}` }
+  return { aspectRatio: '1/1' }
+}
+
+const getWeiboSingleAspectRatio = (aspectRatio: string = '1:1') => {
+  if (aspectRatio === '16:9') return '16 / 9'
+  if (aspectRatio === '4:3') return '4 / 3'
+  if (aspectRatio === '3:4') return '3 / 4'
+  if (aspectRatio === '9:16') return '9 / 16'
+  return '1 / 1'
+}
+
+export default function PlatformPreview({ platform, projectPath, images, caption, imageCount, onCaptionChange, showHeader = true, aspectRatio = '1:1' }: PlatformPreviewProps) {
   const [check, setCheck] = useState<PlatformCheck | null>(null)
   const [loading, setLoading] = useState(false)
   const [activeImageIndex, setActiveImageIndex] = useState(0)
@@ -86,20 +103,22 @@ export default function PlatformPreview({ platform, projectPath, images, caption
   }
 
   return (
-    <div className="platform-preview bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden flex flex-col h-full">
+    <div className="platform-preview bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-zinc-800 bg-zinc-950/40">
-        <div>
-          <p className="text-indigo-400 text-xxs font-bold uppercase tracking-wider">Publish Preview</p>
-          <h3 className="text-zinc-150 font-bold text-sm">{platformNames[platform] || platform}</h3>
+      {showHeader && (
+        <div className="flex items-center justify-between p-4 border-b border-zinc-800 bg-zinc-950/40">
+          <div>
+            <p className="text-indigo-400 text-xxs font-bold uppercase tracking-wider">Publish Preview</p>
+            <h3 className="text-zinc-150 font-bold text-sm">{platformNames[platform] || platform}</h3>
+          </div>
+          <div className="flex items-center gap-1.5">
+            {loading && <Badge variant="outline">checking...</Badge>}
+            {!loading && errorCount > 0 && <Badge variant="default">{errorCount} errors</Badge>}
+            {!loading && warningCount > 0 && <Badge variant="outline">{warningCount} warnings</Badge>}
+            {!loading && errorCount === 0 && warningCount === 0 && check && <Badge variant="accent">Ready</Badge>}
+          </div>
         </div>
-        <div className="flex items-center gap-1.5">
-          {loading && <Badge variant="outline">checking...</Badge>}
-          {!loading && errorCount > 0 && <Badge variant="default">{errorCount} errors</Badge>}
-          {!loading && warningCount > 0 && <Badge variant="outline">{warningCount} warnings</Badge>}
-          {!loading && errorCount === 0 && warningCount === 0 && check && <Badge variant="accent">Ready</Badge>}
-        </div>
-      </div>
+      )}
 
       {/* Violations Area */}
       {check && check.violations.length > 0 && (
@@ -118,10 +137,10 @@ export default function PlatformPreview({ platform, projectPath, images, caption
       )}
 
       {/* Mockup Canvas */}
-      <div className="p-4 flex-1 flex flex-col items-center justify-center bg-zinc-950/60 overflow-auto min-h-[360px]">
+      <div className="px-3 py-4 flex flex-col items-center bg-zinc-950/60 min-h-0">
         {/* Xiaohongshu Mockup */}
         {platform === 'xiaohongshu' && (
-          <div className="w-full max-w-[340px] bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col">
+          <div className="w-full max-w-[340px] bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col isolate">
             {/* Header */}
             <div className="flex items-center justify-between p-3 border-b border-zinc-800/40">
               <div className="flex items-center gap-2">
@@ -135,7 +154,7 @@ export default function PlatformPreview({ platform, projectPath, images, caption
             </div>
 
             {/* Media Block / Carousel */}
-            <div className="relative aspect-[3/4] bg-zinc-950 flex items-center justify-center group">
+            <div className="relative w-full flex-shrink-0 bg-zinc-950 overflow-hidden" style={xiaohongshuAspectStyle(aspectRatio)}>
               {images.length > 0 ? (
                 <>
                   <img 
@@ -169,7 +188,7 @@ export default function PlatformPreview({ platform, projectPath, images, caption
                   )}
                 </>
               ) : (
-                <div className="flex flex-col items-center justify-center text-zinc-600 gap-2">
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-zinc-600 gap-2">
                   <span className="text-3xl">🎨</span>
                   <span className="text-xs">No images generated</span>
                 </div>
@@ -188,8 +207,18 @@ export default function PlatformPreview({ platform, projectPath, images, caption
 
             {/* Content Area */}
             <div className="p-3 flex flex-col gap-1.5 overflow-auto max-h-[140px]">
-              {title && <h4 className="text-zinc-150 font-bold text-sm leading-snug">{title}</h4>}
-              <p className="text-zinc-300 text-xs leading-relaxed whitespace-pre-wrap">{formatBodyText(bodyText)}</p>
+              {title && (
+                <EditableText
+                  text={title}
+                  onCommit={t => onCaptionChange?.(reconstructCaption(t, bodyText, hashtags))}
+                  className="text-zinc-150 font-bold text-sm leading-snug"
+                />
+              )}
+              <EditableText
+                text={bodyText}
+                onCommit={b => onCaptionChange?.(reconstructCaption(title, b, hashtags))}
+                className="text-zinc-300 text-xs leading-relaxed whitespace-pre-wrap"
+              />
               {hashtags.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mt-1">
                   {hashtags.map((tag, idx) => (
@@ -234,7 +263,7 @@ export default function PlatformPreview({ platform, projectPath, images, caption
                 
                 <div className="relative border border-zinc-800 rounded-lg overflow-hidden bg-zinc-950 flex flex-col cursor-pointer group">
                   {images.length > 0 ? (
-                    <div className="aspect-[16/9] w-full relative">
+                    <div className="w-full relative" style={{ aspectRatio: '2.35 / 1' }}>
                       <img src={images[0]} alt="WeChat Cover" className="w-full h-full object-cover" />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-3">
                         <h4 className="text-white font-bold text-sm leading-snug line-clamp-2 drop-shadow-md">
@@ -261,19 +290,25 @@ export default function PlatformPreview({ platform, projectPath, images, caption
             {/* Article Detail Detail */}
             {wechatView === 'detail' && (
               <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl p-4 flex flex-col gap-3 overflow-auto max-h-[380px] text-left">
-                <h2 className="text-zinc-150 font-bold text-base leading-snug">{title || 'WeChat Article Title'}</h2>
+                <EditableText
+                  text={title || 'WeChat Article Title'}
+                  onCommit={t => onCaptionChange?.(reconstructCaption(t, bodyText, hashtags))}
+                  className="text-zinc-150 font-bold text-base leading-snug"
+                />
                 <div className="flex items-center gap-2 text-xxs text-zinc-500 border-b border-zinc-800/40 pb-2">
                   <span className="text-emerald-500 font-bold hover:underline cursor-pointer">Happy Brand</span>
                   <span>Just now</span>
                 </div>
 
-                <div className="text-zinc-300 text-xs leading-relaxed whitespace-pre-wrap flex flex-col gap-3 font-sans">
-                  {formatBodyText(bodyText)}
-                </div>
+                <EditableText
+                  text={bodyText}
+                  onCommit={b => onCaptionChange?.(reconstructCaption(title, b, hashtags))}
+                  className="text-zinc-300 text-xs leading-relaxed whitespace-pre-wrap font-sans"
+                />
 
                 {images.map((src, idx) => (
                   <figure key={idx} className="my-2 border border-zinc-800 rounded-lg overflow-hidden bg-zinc-950">
-                    <img src={src} alt={`Illustration ${idx + 1}`} className="w-full object-cover" />
+                    <img src={src} alt={`Illustration ${idx + 1}`} className="w-full h-auto block" />
                     <figcaption className="p-1.5 bg-zinc-950/60 text-center text-[10px] text-zinc-500">
                       Image #{idx + 1}
                     </figcaption>
@@ -307,8 +342,21 @@ export default function PlatformPreview({ platform, projectPath, images, caption
 
             {/* Weibo Text Body */}
             <div className="flex flex-col gap-1.5">
-              {title && <h4 className="text-zinc-200 font-bold text-xs">【{title}】</h4>}
-              <p className="text-zinc-300 text-xs leading-relaxed whitespace-pre-wrap">{formatBodyText(bodyText)}</p>
+              {title && (
+                <EditableText
+                  text={`【${title}】`}
+                  onCommit={t => {
+                    const stripped = t.replace(/^【|】$/g, '')
+                    onCaptionChange?.(reconstructCaption(stripped, bodyText, hashtags))
+                  }}
+                  className="text-zinc-200 font-bold text-xs"
+                />
+              )}
+              <EditableText
+                text={bodyText}
+                onCommit={b => onCaptionChange?.(reconstructCaption(title, b, hashtags))}
+                className="text-zinc-300 text-xs leading-relaxed whitespace-pre-wrap"
+              />
               {bodyText.length > 140 && (
                 <span className="text-indigo-400 text-xxs font-bold cursor-pointer hover:underline">...展开全文</span>
               )}
@@ -328,7 +376,8 @@ export default function PlatformPreview({ platform, projectPath, images, caption
                   return (
                     <div 
                       key={idx} 
-                      className="aspect-square bg-zinc-950 border border-zinc-800 rounded overflow-hidden relative cursor-pointer hover:opacity-90 transition-opacity"
+                      className="bg-zinc-950 border border-zinc-800 rounded overflow-hidden relative cursor-pointer hover:opacity-90 transition-opacity"
+                      style={{ aspectRatio: images.length === 1 ? getWeiboSingleAspectRatio(aspectRatio) : '1 / 1' }}
                     >
                       <img src={src} alt="" className="w-full h-full object-cover" />
                       {isNinth && (
@@ -370,30 +419,52 @@ export default function PlatformPreview({ platform, projectPath, images, caption
             </div>
 
             {/* Tweet content */}
-            <div className="text-zinc-150 text-xs leading-normal whitespace-pre-wrap flex flex-col gap-1">
-              {title && <span className="font-bold">{title}</span>}
-              <span>{formatBodyText(bodyText)}</span>
+            <div className="text-zinc-150 text-xs leading-normal flex flex-col gap-1">
+              {title && (
+                <EditableText
+                  text={title}
+                  onCommit={t => onCaptionChange?.(reconstructCaption(t, bodyText, hashtags))}
+                  className="font-bold"
+                />
+              )}
+              <EditableText
+                text={bodyText}
+                onCommit={b => onCaptionChange?.(reconstructCaption(title, b, hashtags))}
+                className="whitespace-pre-wrap"
+              />
             </div>
 
             {/* Image Grid */}
             {images.length > 0 && (
               <div className={`overflow-hidden border border-zinc-800 rounded-xl bg-zinc-950 grid gap-[1.5px] ${
                 images.length === 1 
-                  ? 'grid-cols-1 aspect-[16/9]' 
-                  : images.length === 2 
-                  ? 'grid-cols-2 aspect-[16/9]' 
-                  : images.length === 3 
-                  ? 'grid-cols-2 aspect-[16/9]' 
-                  : 'grid-cols-2 aspect-square'
+                  ? 'grid-cols-1' 
+                  : 'grid-cols-2'
               }`}>
                 {images.slice(0, 4).map((src, idx) => {
+                  let cellRatio = '16 / 9'
+                  if (images.length === 1) {
+                    cellRatio = aspectRatio === '1:1' ? '1 / 1' :
+                                aspectRatio === '3:4' ? '3 / 4' :
+                                aspectRatio === '4:3' ? '4 / 3' :
+                                aspectRatio === '9:16' ? '9 / 16' : '16 / 9'
+                  } else if (images.length === 2) {
+                    cellRatio = '8 / 9'
+                  } else if (images.length === 3) {
+                    cellRatio = idx === 0 ? '8 / 18' : '16 / 9'
+                  } else {
+                    cellRatio = '1 / 1'
+                  }
+
                   const isFirstOfThree = images.length === 3 && idx === 0
+
                   return (
                     <div 
                       key={idx} 
                       className={`relative overflow-hidden cursor-pointer hover:opacity-90 transition-opacity ${
                         isFirstOfThree ? 'row-span-2 h-full' : ''
                       }`}
+                      style={{ aspectRatio: isFirstOfThree ? undefined : cellRatio }}
                     >
                       <img src={src} alt="" className="w-full h-full object-cover" />
                     </div>
@@ -420,27 +491,29 @@ export default function PlatformPreview({ platform, projectPath, images, caption
       </div>
 
       {/* Stats Bottom bar */}
-      <div className="grid grid-cols-4 border-t border-zinc-800 bg-zinc-950/40">
-        <div className="flex flex-col items-center justify-center p-2.5 border-r border-zinc-800">
-          <span className="text-zinc-500 text-[9px] font-bold uppercase tracking-wider">Images</span>
-          <span className="text-zinc-200 text-xs font-semibold mt-0.5">{imageCount}</span>
+      {showHeader && (
+        <div className="grid grid-cols-4 border-t border-zinc-800 bg-zinc-950/40">
+          <div className="flex flex-col items-center justify-center p-2.5 border-r border-zinc-800">
+            <span className="text-zinc-500 text-[9px] font-bold uppercase tracking-wider">Images</span>
+            <span className="text-zinc-200 text-xs font-semibold mt-0.5">{imageCount}</span>
+          </div>
+          <div className="flex flex-col items-center justify-center p-2.5 border-r border-zinc-800">
+            <span className="text-zinc-500 text-[9px] font-bold uppercase tracking-wider">Title</span>
+            <span className="text-zinc-200 text-xs font-semibold mt-0.5">{title.length} chars</span>
+          </div>
+          <div className="flex flex-col items-center justify-center p-2.5 border-r border-zinc-800">
+            <span className="text-zinc-500 text-[9px] font-bold uppercase tracking-wider">Body</span>
+            <span className="text-zinc-200 text-xs font-semibold mt-0.5">{bodyText.length} chars</span>
+          </div>
+          <div className="flex flex-col items-center justify-center p-2.5">
+            <span className="text-zinc-500 text-[9px] font-bold uppercase tracking-wider">Hashtags</span>
+            <span className="text-zinc-200 text-xs font-semibold mt-0.5">{hashtags.length}</span>
+          </div>
         </div>
-        <div className="flex flex-col items-center justify-center p-2.5 border-r border-zinc-800">
-          <span className="text-zinc-500 text-[9px] font-bold uppercase tracking-wider">Title</span>
-          <span className="text-zinc-200 text-xs font-semibold mt-0.5">{title.length} chars</span>
-        </div>
-        <div className="flex flex-col items-center justify-center p-2.5 border-r border-zinc-800">
-          <span className="text-zinc-500 text-[9px] font-bold uppercase tracking-wider">Body</span>
-          <span className="text-zinc-200 text-xs font-semibold mt-0.5">{bodyText.length} chars</span>
-        </div>
-        <div className="flex flex-col items-center justify-center p-2.5">
-          <span className="text-zinc-500 text-[9px] font-bold uppercase tracking-wider">Hashtags</span>
-          <span className="text-zinc-200 text-xs font-semibold mt-0.5">{hashtags.length}</span>
-        </div>
-      </div>
+      )}
 
       {/* Project Output Path */}
-      {projectPath && (
+      {showHeader && projectPath && (
         <div className="px-3.5 py-2.5 border-t border-zinc-800 bg-zinc-950/20 text-left">
           <code className="text-zinc-500 text-xxs font-mono truncate block select-all">
             Output Path: {projectPath}
@@ -449,6 +522,45 @@ export default function PlatformPreview({ platform, projectPath, images, caption
       )}
     </div>
   )
+}
+
+function EditableText({ text, onCommit, className }: {
+  text: string
+  onCommit: (s: string) => void
+  className?: string
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  const focused = useRef(false)
+
+  useEffect(() => {
+    if (ref.current) ref.current.innerText = text
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!focused.current && ref.current && ref.current.innerText !== text) {
+      ref.current.innerText = text
+    }
+  }, [text])
+
+  return (
+    <div
+      ref={ref}
+      contentEditable
+      suppressContentEditableWarning
+      onFocus={() => { focused.current = true }}
+      onBlur={e => { focused.current = false; onCommit(e.currentTarget.innerText) }}
+      onKeyDown={e => { if (e.key === 'Escape') e.currentTarget.blur(); e.stopPropagation() }}
+      className={`outline-none rounded transition-colors hover:bg-white/[0.04] focus:bg-white/[0.06] focus:ring-1 focus:ring-inset focus:ring-indigo-400/40 px-0.5 -mx-0.5 cursor-text ${className ?? ''}`}
+    />
+  )
+}
+
+function reconstructCaption(title: string, body: string, hashtags: string[]): string {
+  const parts: string[] = []
+  if (title.trim()) parts.push(`Title: ${title.trim()}`)
+  if (body.trim()) parts.push(body.trim())
+  if (hashtags.length > 0) parts.push(hashtags.join(' '))
+  return parts.filter(Boolean).join('\n')
 }
 
 function extractTitle(caption: string): string {

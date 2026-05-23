@@ -16,9 +16,11 @@ export default function Header() {
     <header className="border-b border-slate-200 dark:border-zinc-850 bg-slate-50/80 dark:bg-zinc-950/80 backdrop-blur-md sticky top-0 z-40">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-2.5 no-underline group">
-          <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center shadow-sm shadow-indigo-600/10 group-hover:bg-indigo-700 transition-colors">
-            <span className="text-white text-sm font-semibold font-display">H</span>
-          </div>
+          <img
+            src="/logo.svg"
+            className="w-8 h-8 object-contain group-hover:scale-105 transition-transform"
+            alt="HappyImage Logo"
+          />
           <div className="flex items-center gap-1.5">
             <span className="font-display text-lg font-semibold text-slate-800 dark:text-zinc-100 transition-colors">
               HappyImage
