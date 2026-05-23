@@ -1,14 +1,19 @@
-import { useEffect, useMemo, useState, useRef } from 'react'
-import { Link, useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom'
-import { MessageSquare, Compass, History, Settings, Loader2 } from 'lucide-react'
+import { useEffect, useMemo, useState, useRef, useReducer } from 'react'
+import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { Compass, Loader2, ChevronLeft, ChevronRight, Check } from 'lucide-react'
 import { getSkill, skills } from '../data'
-import type { ConfigItem, SkillDefinition } from '../types/skills'
+import type { ConfigItem, SkillDefinition, SkillParameter } from '../types/skills'
 import { useSSE } from '../hooks/useSSE'
 import { useProjectChat } from '../hooks/useProjectChat'
-import Button from '../components/ui/Button'
-import PlanConfirmation from '../components/project/PlanConfirmation'
 import ProjectWorkspace from '../components/project/ProjectWorkspace'
-import type { ProjectPlan } from '@happyimage/core'
+import ChatThread from '../components/chat/ChatThread'
+import ChatComposer, { type ChatComposerHandle } from '../components/chat/ChatComposer'
+import type { CommandRequest, ProjectPlan } from '@happyimage/core'
+import { chatReducer, makeMessage } from '../lib/chat-reducer'
+import { parseSSEStream } from '../lib/sse'
+import type { ChatMessage } from '../lib/chat-reducer'
+import { previewForItem, previewForSkill, getStyleGradient, getPaletteGradient } from '../lib/screenshots'
+import { encodeProjectId } from '../lib/project'
 
 interface PreferenceInfo {
   found: boolean
@@ -24,26 +29,76 @@ interface PublishingAccount {
   author: string
 }
 
-interface ChatMessage {
-  id: string
-  role: 'user' | 'assistant' | 'system'
-  text: string
-  type?: 'text' | 'plan' | 'runner'
-  planData?: ProjectPlan
-  logData?: string[]
-  sourceContent?: string
+function CompactStyleCard({
+  item,
+  active,
+  preview,
+  onClick,
+}: {
+  item: ConfigItem
+  active: boolean
+  preview?: string
+  onClick: () => void
+}) {
+  const [imgError, setImgError] = useState(false)
+  const fallback = getStyleGradient(item.id) || getPaletteGradient(item.id)
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={`${item.name}: ${item.description}`}
+      className={`group flex flex-col w-24 shrink-0 rounded-xl overflow-hidden border text-left cursor-pointer transition-all duration-300 ${
+        active 
+          ? 'border-indigo-500 bg-indigo-950/20 ring-2 ring-indigo-500/20' 
+          : 'border-zinc-850 bg-zinc-950 hover:border-zinc-700 hover:scale-[1.02]'
+      }`}
+    >
+      <div className="w-full aspect-[4/3] bg-zinc-950/50 overflow-hidden relative border-b border-zinc-900/40">
+        {preview && !imgError ? (
+          <img 
+            src={preview} 
+            alt={item.name} 
+            onError={() => setImgError(true)} 
+            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" 
+          />
+        ) : (
+          <div 
+            className="w-full h-full flex items-center justify-center p-2 text-center text-[10px] font-bold text-white/90 leading-tight" 
+            style={{ background: fallback }}
+          >
+            {item.name}
+          </div>
+        )}
+
+        {/* Selected checkmark top-right */}
+        {active && (
+          <div className="absolute top-1 right-1 bg-indigo-650 text-white rounded-full p-0.5 shadow-md z-10 animate-scale-in">
+            <Check className="w-2.5 h-2.5 stroke-[3]" />
+          </div>
+        )}
+      </div>
+
+      {/* Label area below the image */}
+      <div className="w-full px-1.5 py-1.5 text-[9px] font-semibold text-zinc-300 truncate text-center bg-zinc-900/50 leading-none">
+        {item.name}
+      </div>
+    </button>
+  )
 }
 
-function encodeProjectId(path: string) {
-  const bytes = new TextEncoder().encode(path)
-  let binary = ''
-  for (const byte of bytes) binary += String.fromCharCode(byte)
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
-}
-
-function imageFor(skill: SkillDefinition, dimension: string, item: ConfigItem) {
-  const dir = skill.screenshotDirs.find(s => s.dimension === dimension)
-  return dir ? `/screenshots/${dir.path}/${item.id}.webp` : ''
+function parseAnalysisFrontMatter(content: string): Record<string, string> {
+  const match = content.match(/^---\n([\s\S]*?)\n---/)
+  if (!match) return {}
+  const result: Record<string, string> = {}
+  for (const line of match[1].split('\n')) {
+    const colonIdx = line.indexOf(':')
+    if (colonIdx === -1) continue
+    const key = line.slice(0, colonIdx).trim()
+    const val = line.slice(colonIdx + 1).trim()
+    if (key && val && !val.startsWith('{') && !val.startsWith('[')) result[key] = val
+  }
+  return result
 }
 
 function initialSelections(skill: SkillDefinition) {
@@ -60,6 +115,25 @@ function defaultImageCount(skill: SkillDefinition) {
   return 4
 }
 
+const parameterNames = new Set(['language', 'aspectRatio', 'imageCount', 'pageCount', 'slides', 'audience', 'density', 'scale'])
+
+function optionsForParameter(parameter: SkillParameter): ConfigItem[] {
+  if (parameter.options) {
+    return parameter.options.map(option => ({
+      id: option.value,
+      name: option.label,
+      description: option.value,
+      tags: [],
+    }))
+  }
+  const defaults: Record<string, ConfigItem[]> = {
+    imageCount: [1, 2, 4, 6, 8].map(count => ({ id: String(count), name: `${count}`, description: `${count} images`, tags: [] })),
+    pageCount: [1, 2, 4, 6, 8].map(count => ({ id: String(count), name: `${count}`, description: `${count} pages`, tags: [] })),
+    slides: [6, 8, 10, 12, 16].map(count => ({ id: String(count), name: `${count}`, description: `${count} slides`, tags: [] })),
+  }
+  return defaults[parameter.name] || [{ id: String(parameter.defaultValue || ''), name: String(parameter.defaultValue || 'Default'), description: 'Default value', tags: [] }]
+}
+
 function parsePublishSlash(input: string) {
   const match = input.trim().match(/^\/baoyu-post-to-(wechat|weibo|x)(?:\s+(.+))?$/)
   if (!match) return null
@@ -70,6 +144,7 @@ function parseContentSlashSkill(input: string) {
   const command = input.trim().split(/\s+/, 1)[0]?.replace(/^\//, '')
   const map: Record<string, string> = {
     'baoyu-image-cards': 'image-cards',
+    'baoyu-xhs-images': 'image-cards',
     'baoyu-cover-image': 'cover-image',
     'baoyu-infographic': 'infographic',
     'baoyu-article-illustrator': 'article-illustrator',
@@ -80,17 +155,39 @@ function parseContentSlashSkill(input: string) {
   return command ? map[command] : undefined
 }
 
+function commandIdForSkill(skillId: string) {
+  const map: Record<string, string> = {
+    'image-cards': 'baoyu-image-cards',
+    'xhs-images': 'baoyu-image-cards',
+    'cover-image': 'baoyu-cover-image',
+    infographic: 'baoyu-infographic',
+    'article-illustrator': 'baoyu-article-illustrator',
+    comic: 'baoyu-comic',
+    'slide-deck': 'baoyu-slide-deck',
+    diagram: 'baoyu-diagram',
+  }
+  return map[skillId] || `baoyu-${skillId}`
+}
+
+const welcomeMsg = makeMessage('assistant', 'Describe what you would like to design, or point to a local directory or GitHub repository. Choose a skill and styles below to begin.')
+
 export default function StudioPage() {
   const { id: urlProjectId } = useParams<{ id?: string }>()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
+
   const chatThreadRef = useRef<HTMLDivElement>(null)
+  const nearBottomRef = useRef(true)
+  const sendingRef = useRef(false)
+  const composerRef = useRef<ChatComposerHandle>(null)
 
-
-  // Core visual settings
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const [sidebarWidth, setSidebarWidth] = useState(320)
+  const sidebarDragRef = useRef<{ startX: number; startWidth: number } | null>(null)
+  const [workspaceOpen, setWorkspaceOpen] = useState(false)
+  const [workspaceWidth, setWorkspaceWidth] = useState(560)
+  const workspaceDragRef = useRef<{ startX: number; startWidth: number } | null>(null)
 
-  // Skill & configuration states
   const defaultSkill = skills[0]
   const [skillId, setSkillId] = useState(defaultSkill.id)
   const skill = getSkill(skillId) || defaultSkill
@@ -99,44 +196,66 @@ export default function StudioPage() {
   const [language, setLanguage] = useState('zh')
   const [imageCount, setImageCount] = useState(defaultImageCount(defaultSkill))
 
+  const [extraParams, setExtraParams] = useState<Record<string, string>>(() => {
+    const nextSkill = skills[0]
+    return Object.fromEntries(
+      nextSkill.parameters
+        .filter(param => parameterNames.has(param.name) && !['language', 'aspectRatio', 'imageCount', 'pageCount', 'slides'].includes(param.name))
+        .map(param => [param.name, String(param.defaultValue ?? '')])
+    )
+  })
+
+  const buildPayload = (
+    currentSkill: SkillDefinition,
+    currentSelections: Record<string, string>,
+    currentAspectRatio: string,
+    currentLanguage: string,
+    currentImageCount: number,
+    currentExtraParams: Record<string, string>,
+    currentUsePreferences: boolean,
+  ) => {
+    const payload: Record<string, string> = { ...currentSelections, usePreferences: String(currentUsePreferences) }
+    
+    if (currentSkill.parameters.some(p => p.name === 'language')) {
+      payload.language = currentLanguage
+    }
+    if (currentSkill.parameters.some(p => p.name === 'aspectRatio')) {
+      payload.aspectRatio = currentAspectRatio
+    }
+    const countParam = currentSkill.parameters.find(p => ['imageCount', 'pageCount', 'slides'].includes(p.name))
+    if (countParam) {
+      payload[countParam.name] = String(currentImageCount)
+    }
+    for (const [k, v] of Object.entries(currentExtraParams)) {
+      payload[k] = v
+    }
+    return payload
+  }
+
   const configSummary = useMemo(() => {
     const parts: string[] = [skill.nameZh]
-    for (const [key, dim] of Object.entries(skill.dimensions)) {
-      const selectedId = selections[key]
-      const item = dim.items.find(i => i.id === selectedId)
-      if (item) parts.push(item.name)
-    }
-    const langLabel = { zh: '中文', en: 'EN', ja: '日本語', ko: '한국어' }[language] || language
-    parts.push(`${langLabel} · ${aspectRatio}`)
-    if (imageCount > 1) parts.push(`${imageCount} pics`)
+    if (imageCount > 1) parts.push(`${imageCount} 张`)
     return parts.join(' · ')
-  }, [skill, selections, language, aspectRatio, imageCount])
-  
-  // Source context parameters
+  }, [skill, imageCount])
+
   const [sourceMode, setSourceMode] = useState('text')
   const [sourceRef, setSourceRef] = useState('')
   const [uploadedSourceName, setUploadedSourceName] = useState('')
   const [uploadStatus, setUploadStatus] = useState('')
 
-  // Preference status
   const [preferenceInfo, setPreferenceInfo] = useState<PreferenceInfo | null>(null)
   const [usePreferences, setUsePreferences] = useState(true)
-
-  // Skip plan setting
   const [skipPlanConfirmation, setSkipPlanConfirmation] = useState(false)
 
-  // Backend Project State
   const [projectData, setProjectData] = useState<any | null>(null)
   const [loadingProject, setLoadingProject] = useState(false)
 
-  // Publishing / Platform Preview states
   const [platform, setPlatform] = useState('xiaohongshu')
   const [caption, setCaption] = useState('')
   const [publishingAccounts, setPublishingAccounts] = useState<PublishingAccount[]>([])
   const [publishingAccount, setPublishingAccount] = useState('')
   const [xhsAvailable, setXhsAvailable] = useState<boolean | null>(null)
-  
-  // Tasks state
+
   const [isCaptioning, setIsCaptioning] = useState(false)
   const [captionError, setCaptionError] = useState<string | null>(null)
   const [isPackaging, setIsPackaging] = useState(false)
@@ -146,19 +265,37 @@ export default function StudioPage() {
   const [publishResult, setPublishResult] = useState<{ pid: number; logPath: string; message: string } | null>(null)
   const [publishError, setPublishError] = useState<string | null>(null)
 
-  // Chat message thread
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
+  const [chat, dispatch] = useReducer(chatReducer, { messages: [welcomeMsg], streamingMsgId: null, planningMsgId: null })
   const [chatInput, setChatInput] = useState('')
   const [pendingGenerationContent, setPendingGenerationContent] = useState('')
   const [pendingGenerationSkillId, setPendingGenerationSkillId] = useState(skill.id)
+  const [pendingCommandRequest, setPendingCommandRequest] = useState<CommandRequest | null>(null)
+  const activeSessionId = searchParams.get('session')
+  const setActiveSessionId = (id: string | null) => {
+    const params = new URLSearchParams(searchParams)
+    if (id) { params.set('session', id) } else { params.delete('session') }
+    const basePath = urlProjectId ? `/projects/${urlProjectId}` : '/'
+    navigate(`${basePath}?${params.toString()}`, { replace: true })
+  }
+  const [disabledPlanPrompts, setDisabledPlanPrompts] = useState<Set<number>>(new Set())
 
-  // Generation stream hook (fresh creation)
   const sse = useSSE()
-
-  // Project chat stream hook (incremental edits)
   const projectChat = useProjectChat(urlProjectId || '')
+  const isStreaming = sse.isStreaming || projectChat.isStreaming
 
-  // Load settings on mount to check skipPlanConfirmation
+  const hasWorkspaceContent = !!(projectData || sse.isStreaming || sse.images.length > 0)
+  useEffect(() => {
+    if (hasWorkspaceContent) setWorkspaceOpen(true)
+    else setWorkspaceOpen(false)
+  }, [hasWorkspaceContent])
+
+  const appendMessage = (role: ChatMessage['role'], text: string, type?: ChatMessage['type'], extra?: Partial<ChatMessage>) => {
+    const msg = makeMessage(role, text, type, extra)
+    dispatch({ type: 'ADD_MESSAGE', message: msg })
+    return msg.id
+  }
+
+  // Load settings
   useEffect(() => {
     fetch('/api/settings')
       .then(res => res.json())
@@ -167,23 +304,35 @@ export default function StudioPage() {
           setSkipPlanConfirmation(true)
         }
       })
-      .catch(() => {})
+      .catch(err => console.warn('Failed to load settings:', err))
   }, [])
 
-  // 1. Load active project from URL if ID exists
+  // Auto-create session on first visit if none in URL
+  const autoCreateRef = useRef(false)
+  useEffect(() => {
+    if (urlProjectId || activeSessionId) return
+    if (autoCreateRef.current) return
+    autoCreateRef.current = true
+    let cancelled = false
+    fetch('/api/sessions', { method: 'POST' })
+      .then(res => res.json())
+      .then(data => { if (!cancelled && data.session?.id) setActiveSessionId(data.session.id) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [urlProjectId])
+
+  // Load active project from URL
+  const projectLoading = useRef(false)
   useEffect(() => {
     if (!urlProjectId) {
       setProjectData(null)
-      setChatMessages([
-        {
-          id: 'welcome',
-          role: 'assistant',
-          text: 'Describe what you would like to design, or point to a local directory or GitHub repository. Choose a skill and styles below to begin.',
-        },
-      ])
+      dispatch({ type: 'RESET_MESSAGES', messages: [welcomeMsg] })
       return
     }
 
+    let cancelled = false
+    if (projectLoading.current) return
+    projectLoading.current = true
     setLoadingProject(true)
     fetch(`/api/projects/${urlProjectId}`)
       .then(res => {
@@ -191,46 +340,91 @@ export default function StudioPage() {
         return res.json()
       })
       .then(data => {
+        if (cancelled) return
         if (data.error) throw new Error(data.error)
         setProjectData(data)
-        
-        // Sync configuration states
-        setSkillId(data.categoryDir || defaultSkill.id)
+
+        const loadedSkillId = data.categoryDir || defaultSkill.id
+        const loadedSkill = getSkill(loadedSkillId) || defaultSkill
+        setSkillId(loadedSkillId)
+
+        // Restore imageCount from actual images, aspectRatio/language/selections from analysis
+        if (data.images && data.images.length > 0) setImageCount(data.images.length)
+        const analysisFile = data.files?.find((f: any) => f.kind === 'analysis')
+        if (analysisFile?.content) {
+          const fm = parseAnalysisFrontMatter(analysisFile.content)
+          if (fm.aspectRatio) setAspectRatio(fm.aspectRatio)
+          if (fm.language) setLanguage(fm.language)
+          const restoredSelections: Record<string, string> = {}
+          for (const dimKey of Object.keys(loadedSkill.dimensions)) {
+            if (fm[dimKey]) restoredSelections[dimKey] = fm[dimKey]
+          }
+          if (Object.keys(restoredSelections).length > 0) setSelections(restoredSelections)
+
+          const extras: Record<string, string> = {}
+          for (const param of loadedSkill.parameters) {
+            if (parameterNames.has(param.name) && !['language', 'aspectRatio', 'imageCount', 'pageCount', 'slides'].includes(param.name)) {
+              if (fm[param.name]) extras[param.name] = fm[param.name]
+            }
+          }
+          if (Object.keys(extras).length > 0) setExtraParams(extras)
+        }
+
         if (data.files && data.files.length > 0) {
           const copyFile = data.files.find((f: any) => f.kind === 'copy')
-          if (copyFile && copyFile.content) {
-            setCaption(copyFile.content)
-          }
+          if (copyFile && copyFile.content) setCaption(copyFile.content)
         }
 
-        // Build history thread from conversations
-        const initialMsg: ChatMessage = {
-          id: 'welcome',
-          role: 'assistant',
-          text: `Loaded project "${data.name}". You can now review files in the workspace on the right, or type modifications below (e.g. "make the 2nd image layout cleaner").`,
-        }
-        
+        const initialMsg = makeMessage('assistant', `Loaded project "${data.name}". You can now review files in the workspace on the right, or type modifications below (e.g. "make the 2nd image layout cleaner").`)
         const historyMsgs: ChatMessage[] = (data.conversations || []).flatMap((c: any, index: number) => [
-          {
-            id: `usr-${index}`,
-            role: 'user',
-            text: c.message,
-          },
-          {
-            id: `ast-${index}`,
-            role: 'assistant',
-            text: c.plan,
-          }
+          makeMessage('user', c.message),
+          makeMessage('assistant', c.plan),
         ])
 
-        setChatMessages([initialMsg, ...historyMsgs])
+        dispatch({ type: 'RESET_MESSAGES', messages: [initialMsg, ...historyMsgs] })
+
+        fetch(`/api/sessions?projectPath=${encodeURIComponent(data.path)}`)
+          .then(res => res.json())
+          .then(async (sessions) => {
+            if (cancelled) return
+            const existing = Array.isArray(sessions) ? sessions[0] : null
+            let sessionId = existing?.id || null
+            if (!sessionId) {
+              const created = await fetch('/api/sessions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: data.name, projectPath: data.path }),
+              }).then(res => res.json())
+              sessionId = created.session?.id || null
+            }
+            if (sessionId && data.conversations?.length) {
+              const syncMessages: Array<{ role: string; content: string }> = []
+              for (const c of data.conversations) {
+                if (c.message) syncMessages.push({ role: 'user', content: c.message })
+                if (c.plan) syncMessages.push({ role: 'assistant', content: c.plan })
+              }
+              if (syncMessages.length > 0) {
+                fetch(`/api/sessions/${sessionId}/sync`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ messages: syncMessages }),
+                }).catch(() => {})
+              }
+            }
+            if (sessionId) setActiveSessionId(sessionId)
+          })
+          .catch(err => { if (!cancelled) console.warn('Failed to fetch/create chat session:', err) })
       })
       .catch(err => {
-        setChatMessages([{ id: 'error', role: 'system', text: err.message || 'Failed to load project' }])
+        if (cancelled) return
+        dispatch({ type: 'RESET_MESSAGES', messages: [makeMessage('system', err.message || 'Failed to load project')] })
       })
-      .finally(() => setLoadingProject(false))
+      .finally(() => { if (!cancelled) setLoadingProject(false) })
+
+    return () => { cancelled = true; projectLoading.current = false }
   }, [urlProjectId])
 
+  // Handle gallery/skill query params
   useEffect(() => {
     if (urlProjectId) return
     const requestedSkillId = searchParams.get('skill')
@@ -251,17 +445,78 @@ export default function StudioPage() {
     setAspectRatio(searchParams.get('aspectRatio') || requestedSkill.defaultAspectRatio)
     setLanguage(searchParams.get('language') || 'zh')
     setImageCount(Number(searchParams.get('imageCount') || searchParams.get('pageCount') || searchParams.get('slides')) || defaultImageCount(requestedSkill))
+    
+    // Set extraParams from query params
+    const extras: Record<string, string> = {}
+    for (const param of requestedSkill.parameters) {
+      if (parameterNames.has(param.name) && !['language', 'aspectRatio', 'imageCount', 'pageCount', 'slides'].includes(param.name)) {
+        const val = searchParams.get(param.name) || String(param.defaultValue ?? '')
+        extras[param.name] = val
+      }
+    }
+    setExtraParams(extras)
+
     setIsSidebarOpen(searchParams.get('drawer') === '1')
-    setChatMessages([
-      {
-        id: 'welcome-gallery',
-        role: 'assistant',
-        text: `Gallery selections are loaded for ${requestedSkill.nameZh}. Describe the topic, paste a GitHub repository, or tell me what you want to generate.`,
-      },
-    ])
+    const requestedSessionId = searchParams.get('session')
+    if (requestedSessionId) setActiveSessionId(requestedSessionId)
+    dispatch({ type: 'RESET_MESSAGES', messages: [
+      makeMessage('assistant', `Gallery selections are loaded for ${requestedSkill.nameZh}${requestedSessionId ? ` in session ${requestedSessionId.slice(0, 8)}` : ''}. Describe the topic, paste a GitHub repository, or tell me what you want to generate.`),
+    ]})
   }, [searchParams, urlProjectId])
 
-  // 2. Fetch skill preferences
+  // Load session history when switching sessions
+  useEffect(() => {
+    if (!activeSessionId || urlProjectId) return
+    fetch(`/api/sessions/${activeSessionId}`)
+      .then(res => res.json())
+      .then(data => {
+        const session = data.session
+        if (!session) return
+        const events = data.events || []
+        const msgs: ChatMessage[] = [makeMessage('assistant', `Session: ${session.title || 'New Chat'}`)]
+        for (const evt of events) {
+          if (evt.type === 'message') {
+            msgs.push(makeMessage(evt.role || 'user', evt.content || ''))
+          } else if (evt.type === 'plan' && evt.plan) {
+            msgs.push(makeMessage('assistant', `Plan: ${evt.plan.title || ''}`, 'plan', { planData: evt.plan }))
+          } else if (evt.type === 'done') {
+            msgs.push(makeMessage('assistant', 'Generation completed.'))
+          } else if (evt.type === 'error' && evt.message) {
+            msgs.push(makeMessage('system', evt.message))
+          }
+        }
+
+        // If task is still running, show a runner message and connect to stream
+        if (data.activeTask?.status === 'running') {
+          const runnerId = makeMessage('assistant', 'Task is still running... Reconnecting...', 'runner').id
+          msgs.push({ id: runnerId, role: 'assistant', text: '', type: 'runner' })
+          dispatch({ type: 'RESET_MESSAGES', messages: msgs })
+
+          // Connect to stream for live updates
+          const lastSeq = events.length > 0 ? events[events.length - 1].seq : 0
+          fetch(`/api/sessions/${activeSessionId}/stream?after=${lastSeq}`)
+            .then(res => {
+              if (!res.ok) return
+              return parseSSEStream(res, (msg: any) => {
+                if (msg.type === 'replay' && msg.event) {
+                  // Skip replays, they're historical
+                } else if (msg.type === 'text') {
+                  dispatch({ type: 'APPEND_TEXT', messageId: runnerId, text: msg.text || '' })
+                } else if (msg.type === 'done') {
+                  dispatch({ type: 'SET_MESSAGE', messageId: runnerId, patch: { text: 'Task completed.', type: 'text' } })
+                }
+              })
+            })
+            .catch(() => {})
+          return
+        }
+
+        dispatch({ type: 'RESET_MESSAGES', messages: msgs })
+      })
+      .catch(() => {})
+  }, [activeSessionId])
+
+  // Fetch skill preferences
   useEffect(() => {
     setPreferenceInfo(null)
     fetch(`/api/preferences/${skill.id}`)
@@ -270,13 +525,17 @@ export default function StudioPage() {
       .catch(() => setPreferenceInfo(null))
   }, [skill.id])
 
-  // 3. Fetch publish accounts & platform probes
-  useEffect(() => {
-    setXhsAvailable(null)
+  const checkXhsAvailable = () => {
     fetch('/api/publish/probe?platform=xiaohongshu')
       .then(res => res.json())
       .then(data => setXhsAvailable(data.xiaohongshu?.available ?? false))
       .catch(() => setXhsAvailable(false))
+  }
+
+  // Fetch publish accounts
+  useEffect(() => {
+    setXhsAvailable(null)
+    checkXhsAvailable()
   }, [])
 
   useEffect(() => {
@@ -291,49 +550,72 @@ export default function StudioPage() {
         const preferred = accounts.find((account: PublishingAccount) => account.isDefault) || accounts[0]
         setPublishingAccount(preferred?.alias || '')
       })
-      .catch(() => {
-        setPublishingAccounts([])
-        setPublishingAccount('')
-      })
+      .catch(() => { setPublishingAccounts([]); setPublishingAccount('') })
   }, [platform])
 
-  // 4. Scroll chat to bottom
+  // Smart scroll
   useEffect(() => {
-    chatThreadRef.current?.scrollTo({
-      top: chatThreadRef.current.scrollHeight,
-      behavior: 'smooth',
-    })
-  }, [chatMessages, sse.log, projectChat.logs])
+    if (!nearBottomRef.current) return
+    const el = chatThreadRef.current
+    if (!el) return
+    el.scrollTo({ top: el.scrollHeight, behavior: isStreaming ? 'instant' : 'smooth' })
+  }, [chat.messages, sse.log, projectChat.logs, isStreaming])
 
-  // Helpers
-  const appendMessage = (role: ChatMessage['role'], text: string, type?: ChatMessage['type'], planData?: ProjectPlan, sourceContent?: string) => {
-    const newMsg: ChatMessage = { id: `${Date.now()}-${chatMessages.length}`, role, text, type, planData, sourceContent }
-    setChatMessages(prev => [...prev, newMsg])
-    return newMsg.id
-  }
+  // Reset sending guard when streaming stops
+  useEffect(() => {
+    if (!isStreaming) sendingRef.current = false
+  }, [isStreaming])
 
   const selectSkill = (nextId: string) => {
     const nextSkill = getSkill(nextId)
     if (!nextSkill) return
     setSkillId(nextId)
     setSelections(initialSelections(nextSkill))
-    setAspectRatio(nextSkill.defaultAspectRatio)
-    setImageCount(defaultImageCount(nextSkill))
+    
+    const langParam = nextSkill.parameters.find(p => p.name === 'language')
+    if (langParam) {
+      setLanguage(String(langParam.defaultValue ?? 'zh'))
+    } else {
+      setLanguage('zh')
+    }
+    
+    const aspectParam = nextSkill.parameters.find(p => p.name === 'aspectRatio')
+    if (aspectParam) {
+      setAspectRatio(String(aspectParam.defaultValue ?? nextSkill.defaultAspectRatio))
+    } else {
+      setAspectRatio(nextSkill.defaultAspectRatio)
+    }
+
+    const countParam = nextSkill.parameters.find(p => ['imageCount', 'pageCount', 'slides'].includes(p.name))
+    if (countParam) {
+      setImageCount(Number(countParam.defaultValue ?? defaultImageCount(nextSkill)))
+    } else {
+      setImageCount(defaultImageCount(nextSkill))
+    }
+
+    const extras = Object.fromEntries(
+      nextSkill.parameters
+        .filter(param => parameterNames.has(param.name) && !['language', 'aspectRatio', 'imageCount', 'pageCount', 'slides'].includes(param.name))
+        .map(param => [param.name, String(param.defaultValue ?? '')])
+    )
+    setExtraParams(extras)
   }
 
   // --- Initial Generation Flow (SSE) ---
-  const [planningMsgId, setPlanningMsgId] = useState<string | null>(null)
-  const [disabledPlanPrompts, setDisabledPlanPrompts] = useState<Set<number>>(new Set())
-  
+
   const handleStartGeneration = async () => {
+    if (sendingRef.current) return
     const query = chatInput.trim()
     const publishCommand = parsePublishSlash(query)
     if (publishCommand) {
+      sendingRef.current = true
       await runPublishSlash(publishCommand.platform, publishCommand.packagePath)
+      sendingRef.current = false
       return
     }
     const hasSource = sourceMode !== 'text' && Boolean(sourceRef.trim())
     if (!query && !hasSource) return
+    sendingRef.current = true
     const generationContent = query || ''
     const activeSkillId = parseContentSlashSkill(query) || skill.id
     setChatInput('')
@@ -341,98 +623,164 @@ export default function StudioPage() {
     setPendingGenerationSkillId(activeSkillId)
     setDisabledPlanPrompts(new Set())
 
+    const payload = buildPayload(skill, selections, aspectRatio, language, imageCount, extraParams, usePreferences)
+    const commandRequest: CommandRequest = {
+      commandId: commandIdForSkill(activeSkillId),
+      source: sourceMode === 'file' && sourceRef
+        ? { type: 'file', value: sourceRef }
+        : { type: 'text', value: generationContent },
+      options: sourceMode === 'file' && generationContent
+        ? { ...payload, prompt: generationContent }
+        : payload,
+    }
+    setPendingCommandRequest(commandRequest)
+
+    let sessionId = activeSessionId
+    if (!sessionId) {
+      try {
+        const sessionRes = await fetch('/api/sessions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: query || generationContent || uploadedSourceName, commandRequest }),
+        })
+        const sessionData = await sessionRes.json()
+        if (sessionRes.ok && sessionData.session?.id) {
+          sessionId = sessionData.session.id
+          setActiveSessionId(sessionData.session.id)
+        }
+      } catch (err) {
+        console.warn('Failed to create session, falling back to activeSessionId:', err)
+        sessionId = activeSessionId
+      }
+    }
+
     appendMessage('user', query || `使用${uploadedSourceName ? `上传文件 ${uploadedSourceName}` : '已选择的内容源'}生成图片`)
-    const payload = { ...selections, aspectRatio, language, imageCount: String(imageCount), usePreferences: String(usePreferences) }
 
     if (skipPlanConfirmation) {
-      appendMessage('assistant', 'Launching generation process directly...', 'runner')
+      const streamId = appendMessage('assistant', '', 'runner')
+      dispatch({ type: 'SET_STREAMING', messageId: streamId })
       sse.start(activeSkillId, generationContent, payload, {
+        onText: (text) => dispatch({ type: 'APPEND_TEXT', messageId: streamId, text }),
+        onError: (errMsg) => {
+          dispatch({ type: 'SET_MESSAGE', messageId: streamId, patch: { text: `Generation failed: ${errMsg}`, type: 'error', retryFn: () => sse.retry() } })
+          dispatch({ type: 'SET_STREAMING', messageId: null })
+        },
         onDone: (doneImages) => {
-          appendMessage('assistant', `Generation completed! Created ${doneImages.length} images.`)
+          dispatch({ type: 'APPEND_TEXT', messageId: streamId, text: doneImages.length > 0 ? `\n\n✓ Generated ${doneImages.length} images.` : '\n\n⚠ No images returned.' })
+          dispatch({ type: 'SET_STREAMING', messageId: null })
         },
         onProject: (path) => {
-          const encodedId = encodeProjectId(path)
-          navigate(`/projects/${encodedId}`, { replace: true })
-        }
-      }, { sourceMode, sourceRef })
+          const pid = encodeProjectId(path)
+          dispatch({ type: 'APPEND_TEXT', messageId: streamId, text: `\n\n[→ Open project workspace](/projects/${pid})` })
+        },
+      }, { sourceMode, sourceRef, sessionId: sessionId || undefined, commandRequest: commandRequest as unknown as Record<string, unknown> })
       return
     }
 
-    const thinkingId = appendMessage('assistant', 'Thinking... Creating a structured generation plan.')
-    setPlanningMsgId(thinkingId)
+    const thinkingId = appendMessage('assistant', '', 'thinking')
+    dispatch({ type: 'SET_PLANNING', messageId: thinkingId })
 
     try {
-      const res = await fetch('/api/generate/plan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ skillId: activeSkillId, content: generationContent, selections: payload, sourceMode, sourceRef }),
-      })
+      const res = sessionId
+        ? await fetch(`/api/sessions/${sessionId}/command`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ commandRequest }),
+        })
+        : await fetch('/api/generate/plan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ skillId: activeSkillId, content: generationContent, selections: payload, sourceMode, sourceRef }),
+        })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
-      
-      // Update the thinking bubble to present the inline plan
-      setChatMessages(prev => prev.map(msg => 
-        msg.id === thinkingId 
-          ? { ...msg, text: `I have prepared a generation plan for you: **${data.title || 'Untitled Project'}**`, type: 'plan', planData: data, sourceContent: generationContent }
-          : msg
-      ))
+      const plan = data.plan || data
+
+      dispatch({ type: 'SET_MESSAGE', messageId: thinkingId, patch: {
+        text: `I have prepared a generation plan for you: **${plan.title || 'Untitled Project'}**`,
+        type: 'plan',
+        planData: plan,
+        sourceContent: generationContent,
+      }})
     } catch (err: any) {
-      setChatMessages(prev => prev.map(msg => 
-        msg.id === thinkingId 
-          ? { ...msg, text: `Failed to prepare plan: ${err.message || 'Error occurred.'}`, role: 'system' }
-          : msg
-      ))
+      dispatch({ type: 'SET_MESSAGE', messageId: thinkingId, patch: {
+        text: `Failed to prepare plan: ${err.message || 'Error occurred.'}`,
+        role: 'system',
+      }})
     }
   }
 
   const confirmGeneratePlan = (confirmedPlan: ProjectPlan, disabledPrompts: Set<number>, sourceContent?: string) => {
     const content = (sourceContent || pendingGenerationContent || chatInput).trim()
-    const payload = { ...selections, aspectRatio, language, imageCount: String(imageCount), usePreferences: String(usePreferences) }
+    const payload = buildPayload(skill, selections, aspectRatio, language, imageCount, extraParams, usePreferences)
     const activePrompts = confirmedPlan.prompts.filter((_, i) => !disabledPrompts.has(i))
     const adjustedPlan = { ...confirmedPlan, prompts: activePrompts }
 
-    // Clear plan card state
-    setChatMessages(prev => prev.filter(msg => msg.id !== planningMsgId))
-    setPlanningMsgId(null)
+    dispatch({ type: 'REMOVE_MESSAGE', messageId: chat.planningMsgId! })
+    dispatch({ type: 'CLEAR_PLANNING' })
 
-    // Add runner message bubble
-    appendMessage('assistant', 'Launching generation process...', 'runner')
+    const streamId = appendMessage('assistant', '', 'runner')
+    dispatch({ type: 'SET_STREAMING', messageId: streamId })
 
     sse.start(pendingGenerationSkillId || skill.id, content, payload, {
+      onText: (text) => dispatch({ type: 'APPEND_TEXT', messageId: streamId, text }),
+      onError: (errMsg) => {
+        dispatch({ type: 'SET_MESSAGE', messageId: streamId, patch: { text: `Generation failed: ${errMsg}`, type: 'error', retryFn: () => sse.retry() } })
+        dispatch({ type: 'SET_STREAMING', messageId: null })
+      },
       onDone: (doneImages) => {
-        appendMessage('assistant', `Generation completed! Created ${doneImages.length} images.`)
+        dispatch({ type: 'APPEND_TEXT', messageId: streamId, text: doneImages.length > 0 ? `\n\n✓ Generated ${doneImages.length} images.` : '\n\n⚠ No images returned.' })
+        dispatch({ type: 'SET_STREAMING', messageId: null })
       },
       onProject: (path) => {
-        // Encode path and navigate to project view
-        const encodedId = encodeProjectId(path)
-        navigate(`/projects/${encodedId}`, { replace: true })
-      }
-    }, { sourceMode, sourceRef, prebuiltPlan: adjustedPlan as unknown as Record<string, unknown> })
+        const pid = encodeProjectId(path)
+        dispatch({ type: 'APPEND_TEXT', messageId: streamId, text: `\n\n[→ Open project workspace](/projects/${pid})` })
+      },
+    }, {
+      sourceMode, sourceRef,
+      prebuiltPlan: adjustedPlan as unknown as Record<string, unknown>,
+      sessionId: activeSessionId || undefined,
+      commandRequest: pendingCommandRequest as unknown as Record<string, unknown> | undefined,
+    })
     setPendingGenerationContent('')
     setPendingGenerationSkillId(skill.id)
+    setPendingCommandRequest(null)
   }
 
   const cancelGeneratePlan = () => {
-    setChatMessages(prev => prev.filter(msg => msg.id !== planningMsgId))
-    setPlanningMsgId(null)
+    dispatch({ type: 'REMOVE_MESSAGE', messageId: chat.planningMsgId! })
+    dispatch({ type: 'CLEAR_PLANNING' })
     setPendingGenerationContent('')
     setPendingGenerationSkillId(skill.id)
+    setPendingCommandRequest(null)
     setDisabledPlanPrompts(new Set())
   }
 
-  // --- Incremental Edit Chat Flow (useProjectChat) ---
+  // --- Incremental Edit Chat Flow ---
+
   const handleSendProjectEdit = () => {
+    if (sendingRef.current) return
     const query = chatInput.trim()
     if (!query || projectChat.isStreaming) return
     const publishCommand = parsePublishSlash(query)
     if (publishCommand) {
+      sendingRef.current = true
       runPublishSlash(publishCommand.platform, publishCommand.packagePath)
+      sendingRef.current = false
       return
     }
+    sendingRef.current = true
     setChatInput('')
 
     appendMessage('user', query)
-    
+    if (activeSessionId) {
+      fetch(`/api/sessions/${activeSessionId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: query, targetArtifactId: selectedImage !== null ? `image-${selectedImage}` : undefined }),
+      }).catch(err => console.warn('Failed to post session message:', err))
+    }
+
     const target = selectedImage !== null ? { type: 'image', index: selectedImage } : undefined
     projectChat.sendMessage(query, target)
   }
@@ -457,16 +805,13 @@ export default function StudioPage() {
 
   const handleSourceModeChange = (mode: string) => {
     setSourceMode(mode)
-    if (mode !== 'file') {
-      setUploadedSourceName('')
-      setUploadStatus('')
-    }
+    if (mode !== 'file') { setUploadedSourceName(''); setUploadStatus('') }
     if (mode === 'text') setSourceRef('')
   }
 
   const canSubmit = projectData
-    ? Boolean(chatInput.trim()) && !projectChat.isStreaming
-    : (Boolean(chatInput.trim()) || (sourceMode !== 'text' && Boolean(sourceRef.trim()))) && !sse.isStreaming
+    ? Boolean(chatInput.trim()) && !projectChat.isStreaming && !sendingRef.current
+    : (Boolean(chatInput.trim()) || (sourceMode !== 'text' && Boolean(sourceRef.trim()))) && !sse.isStreaming && !sendingRef.current
 
   const runPublishSlash = async (targetPlatform: string, explicitPackagePath = '') => {
     const packagePath = explicitPackagePath || packageResult?.packagePath || ''
@@ -497,21 +842,19 @@ export default function StudioPage() {
       ? 'Upload a .md, .markdown, or .txt file'
       : '/Users/.../project'
 
-  // Watch for finished incremental edit chat stream
+  // Watch for finished project chat stream
   const prevStreaming = useRef(false)
   useEffect(() => {
     if (prevStreaming.current && !projectChat.isStreaming && urlProjectId) {
-      // Re-fetch project contents to reflect the modified files & images
       fetch(`/api/projects/${urlProjectId}`)
         .then(res => res.json())
-        .then(data => {
-          if (!data.error) setProjectData(data)
-        })
+        .then(data => { if (!data.error) setProjectData(data) })
     }
     prevStreaming.current = projectChat.isStreaming
   }, [projectChat.isStreaming, urlProjectId])
 
   // --- Publishing Actions ---
+
   const generateCaption = async () => {
     setIsCaptioning(true)
     setCaptionError(null)
@@ -519,13 +862,7 @@ export default function StudioPage() {
       const res = await fetch('/api/caption', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          skillId: skill.id,
-          content: projectData?.name || chatInput,
-          selections,
-          platform,
-          imageCount: projectData?.images.length || imageCount,
-        }),
+        body: JSON.stringify({ skillId: skill.id, content: projectData?.name || chatInput, selections, platform, imageCount: projectData?.images.length || imageCount }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
@@ -577,16 +914,11 @@ export default function StudioPage() {
     }
   }
 
-  const handleSelectImage = (index: number | null) => {
-    onSelectImage(index)
-  }
-
   const [selectedImage, setSelectedImage] = useState<number | null>(null)
-  const onSelectImage = (index: number | null) => {
-    setSelectedImage(index)
-  }
+  useEffect(() => {
+    if (selectedImage !== null) composerRef.current?.focus()
+  }, [selectedImage])
 
-  // Selections Summary helper
   const selectionSummary = useMemo(() => {
     return Object.entries(selections).map(([key, itemId]) => {
       const item = skill.dimensions[key]?.items.find(i => i.id === itemId)
@@ -594,448 +926,420 @@ export default function StudioPage() {
     })
   }, [selections, skill])
 
-  const renderParameters = (isInline: boolean) => {
-    return (
-      <div className={`flex flex-col gap-5 overflow-y-auto transition-all duration-300 ${
-        isInline 
-          ? 'w-72 shrink-0 border border-zinc-850 bg-zinc-900/60 backdrop-blur-md rounded-2xl p-4 h-full scrollbar-thin shadow-xl'
-          : 'w-80 border-l border-zinc-850 bg-zinc-900/40 backdrop-blur-md p-5 h-full scrollbar-thin'
-      }`}>
-        <div className="flex items-center justify-between border-b border-zinc-850 pb-3">
-          <h3 className="text-zinc-300 font-bold text-xs uppercase tracking-wider">⚙ Visual Parameters</h3>
-          {!isInline && (
-            <button 
-              onClick={() => setIsSidebarOpen(false)}
-              className="text-zinc-500 hover:text-zinc-300 font-semibold p-1 text-sm transition-colors cursor-pointer"
-            >
-              ✕ Close
-            </button>
-          )}
-        </div>
+  const renderParameters = () => (
+    <div className="flex flex-col gap-5 overflow-y-auto w-full h-full p-5 scrollbar-thin">
+      <div className="flex items-center justify-between border-b border-zinc-850 pb-3 flex-shrink-0">
+        <button
+          type="button"
+          onClick={() => navigate('/gallery')}
+          className="inline-flex items-center gap-1 text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 border border-indigo-500 rounded px-2.5 py-1.5 transition-all cursor-pointer shadow-sm hover:scale-[1.02]"
+        >
+          <Compass className="h-3 w-3" /> Styles Gallery
+        </button>
+        <button onClick={() => setIsSidebarOpen(false)} className="text-zinc-500 hover:text-zinc-300 font-semibold p-1 text-sm transition-colors cursor-pointer">
+          ✕ Close
+        </button>
+      </div>
 
-        {/* Skill Selector Strip */}
-        <div className="flex flex-col gap-2">
-          <span className="text-zinc-400 text-[10px] font-bold uppercase tracking-wider">Active Skill</span>
-          <div className="grid grid-cols-1 gap-2 max-h-[140px] overflow-y-auto border border-zinc-800 p-2 rounded-lg bg-zinc-950/40 scrollbar-thin">
-            {skills.map(item => (
+      {/* Active Skill Selector with Previews */}
+      <div className="flex flex-col gap-2">
+        <div className="flex justify-between items-center px-1">
+          <span className="text-zinc-400 text-[10px] font-bold uppercase tracking-wider">生成类型 Active Skill</span>
+          <span className="text-[9px] text-indigo-400 font-bold bg-indigo-950/40 border border-indigo-900/30 rounded px-1.5 py-0.5">
+            {skill.nameZh}
+          </span>
+        </div>
+        <div className="flex gap-2 overflow-x-auto pb-2 pt-0.5 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
+          {skills.map(item => {
+            const active = item.id === skill.id
+            const preview = previewForSkill(item)
+            return (
               <button
                 key={item.id}
+                type="button"
                 onClick={() => selectSkill(item.id)}
-                className={`flex items-center gap-2.5 p-2 rounded-lg text-left border transition-all cursor-pointer ${
-                  item.id === skill.id 
-                    ? 'bg-indigo-50 dark:bg-indigo-950/25 border-indigo-200/60 dark:border-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-semibold shadow-sm' 
-                    : 'border-transparent hover:bg-zinc-950/20 text-zinc-400 hover:text-zinc-200'
+                title={`${item.nameZh}: ${item.description}`}
+                className={`group flex flex-col w-28 shrink-0 rounded-xl overflow-hidden border text-left cursor-pointer transition-all duration-300 ${
+                  active 
+                    ? 'border-indigo-500 bg-indigo-950/20 ring-2 ring-indigo-500/20' 
+                    : 'border-zinc-850 bg-zinc-950 hover:border-zinc-700 hover:scale-[1.02]'
                 }`}
               >
-                <span className="text-lg">🎨</span>
-                <div className="flex flex-col">
-                  <span className="text-xs font-bold">{item.nameZh}</span>
-                  <span className="text-[10px] text-zinc-550">{item.name}</span>
+                <div className="w-full aspect-[16/10] bg-zinc-950/50 overflow-hidden relative border-b border-zinc-900/40">
+                  {preview ? (
+                    <img 
+                      src={preview} 
+                      alt={item.nameZh} 
+                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" 
+                    />
+                  ) : (
+                    <div 
+                      className="w-full h-full flex items-center justify-center p-2 text-center text-[10px] font-bold text-white/90 leading-tight bg-gradient-to-br from-indigo-900 to-zinc-900"
+                    >
+                      {item.nameZh}
+                    </div>
+                  )}
+
+                  {/* Selected checkmark top-right */}
+                  {active && (
+                    <div className="absolute top-1 right-1 bg-indigo-650 text-white rounded-full p-0.5 shadow-md z-10 animate-scale-in">
+                      <Check className="w-2.5 h-2.5 stroke-[3]" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Label area below the image */}
+                <div className="w-full px-1.5 py-1.5 text-[9px] font-semibold text-zinc-300 truncate text-center bg-zinc-900/50 leading-none">
+                  {item.nameZh}
                 </div>
               </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Settings controls */}
-        <div className="flex flex-col gap-4">
-          <div className="flex gap-2">
-            <label className="flex-1 flex flex-col gap-1 text-[10px] font-semibold text-zinc-400">
-              Language
-              <select value={language} onChange={e => setLanguage(e.target.value)} className="bg-zinc-950 border border-zinc-800 text-zinc-150 p-2 rounded-lg text-xs outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors cursor-pointer">
-                <option value="zh">中文</option>
-                <option value="en">English</option>
-                <option value="ja">日本語</option>
-              </select>
-            </label>
-            <label className="flex-1 flex flex-col gap-1 text-[10px] font-semibold text-zinc-400">
-              Aspect Ratio
-              <select value={aspectRatio} onChange={e => setAspectRatio(e.target.value)} className="bg-zinc-950 border border-zinc-800 text-zinc-150 p-2 rounded-lg text-xs outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors cursor-pointer">
-                <option value="1:1">1:1</option>
-                <option value="3:4">3:4</option>
-                <option value="4:3">4:3</option>
-                <option value="16:9">16:9</option>
-                <option value="9:16">9:16</option>
-              </select>
-            </label>
-          </div>
-
-          <div className="flex gap-2">
-            <label className="flex-1 flex flex-col gap-1 text-[10px] font-semibold text-zinc-400">
-              Image Count
-              <input min={1} max={10} type="number" value={imageCount} onChange={e => setImageCount(Number(e.target.value) || 1)} className="bg-zinc-950 border border-zinc-800 text-zinc-150 p-2 rounded-lg text-xs outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors" />
-            </label>
-            <label className="flex-1 flex flex-col gap-1 text-[10px] font-semibold text-zinc-400">
-              Context Mode
-              <select value={sourceMode} onChange={e => handleSourceModeChange(e.target.value)} className="bg-zinc-950 border border-zinc-800 text-zinc-150 p-2 rounded-lg text-xs outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors cursor-pointer">
-                <option value="text">Natural Language</option>
-                <option value="local">Local Directory</option>
-                <option value="file">Upload Markdown / Text</option>
-                <option value="github">GitHub Repo URL</option>
-              </select>
-            </label>
-          </div>
-
-          {sourceMode === 'file' ? (
-            <label className="flex flex-col gap-2 text-[10px] font-semibold text-zinc-400">
-              Source File
-              <input
-                type="file"
-                accept=".md,.markdown,.txt,text/markdown,text/plain"
-                onChange={e => handleSourceUpload(e.target.files?.[0] || null)}
-                className="bg-zinc-950 border border-zinc-800 text-zinc-150 p-2 rounded-lg text-xs outline-none file:mr-3 file:rounded-md file:border-0 file:bg-indigo-600 file:px-2.5 file:py-1.5 file:text-xs file:font-bold file:text-white hover:file:bg-indigo-700"
-              />
-              {sourceRef && (
-                <code className="truncate rounded-lg border border-zinc-850 bg-zinc-950 px-2 py-1.5 text-[10px] font-mono text-zinc-400">
-                  {uploadedSourceName || sourceRef}
-                </code>
-              )}
-              {uploadStatus && (
-                <span className={`text-[10px] ${uploadStatus.toLowerCase().includes('failed') ? 'text-red-400' : 'text-emerald-400'}`}>
-                  {uploadStatus}
-                </span>
-              )}
-            </label>
-          ) : sourceMode !== 'text' && (
-            <label className="flex flex-col gap-1 text-[10px] font-semibold text-zinc-400">
-              Context Path / URL
-              <input
-                value={sourceRef}
-                onChange={e => setSourceRef(e.target.value)}
-                placeholder={sourceInputHint}
-                className="bg-zinc-950 border border-zinc-800 text-zinc-150 p-2 rounded-lg text-xs outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
-              />
-            </label>
-          )}
-
-          {/* EXTEND.md Preferences */}
-          <div className="border border-zinc-850 p-3 rounded-xl bg-zinc-950/20">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-bold text-zinc-400 uppercase">EXTEND.md Preferences</span>
-              <span className={`text-[9px] px-1.5 rounded font-bold uppercase ${preferenceInfo?.found ? 'bg-indigo-950 text-indigo-400 border border-indigo-900' : 'bg-zinc-900 text-zinc-550'}`}>
-                {preferenceInfo?.found ? 'found' : 'none'}
-              </span>
-            </div>
-            
-            {preferenceInfo?.found ? (
-              <div className="flex flex-col gap-2">
-                <label className="flex items-center gap-2 text-xs font-semibold text-zinc-350 cursor-pointer">
-                  <input type="checkbox" checked={usePreferences} onChange={e => setUsePreferences(e.target.checked)} className="rounded text-indigo-600 focus:ring-0 cursor-pointer" />
-                  Apply EXTEND.md preferences
-                </label>
-                <code className="text-[10px] text-zinc-400 font-mono truncate bg-zinc-950 p-1.5 rounded border border-zinc-900">{preferenceInfo.path}</code>
-              </div>
-            ) : (
-              <p className="text-[10px] text-zinc-400 leading-normal m-0">No custom skill settings found. Standard values will apply.</p>
-            )}
-          </div>
-        </div>
-
-        {/* Presets and choice grids */}
-        <div className="flex flex-col gap-3 border-t border-zinc-850 pt-4">
-          <span className="text-zinc-400 text-[10px] font-bold uppercase tracking-wider">Style Dimensions</span>
-          {Object.keys(skill.dimensions).map(dimension => {
-            const dim = skill.dimensions[dimension]
-            const activeVal = selections[dimension] || ''
-            
-            return (
-              <div key={dimension} className="flex flex-col gap-1.5">
-                <label className="text-zinc-400 text-xs font-semibold">{dim.label}</label>
-                <select 
-                   value={activeVal}
-                   onChange={e => setSelections(prev => ({ ...prev, [dimension]: e.target.value }))}
-                   className="bg-zinc-950 border border-zinc-800 text-zinc-150 p-2.5 rounded-lg text-xs outline-none cursor-pointer focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
-                >
-                  {dim.items.map(item => (
-                    <option key={item.id} value={item.id}>
-                      {item.name} — {item.description}
-                    </option>
-                  ))}
-                </select>
-              </div>
             )
           })}
         </div>
       </div>
+
+      {/* Style Dimensions */}
+      <div className="flex flex-col gap-4 border-t border-zinc-850 pt-4">
+        <span className="text-zinc-400 text-[10px] font-bold uppercase tracking-wider">Style Dimensions</span>
+        {Object.keys(skill.dimensions).map(dimension => {
+          const dim = skill.dimensions[dimension]
+          const selectedItemId = selections[dimension] || ''
+          const selectedItem = dim.items.find(item => item.id === selectedItemId)
+          return (
+            <div key={dimension} className="flex flex-col gap-1.5">
+              <div className="flex justify-between items-center px-1">
+                <label className="text-zinc-400 text-xs font-semibold">{dim.label}</label>
+                {selectedItem && (
+                  <span className="text-[9px] text-indigo-400 font-bold bg-indigo-950/40 border border-indigo-900/30 rounded px-1.5 py-0.5 max-w-[150px] truncate" title={selectedItem.description}>
+                    {selectedItem.name}
+                  </span>
+                )}
+              </div>
+              <div className="flex gap-2 overflow-x-auto pb-2 pt-0.5 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
+                {dim.items.map(item => (
+                  <CompactStyleCard
+                    key={item.id}
+                    item={item}
+                    active={selectedItemId === item.id}
+                    preview={previewForItem(skill, dimension, item)}
+                    onClick={() => setSelections(prev => ({ ...prev, [dimension]: item.id }))}
+                  />
+                ))}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Output Parameters */}
+      <div className="flex flex-col gap-4 border-t border-zinc-850 pt-4">
+        <span className="text-zinc-400 text-[10px] font-bold uppercase tracking-wider">Output Parameters</span>
+        {skill.parameters
+          .filter(param => parameterNames.has(param.name))
+          .map(param => {
+            const options = optionsForParameter(param)
+            
+            // Get current active value
+            let currentValue: string
+            let onChange: (val: string) => void
+            
+            if (param.name === 'language') {
+              currentValue = language
+              onChange = setLanguage
+            } else if (param.name === 'aspectRatio') {
+              currentValue = aspectRatio
+              onChange = setAspectRatio
+            } else if (['imageCount', 'pageCount', 'slides'].includes(param.name)) {
+              currentValue = String(imageCount)
+              onChange = (val) => setImageCount(Number(val))
+            } else {
+              currentValue = extraParams[param.name] || String(param.defaultValue ?? '')
+              onChange = (val) => setExtraParams(prev => ({ ...prev, [param.name]: val }))
+            }
+            
+            return (
+              <div key={param.name} className="flex flex-col gap-1.5">
+                <span className="text-zinc-400 text-[10px] font-bold uppercase tracking-wider">
+                  {param.label}
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {options.map(opt => {
+                    const active = currentValue === opt.id
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => onChange(opt.id)}
+                        className={`flex-grow py-1.5 px-2.5 text-xs font-semibold rounded-xl border text-center transition-all cursor-pointer min-w-[60px] ${
+                          active
+                            ? 'border-indigo-500 bg-indigo-950/20 text-indigo-400 font-bold'
+                            : 'border-zinc-850 bg-zinc-950 text-zinc-405 hover:text-zinc-200 hover:border-zinc-700'
+                        }`}
+                      >
+                        {opt.name}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
+      </div>
+
+      {/* EXTEND.md Preferences */}
+      <div className="flex flex-col gap-4 border-t border-zinc-850 pt-4">
+        <div className="border border-zinc-850 p-3 rounded-xl bg-zinc-950/20">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-bold text-zinc-400 uppercase">EXTEND.md Preferences</span>
+            <span className={`text-[9px] px-1.5 rounded font-bold uppercase ${preferenceInfo?.found ? 'bg-indigo-950 text-indigo-400 border border-indigo-900' : 'bg-zinc-900 text-zinc-550'}`}>{preferenceInfo?.found ? 'found' : 'none'}</span>
+          </div>
+          {preferenceInfo?.found ? (
+            <div className="flex flex-col gap-2">
+              <label className="flex items-center gap-2 text-xs font-semibold text-zinc-350 cursor-pointer">
+                <input type="checkbox" checked={usePreferences} onChange={e => setUsePreferences(e.target.checked)} className="rounded text-indigo-600 focus:ring-0 cursor-pointer" />
+                Apply EXTEND.md preferences
+              </label>
+              <code className="text-[10px] text-zinc-400 font-mono truncate bg-zinc-950 p-1.5 rounded border border-zinc-900">{preferenceInfo.path}</code>
+            </div>
+          ) : (
+            <p className="text-[10px] text-zinc-400 leading-normal m-0">No custom skill settings found. Standard values will apply.</p>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+
+  const handleWorkspaceDragStart = (e: React.MouseEvent) => {
+    workspaceDragRef.current = { startX: e.clientX, startWidth: workspaceWidth }
+    const onMove = (ev: MouseEvent) => {
+      if (!workspaceDragRef.current) return
+      const delta = workspaceDragRef.current.startX - ev.clientX
+      const newWidth = Math.max(300, Math.min(workspaceDragRef.current.startWidth + delta, window.innerWidth * 0.8))
+      setWorkspaceWidth(newWidth)
+    }
+    const onUp = () => {
+      workspaceDragRef.current = null
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }
+
+  const handleSidebarDragStart = (e: React.MouseEvent) => {
+    sidebarDragRef.current = { startX: e.clientX, startWidth: sidebarWidth }
+    const onMove = (ev: MouseEvent) => {
+      if (!sidebarDragRef.current) return
+      const delta = sidebarDragRef.current.startX - ev.clientX
+      const newWidth = Math.max(260, Math.min(sidebarDragRef.current.startWidth + delta, window.innerWidth * 0.8))
+      setSidebarWidth(newWidth)
+    }
+    const onUp = () => {
+      sidebarDragRef.current = null
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }
+
+  if (loadingProject) {
+    return (
+      <div role="status" aria-label="Loading project" className="flex-1 flex flex-col items-center justify-center text-zinc-500 bg-zinc-950">
+        <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mb-2" aria-hidden="true" />
+        Loading project...
+      </div>
     )
   }
 
-  return loadingProject ? (
-    <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 bg-zinc-950">
-      <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mb-2" />
-      Loading project...
-    </div>
-  ) : (
-    <div className="flex-1 flex overflow-hidden bg-zinc-950">
-            
-            {/* Left Column: Chat Stream */}
-            <div className={`flex flex-col border-r border-zinc-900 bg-zinc-950 transition-all duration-300 ${
-              (projectData || sse.isStreaming || sse.images.length > 0) ? 'w-[40%]' : 'flex-1 max-w-4xl mx-auto px-6'
-            }`}>
-              
-              {/* Active project header bar */}
-              <div className="px-5 py-3 border-b border-zinc-900 flex items-center justify-between bg-zinc-950/85 backdrop-blur-md flex-shrink-0">
-                <div className="flex items-center gap-2">
-                  {projectData && (
-                    <span className="text-zinc-400 text-xs font-semibold truncate max-w-[200px]">
-                      Active Project: <strong className="text-zinc-200">{projectData.name}</strong>
-                    </span>
-                  )}
-                </div>
-                
-                {projectData && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xxs px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-500 font-bold uppercase">{projectData.categoryDir}</span>
-                    <Link to="/" className="text-xs text-indigo-400 hover:text-indigo-300 font-bold no-underline transition-colors">
-                      + New
-                    </Link>
-                  </div>
-                )}
-              </div>
+  return (
+    <div className="flex-1 relative overflow-hidden bg-zinc-950">
 
-              {/* Message thread container */}
-              <div 
-                ref={chatThreadRef}
-                className="flex-1 overflow-auto p-5 flex flex-col gap-4 select-text"
-              >
-                {!projectData && !urlProjectId && (
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    <Link
-                      to="/gallery"
-                      className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4 no-underline shadow-lg transition hover:border-indigo-500/60 hover:bg-zinc-900"
-                    >
-                      <div className="text-xs font-semibold uppercase tracking-wider text-indigo-400">Start here</div>
-                      <div className="mt-2 text-sm font-bold text-zinc-100">Gallery Guide</div>
-                      <p className="mt-1 text-xs leading-relaxed text-zinc-500">Choose image type, styles, palettes, layout, aspect, text, and language before chatting.</p>
-                    </Link>
-                    <Link
-                      to="/history"
-                      className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4 no-underline shadow-lg transition hover:border-indigo-500/60 hover:bg-zinc-900"
-                    >
-                      <div className="text-xs font-semibold uppercase tracking-wider text-emerald-400">Continue</div>
-                      <div className="mt-2 text-sm font-bold text-zinc-100">Project History</div>
-                      <p className="mt-1 text-xs leading-relaxed text-zinc-500">Open previous projects, review generated files, and keep iterating in chat.</p>
-                    </Link>
-                    <Link
-                      to="/settings"
-                      className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4 no-underline shadow-lg transition hover:border-indigo-500/60 hover:bg-zinc-900"
-                    >
-                      <div className="text-xs font-semibold uppercase tracking-wider text-amber-400">Setup</div>
-                      <div className="mt-2 text-sm font-bold text-zinc-100">Settings</div>
-                      <p className="mt-1 text-xs leading-relaxed text-zinc-500">Manage API keys, preferences, and publishing account settings.</p>
-                    </Link>
-                  </div>
-                )}
+      {/* Chat column — right edge pulls left when workspace is open */}
+      <div
+        className="absolute inset-0 flex flex-col border-r border-zinc-900 bg-zinc-950 transition-[right] duration-300 ease-out"
+        style={{ right: (workspaceOpen ? workspaceWidth : 0) + (isSidebarOpen ? sidebarWidth : 0) }}
+      >
 
-                {/* Greeting or project instructions */}
-                {chatMessages.map(msg => (
-                  <div key={msg.id} className={`flex flex-col gap-1.5 max-w-[85%] ${
-                    msg.role === 'user' ? 'self-end items-end' : 'self-start items-start'
-                  } animate-fade-in`}>
-                    
-                    {/* Speaker name */}
-                    <span className="text-zinc-500 text-xxs font-bold uppercase tracking-wider">
-                      {msg.role === 'user' ? 'You' : msg.role === 'system' ? 'System' : 'Assistant'}
-                    </span>
-
-                    {/* Standard text bubble */}
-                    <div className={`px-4 py-3.5 rounded-2xl text-sm leading-relaxed border transition-all ${
-                      msg.role === 'user'
-                        ? 'bg-indigo-600 border-indigo-500 text-white rounded-tr-none shadow-md shadow-indigo-600/10'
-                        : 'bg-zinc-900/60 border-zinc-850/80 text-zinc-150 rounded-tl-none backdrop-blur-sm'
-                    }`}>
-                      {msg.text}
-                    </div>
-
-                    {/* Custom planning confirmation card */}
-                    {msg.type === 'plan' && msg.planData && (
-                      <div className="mt-2.5 w-full max-w-md self-start border border-zinc-800 rounded-xl bg-zinc-900 shadow-xl overflow-hidden animate-scale-up">
-                        <PlanConfirmation
-                          plan={msg.planData}
-                          imageCount={imageCount}
-                          onConfirm={(plan) => confirmGeneratePlan(plan, disabledPlanPrompts, msg.sourceContent)}
-                          onCancel={cancelGeneratePlan}
-                          onTogglePrompt={(index) => {
-                            setDisabledPlanPrompts(prev => {
-                              const next = new Set(prev)
-                              if (next.has(index)) next.delete(index)
-                              else next.add(index)
-                              return next
-                            })
-                          }}
-                          disabledPrompts={disabledPlanPrompts}
-                        />
-                      </div>
-                    )}
-
-                    {/* Custom runner console card */}
-                    {msg.type === 'runner' && (
-                      <div className="mt-2.5 w-full max-w-md self-start border border-zinc-800 rounded-xl bg-zinc-950/80 p-3 shadow-xl flex flex-col gap-2 font-mono text-xxs text-emerald-400 max-h-[220px] overflow-auto select-text animate-scale-up">
-                        <div className="flex items-center justify-between border-b border-zinc-900 pb-1.5 text-zinc-500">
-                          <span>Terminal log</span>
-                          {sse.isStreaming && (
-                            <button onClick={sse.stop} className="text-red-400 hover:text-red-300 font-bold bg-red-950/30 px-2 py-0.5 rounded border border-red-900 transition-colors">
-                              Cancel
-                            </button>
-                          )}
-                        </div>
-                        {sse.error && <div className="text-red-400">{sse.error}</div>}
-                        <div className="whitespace-pre-wrap">{sse.log.join('')}</div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-
-                {/* Incremental project chat logs / streams */}
-                {projectChat.isStreaming && (
-                  <div className="flex flex-col gap-1.5 max-w-[85%] self-start items-start animate-fade-in">
-                    <span className="text-zinc-500 text-xxs font-bold uppercase tracking-wider">Assistant</span>
-                    
-                    {projectChat.plan && (
-                      <div className="px-4 py-3 rounded-2xl text-sm leading-relaxed border bg-zinc-900 border-zinc-850 text-zinc-150 rounded-tl-none">
-                        <strong>Modification plan:</strong>
-                        <p className="mt-1 text-zinc-300 leading-normal m-0">{projectChat.plan}</p>
-                      </div>
-                    )}
-
-                    <div className="mt-2 w-full max-w-md self-start border border-zinc-800 rounded-xl bg-zinc-950/80 p-3 shadow-xl flex flex-col gap-2 font-mono text-xxs text-emerald-400 max-h-[160px] overflow-auto">
-                      <div className="flex items-center justify-between border-b border-zinc-900 pb-1 text-zinc-500">
-                        <span>Fine-tuning logs</span>
-                        <button onClick={projectChat.stop} className="text-red-400 hover:text-red-300 font-bold bg-red-950/20 px-1.5 py-0.5 rounded border border-red-900">
-                          Cancel
-                        </button>
-                      </div>
-                      <div className="whitespace-pre-wrap">
-                        {projectChat.logs.join('\n')}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Chat composer box */}
-              <div className="p-5 bg-transparent flex-shrink-0">
-                <div className="border border-zinc-800/80 focus-within:border-indigo-500/60 focus-within:ring-2 focus-within:ring-indigo-500/20 bg-zinc-900/70 backdrop-blur-md rounded-2xl p-3.5 flex flex-col gap-2.5 shadow-xl relative transition-all">
-
-                  {/* Config summary bar — click to open drawer */}
-                  <button
-                    onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700/50 hover:border-zinc-600/50 text-zinc-400 hover:text-zinc-200 text-xs transition-colors cursor-pointer"
-                    title="View and modify visual parameters"
-                  >
-                    <span>⚙</span>
-                    <span className="truncate">{configSummary}</span>
-                    <span className={`ml-auto text-zinc-650 transition-transform ${isSidebarOpen ? 'rotate-180' : ''}`}>›</span>
-                  </button>
-
-                  {selectedImage !== null && (
-                    <div className="flex items-center justify-between bg-indigo-950/30 border border-indigo-900/50 text-indigo-400 px-3 py-1.5 rounded-lg text-xs">
-                      <span className="font-semibold">Targeting Image #{selectedImage + 1} for direct edits</span>
-                      <button onClick={() => setSelectedImage(null)} className="text-indigo-400 hover:text-indigo-300 font-bold p-1">
-                        ✕
-                      </button>
-                    </div>
-                  )}
-
-                  <textarea
-                    value={chatInput}
-                    onChange={e => setChatInput(e.target.value)}
-                    onKeyDown={e => {
-                      if (
-                        e.key === 'Enter' &&
-                        !e.shiftKey &&
-                        !e.metaKey &&
-                        !e.ctrlKey &&
-                        !chatInput.trim() &&
-                        !projectData &&
-                        sourceMode !== 'text' &&
-                        Boolean(sourceRef.trim())
-                      ) {
-                        e.preventDefault()
-                        handleStartGeneration()
-                        return
-                      }
-                      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                        e.preventDefault()
-                        projectData ? handleSendProjectEdit() : handleStartGeneration()
-                      }
-                    }}
-                    placeholder={
-                      projectData
-                        ? selectedImage !== null
-                          ? `Instruct edits for image #${selectedImage + 1} (e.g. "make background darker")...`
-                          : "Describe changes for this project..."
-                        : sourceMode !== 'text' && sourceRef
-                          ? "Press Enter with an empty message to generate from the selected source, or add extra instructions..."
-                          : "Describe the content details, characters, copy, and layout you want to design..."
-                    }
-                    className="w-full bg-transparent border-0 text-zinc-200 placeholder-zinc-550 font-sans text-sm focus:outline-none focus:ring-0 outline-none resize-none min-h-[72px]"
-                  />
-
-                  <div className="flex items-center justify-end border-t border-zinc-850 pt-2.5 mt-1">
-                    <Button
-                      onClick={projectData ? handleSendProjectEdit : handleStartGeneration}
-                      disabled={!canSubmit}
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white shadow shadow-indigo-600/10 flex items-center gap-1 px-4 py-2"
-                    >
-                      <span>Send</span>
-                      <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
-                        <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
-                      </svg>
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Inline Parameters Sidebar when NO project is active */}
-            {!(projectData || sse.isStreaming || sse.images.length > 0) && isSidebarOpen && (
-              renderParameters(false)
+        {/* Active project header bar */}
+        <div className="px-5 py-3 border-b border-zinc-900 flex items-center justify-between bg-zinc-950/85 backdrop-blur-md flex-shrink-0">
+          <div className="flex items-center gap-2">
+            {projectData && (
+              <span className="text-zinc-400 text-xs font-semibold truncate max-w-[200px]">
+                Active Project: <strong className="text-zinc-200">{projectData.name}</strong>
+              </span>
             )}
-
-            {/* Right Column: Visual Sandbox Workspace + docked Parameters (when project active) */}
-            {(projectData || sse.isStreaming || sse.images.length > 0) && (
-              <div className="w-[60%] h-full p-4 flex gap-4 overflow-hidden">
-                <div className="flex-1 h-full overflow-hidden">
-                  <ProjectWorkspace
-                    projectId={urlProjectId || ''}
-                    projectPath={projectData?.path || sse.projectPath}
-                    files={projectData?.files || []}
-                    images={projectData?.images || []}
-                    selectedImage={selectedImage}
-                    onSelectImage={handleSelectImage}
-                    newImages={projectData ? projectChat.newImages : sse.images}
-                    newFiles={projectData ? projectChat.newFiles : sse.files}
-                    logs={projectData ? projectChat.logs : sse.log}
-                    isStreaming={sse.isStreaming || projectChat.isStreaming}
-                    onRegenerateImage={projectChat.regenerate}
-                    
-                    // Publishing props
-                    platform={platform}
-                    onPlatformChange={setPlatform}
-                    caption={caption}
-                    onCaptionChange={setCaption}
-                    isCaptioning={isCaptioning}
-                    onGenerateCaption={generateCaption}
-                    captionError={captionError}
-                    isPackaging={isPackaging}
-                    onPreparePackage={preparePackage}
-                    packageResult={packageResult}
-                    packageError={packageError}
-                    isPublishing={isPublishing}
-                    onOpenPublisher={openPublisher}
-                    publishResult={publishResult}
-                    publishError={publishError}
-                    xhsAvailable={xhsAvailable}
-                    publishingAccounts={publishingAccounts}
-                    publishingAccount={publishingAccount}
-                    onPublishingAccountChange={setPublishingAccount}
-                  />
-                </div>
-                {isSidebarOpen && renderParameters(true)}
-              </div>
-            )}
-            
           </div>
-  );
+          {projectData && (
+            <div className="flex items-center gap-2">
+              <span className="text-xxs px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-500 font-bold uppercase">{projectData.categoryDir}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Chat Thread */}
+        <ChatThread
+          messages={chat.messages}
+          streamingMsgId={chat.streamingMsgId}
+          isStreaming={isStreaming}
+          projectData={projectData}
+          urlProjectId={urlProjectId}
+          imageCount={imageCount}
+          disabledPlanPrompts={disabledPlanPrompts}
+          debugLog={sse.log}
+          onConfirmPlan={confirmGeneratePlan}
+          onCancelPlan={cancelGeneratePlan}
+          onTogglePrompt={(index) => {
+            setDisabledPlanPrompts(prev => {
+              const next = new Set(prev)
+              if (next.has(index)) next.delete(index); else next.add(index)
+              return next
+            })
+          }}
+        />
+
+        {/* Project chat streaming */}
+        {projectChat.isStreaming && (
+          <div className="flex flex-col gap-1.5 max-w-[85%] self-start items-start px-5 animate-fade-in">
+            <span className="text-zinc-500 text-xxs font-bold uppercase tracking-wider">Assistant</span>
+            {projectChat.plan && (
+              <div className="px-4 py-3 rounded-2xl text-sm leading-relaxed border bg-zinc-900 border-zinc-850 text-zinc-150 rounded-tl-none">
+                <strong>Modification plan:</strong>
+                <p className="mt-1 text-zinc-300 leading-normal m-0">{projectChat.plan}</p>
+              </div>
+            )}
+            {projectChat.error && (
+              <div className="px-3 py-2 rounded-lg bg-red-950/30 border border-red-900/40 text-sm text-red-400 flex items-center gap-2">
+                <span>{projectChat.error}</span>
+                <button onClick={projectChat.retrySend} className="text-xs text-amber-400 hover:text-amber-300 font-semibold bg-amber-950/30 px-2 py-0.5 rounded border border-amber-900/50 transition-colors">Retry</button>
+              </div>
+            )}
+            <details className="mt-2 w-full max-w-md self-start border border-zinc-850 rounded-xl bg-zinc-950/50 overflow-hidden">
+              <summary className="px-3 py-1.5 text-xs text-zinc-500 cursor-pointer hover:text-zinc-300 transition-colors select-none">Edit log ({projectChat.logs.length} entries)</summary>
+              <div className="px-3 pb-2 font-mono text-xxs text-emerald-400/70 max-h-[160px] overflow-auto select-text whitespace-pre-wrap border-t border-zinc-900 pt-1.5">
+                {projectChat.logs.join('\n') || 'No log entries yet.'}
+              </div>
+            </details>
+          </div>
+        )}
+
+        {/* Chat Composer */}
+        <ChatComposer
+          ref={composerRef}
+          chatInput={chatInput}
+          onInputChange={setChatInput}
+          onSend={projectData ? handleSendProjectEdit : handleStartGeneration}
+          canSubmit={canSubmit}
+          isStreaming={isStreaming}
+          isPlanning={chat.planningMsgId !== null}
+          onStop={() => { sse.stop(); projectChat.stop(); cancelGeneratePlan() }}
+          projectData={projectData}
+          selectedImage={selectedImage}
+          onClearTarget={() => setSelectedImage(null)}
+          isSidebarOpen={isSidebarOpen}
+          onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+          configSummary={configSummary}
+          sourceMode={sourceMode}
+          onSourceModeChange={handleSourceModeChange}
+          sourceRef={sourceRef}
+          onSourceRefChange={setSourceRef}
+          uploadedSourceName={uploadedSourceName}
+          uploadStatus={uploadStatus}
+          onSourceUpload={handleSourceUpload}
+        />
+      </div>
+
+
+
+      {/* Collapse/expand toggle — always visible at the workspace edge when content exists */}
+      {hasWorkspaceContent && (
+        <button
+          className="absolute top-1/2 -translate-y-1/2 z-20 w-5 h-16 bg-zinc-800/90 border border-zinc-700/80 border-r-0 rounded-l-xl flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-700 transition-all cursor-pointer backdrop-blur-sm shadow-lg"
+          style={{ right: (workspaceOpen ? workspaceWidth : 0) + (isSidebarOpen ? sidebarWidth : 0) }}
+          onClick={() => setWorkspaceOpen(v => !v)}
+          aria-label={workspaceOpen ? 'Collapse workspace' : 'Expand workspace'}
+        >
+          {workspaceOpen ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
+        </button>
+      )}
+
+      {/* Workspace panel — slides in from right, width draggable */}
+      <div
+        className="absolute top-0 bottom-0 transition-[transform,right] duration-300 ease-out z-20"
+        style={{
+          width: workspaceWidth,
+          right: isSidebarOpen ? sidebarWidth : 0,
+          transform: workspaceOpen ? 'translateX(0)' : 'translateX(100%)',
+        }}
+      >
+        {/* Drag-to-resize handle on left edge */}
+        <div
+          className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-500/50 active:bg-indigo-500/80 transition-colors z-10 group"
+          onMouseDown={handleWorkspaceDragStart}
+        >
+          <div className="absolute -left-2 top-0 bottom-0 w-5" />
+        </div>
+
+        <div className="h-full pl-2 pr-4 py-4 flex gap-4 overflow-hidden">
+          <div className="flex-1 h-full overflow-hidden">
+            <ProjectWorkspace
+              projectId={urlProjectId || ''}
+              projectPath={projectData?.path || sse.projectPath}
+              files={projectData?.files || []}
+              images={projectData?.images || []}
+              selectedImage={selectedImage}
+              onSelectImage={setSelectedImage}
+              newImages={projectData ? projectChat.newImages : sse.images}
+              newFiles={projectData ? projectChat.newFiles : sse.files}
+              logs={projectData ? projectChat.logs : sse.log}
+              isStreaming={sse.isStreaming || projectChat.isStreaming}
+              platform={platform}
+              onPlatformChange={setPlatform}
+              caption={caption}
+              onCaptionChange={setCaption}
+              isCaptioning={isCaptioning}
+              onGenerateCaption={generateCaption}
+              captionError={captionError}
+              isPackaging={isPackaging}
+              onPreparePackage={preparePackage}
+              packageResult={packageResult}
+              packageError={packageError}
+              isPublishing={isPublishing}
+              onOpenPublisher={openPublisher}
+              publishResult={publishResult}
+              publishError={publishError}
+              xhsAvailable={xhsAvailable}
+              publishingAccounts={publishingAccounts}
+              publishingAccount={publishingAccount}
+              onPublishingAccountChange={setPublishingAccount}
+              aspectRatio={aspectRatio}
+              onInstallXhsSuccess={checkXhsAvailable}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Parameters sidebar — slides in from right, width draggable */}
+      <div
+        className="absolute right-0 top-0 bottom-0 transition-transform duration-300 ease-out z-30 flex bg-zinc-950 border-l border-zinc-900"
+        style={{
+          width: sidebarWidth,
+          transform: isSidebarOpen ? 'translateX(0)' : 'translateX(100%)',
+        }}
+      >
+        {/* Drag-to-resize handle on left edge */}
+        <div
+          className="w-1 cursor-col-resize hover:bg-indigo-500/50 active:bg-indigo-500/80 transition-colors z-40 relative flex-shrink-0"
+          onMouseDown={handleSidebarDragStart}
+        >
+          <div className="absolute -left-2 top-0 bottom-0 w-5" />
+        </div>
+
+        <div className="flex-1 h-full overflow-hidden">
+          {renderParameters()}
+        </div>
+      </div>
+
+    </div>
+  )
 }
