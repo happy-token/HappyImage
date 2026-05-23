@@ -401,7 +401,7 @@ describe('Preferences API', () => {
     expect(res.status).toBe(200)
     const data = await res.json()
     expect(data.found).toBe(true)
-    expect(data.values['watermark.content']).toBe('@happytoken')
+    expect((data.values.watermark as Record<string, unknown>)?.content).toBe('@happytoken')
   })
 
   test('GET /api/preferences/:skillId/schema returns editable fields', async () => {

@@ -39,17 +39,17 @@ describe('SessionSidebar', () => {
 
   test('highlights active session', () => {
     const { container } = render(<SessionSidebar {...defaultProps()} activeId="s1" />)
-    const buttons = container.querySelectorAll('button')
-    const activeButton = Array.from(buttons).find(b => b.textContent?.includes('Chat 1'))
-    expect(activeButton?.className).toContain('border-l-indigo-500')
+    const items = container.querySelectorAll('[role="button"]')
+    const activeItem = Array.from(items).find(b => b.textContent?.includes('Chat 1'))
+    expect(activeItem?.className).toContain('border-l-indigo-500')
   })
 
   test('calls onSwitch on click', () => {
     const onSwitch = mock(() => {})
     const { container } = render(<SessionSidebar {...defaultProps()} onSwitch={onSwitch} />)
-    const buttons = container.querySelectorAll('button')
-    const chatBtn = Array.from(buttons).find(b => b.textContent?.includes('Chat 1'))
-    fireEvent.click(chatBtn!)
+    const items = container.querySelectorAll('[role="button"]')
+    const chatItem = Array.from(items).find(b => b.textContent?.includes('Chat 1'))
+    fireEvent.click(chatItem!)
     expect(onSwitch).toHaveBeenCalledWith('s1')
   })
 

@@ -72,10 +72,13 @@ export default function SessionSidebar({ sessions, activeId, loading, onCreate, 
         )}
 
         {sorted.map(s => (
-          <button
+          <div
             key={s.id}
+            role="button"
+            tabIndex={0}
             onClick={() => onSwitch(s.id)}
-            className={`w-full text-left px-4 py-3 border-b border-zinc-900/50 transition-colors group ${
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSwitch(s.id) } }}
+            className={`relative w-full text-left px-4 py-3 border-b border-zinc-900/50 transition-colors group cursor-pointer ${
               s.id === activeId
                 ? 'bg-indigo-950/30 border-l-2 border-l-indigo-500'
                 : 'hover:bg-zinc-900/50 border-l-2 border-l-transparent'
@@ -126,7 +129,7 @@ export default function SessionSidebar({ sessions, activeId, loading, onCreate, 
                 <Trash2 className="h-3 w-3" />
               </button>
             </div>
-          </button>
+          </div>
         ))}
       </div>
     </div>
