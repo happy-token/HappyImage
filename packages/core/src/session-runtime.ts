@@ -1,5 +1,5 @@
 import { mkdirSync } from 'fs'
-import { join, resolve } from 'path'
+import { join, resolve, basename } from 'path'
 import { Database } from 'bun:sqlite'
 import type { CommandRequest } from './commands.js'
 import type { ProjectPlan } from './anthropic.js'
@@ -71,6 +71,8 @@ export interface SessionMessage {
   id: string
   role: 'user' | 'assistant' | 'system'
   content: string
+  targetImageIndex?: number
+  targetImageName?: string
   createdAt: string
 }
 
@@ -252,11 +254,13 @@ function loadSession(row: SessionRow): SkillSession {
     id: event.id,
     role: event.role,
     content: event.content,
+    targetImageIndex: (event as any).targetImageIndex,
+    targetImageName: (event as any).targetImageName,
     createdAt: event.createdAt,
   }))
   return {
     id: row.id,
-    title: row.title || undefined,
+    title: (row.title && !row.title.startsWith('New Chat')) ? row.title : (row.activeProjectPath ? basename(row.activeProjectPath) : row.title || undefined),
     status: row.status,
     commandRequest: parseJson<CommandRequest | undefined>(row.commandRequestJson, undefined),
     answers: parseJson(row.answersJson, {}),
@@ -384,7 +388,7 @@ export function getSessionPreview(sessionId: string) {
   const imageCount = session.artifacts.filter(a => a.type === 'image').length
   return {
     id: session.id,
-    title: session.title || lastMsg?.content?.slice(0, 60) || 'New Chat',
+    title: (session.title && !session.title.startsWith('New Chat')) ? session.title : (session.activeProjectPath || session.projectPath ? basename(session.activeProjectPath || session.projectPath!) : lastMsg?.content?.slice(0, 60) || 'New Chat'),
     status: session.status,
     lastMessage: lastMsg?.content?.slice(0, 100) || '',
     imageCount,
@@ -395,9 +399,9 @@ export function getSessionPreview(sessionId: string) {
   }
 }
 
-export function appendSessionMessage(sessionId: string, role: SessionMessage['role'], content: string) {
-  const message: SessionMessage = { id: id('msg'), role, content, createdAt: now() }
-  appendSessionEvent(sessionId, { type: 'message', role, content })
+export function appendSessionMessage(sessionId: string, role: SessionMessage['role'], content: string, extra?: Record<string, unknown>) {
+  const message: SessionMessage = { id: id('msg'), role, content, createdAt: now(), ...extra }
+  appendSessionEvent(sessionId, { type: 'message', role, content, ...extra })
   return message
 }
 
@@ -458,7 +462,10 @@ export function requestSessionRevision(sessionId: string, request: RevisionReque
   const session = getSkillSession(sessionId)
   if (!session) return null
   getDb().query('UPDATE sessions SET status = ?, updatedAt = ? WHERE id = ?').run('revising', now(), sessionId)
-  appendSessionMessage(sessionId, 'user', request.instruction)
+  const lastMsg = session.messages[session.messages.length - 1]
+  if (!lastMsg || lastMsg.role !== 'user' || lastMsg.content !== request.instruction) {
+    appendSessionMessage(sessionId, 'user', request.instruction)
+  }
   appendSessionEvent(sessionId, { type: 'revision-requested', target: request.target, instruction: request.instruction })
   return getSkillSession(sessionId)
 }

@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { MessageSquare, Compass, History, Settings, PanelLeftClose, PanelLeftOpen, Plus, Trash2, PenLine } from 'lucide-react'
 
 interface SessionPreview {
@@ -71,6 +71,7 @@ export default function DashboardLayout() {
   const [projects, setProjects] = useState<ProjectSummary[]>([])
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState('')
+  const newChatInFlight = useRef(false)
 
   useEffect(() => {
     window.localStorage.setItem('happyimage-sidebar-collapsed', String(isCollapsed))
@@ -91,7 +92,7 @@ export default function DashboardLayout() {
   }
 
   useEffect(() => { fetchSessions(); fetchProjects() }, [])
-  useEffect(() => { fetchSessions(); fetchProjects() }, [location.search])
+  useEffect(() => { fetchSessions(); fetchProjects() }, [location.pathname, location.search])
   useEffect(() => {
     const onFocus = () => { fetchSessions(); fetchProjects() }
     window.addEventListener('focus', onFocus)
@@ -99,6 +100,8 @@ export default function DashboardLayout() {
   }, [])
 
   const handleNewChat = async () => {
+    if (newChatInFlight.current) return
+    newChatInFlight.current = true
     try {
       const allSessions: SessionPreview[] = await fetch('/api/sessions').then(r => r.json())
       const blank = Array.isArray(allSessions)
@@ -112,6 +115,7 @@ export default function DashboardLayout() {
         navigate(`/?session=${data.session.id}`)
       }
     } catch { navigate('/') }
+    finally { newChatInFlight.current = false }
   }
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {

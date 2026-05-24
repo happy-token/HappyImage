@@ -37,7 +37,7 @@ preferences.post('/:skillId', async (c) => {
     return c.json({ error: 'values object required' }, 400)
   }
   const scope = body.scope ? String(body.scope) as PreferenceScope : undefined
-  if (scope && !['project', 'output', 'xdg', 'user'].includes(scope)) {
+  if (scope && !['config', 'legacy', 'project'].includes(scope)) {
     return c.json({ error: 'Invalid preference scope' }, 400)
   }
   return c.json(writePreferenceInfo(skillId, values, scope, body.currentPath ? String(body.currentPath) : null))

@@ -309,7 +309,7 @@ function boolFrom(value: any, fallback = false) {
 
 function draftFromPreference(info: PreferenceInfo | null, schema: PreferenceSchema | null): PreferenceDraft {
   const values = info?.values || {}
-  const draft: PreferenceDraft = { scope: info?.scope || 'output' }
+  const draft: PreferenceDraft = { scope: info?.scope || 'config' }
   for (const field of schema?.fields || []) {
     const current = getNested(values, field.skillPath)
     if (field.type === 'boolean') draft[field.key] = boolFrom(current, Boolean(field.defaultValue))
@@ -849,38 +849,14 @@ export default function SettingsPage() {
   }
 
   const renderEnvironment = () => {
+    const vendorOnly = !dependencies?.skillsRoot?.ready && dependencies?.checks?.find(c => c.id === 'baoyu-skills')?.ok === true
+    const vendorDescription = dependencies?.checks?.find(c => c.id === 'baoyu-skills')?.description
     const readyCandidates = dependencies?.skillsRoot?.ready
       ? []
       : (dependencies?.skillsRootCandidates || []).filter(candidate => candidate.ready && candidate.root !== dependencies?.skillsRoot?.root)
 
-    return (
-    <section className="studio-panel">
-      <div className="studio-panel-head">
-        <div>
-          <p className="studio-eyebrow">environment</p>
-          <h2>环境依赖状态</h2>
-        </div>
-        <span>{dependencies?.ok ? 'ready' : 'check'}</span>
-      </div>
-      <p className="text-sm leading-relaxed text-zinc-500">
-        HappyImage 需要一个包含 baoyu-* 技能的目录。可以安装到 ~/.baoyu-skills，也可以直接选择 Claude 插件已经安装好的 skills 目录。
-      </p>
-      <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="studio-eyebrow">baoyu-skills root</p>
-            <h3 className="text-sm font-bold text-zinc-100">{dependencies?.skillsRoot?.ready ? '技能目录已就绪' : '技能目录未就绪'}</h3>
-            <p className="mt-1 break-all text-xs leading-relaxed text-zinc-500">{dependencies?.skillsRoot?.root || '~/.baoyu-skills'}</p>
-          </div>
-          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${dependencies?.skillsRoot?.ready ? 'bg-emerald-950/30 text-emerald-300' : 'bg-red-950 text-red-300'}`}>
-            {dependencies?.skillsRoot?.ready ? 'ready' : 'missing'}
-          </span>
-        </div>
-        {dependencies?.skillsRoot?.missing?.length ? (
-          <p className="mt-3 text-xs leading-relaxed text-red-300">
-            缺少核心技能：{dependencies.skillsRoot.missing.join(', ')}
-          </p>
-        ) : null}
+    const skillsRootControls = (
+      <>
         {readyCandidates.length ? (
           <div className="mt-3 rounded-xl border border-emerald-900/50 bg-emerald-950/20 p-3">
             <p className="text-xs font-bold text-emerald-200">检测到可用的 baoyu-skills 安装目录</p>
@@ -931,6 +907,53 @@ export default function SettingsPage() {
           注意：~/.baoyu-skills 也常被 baoyu-skills 用作 Chrome/profile 等运行数据目录；真正的技能根目录必须直接包含 baoyu-image-cards、baoyu-imagine 等文件夹。
         </p>
         {skillsRootStatus && <div className="studio-project-path mt-3">{skillsRootStatus}</div>}
+      </>
+    )
+
+    return (
+    <section className="studio-panel">
+      <div className="studio-panel-head">
+        <div>
+          <p className="studio-eyebrow">environment</p>
+          <h2>环境依赖状态</h2>
+        </div>
+        <span>{dependencies?.ok ? 'ready' : 'check'}</span>
+      </div>
+      <p className="text-sm leading-relaxed text-zinc-500">
+        HappyImage 需要一个包含 baoyu-* 技能的目录。可以安装到 ~/.baoyu-skills，也可以直接选择 Claude 插件已经安装好的 skills 目录。
+      </p>
+      <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="studio-eyebrow">baoyu-skills root</p>
+            <h3 className="text-sm font-bold text-zinc-100">
+              {dependencies?.skillsRoot?.ready ? '技能目录已就绪' : vendorOnly ? '内置技能已就绪' : '技能目录未就绪'}
+            </h3>
+            {vendorOnly
+              ? <p className="mt-1 text-xs leading-relaxed text-zinc-500">{vendorDescription}</p>
+              : <p className="mt-1 break-all text-xs leading-relaxed text-zinc-500">{dependencies?.skillsRoot?.root || '~/.baoyu-skills'}</p>
+            }
+          </div>
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${dependencies?.skillsRoot?.ready || vendorOnly ? 'bg-emerald-950/30 text-emerald-300' : 'bg-red-950 text-red-300'}`}>
+            {dependencies?.skillsRoot?.ready ? 'ready' : vendorOnly ? '内置' : 'missing'}
+          </span>
+        </div>
+        {dependencies?.skillsRoot?.missing?.length ? (
+          <p className="mt-3 text-xs leading-relaxed text-red-300">
+            缺少核心技能：{dependencies.skillsRoot.missing.join(', ')}
+          </p>
+        ) : null}
+        {vendorOnly ? (
+          <details className="mt-4 group">
+            <summary className="cursor-pointer select-none list-none text-xs font-semibold text-zinc-400 hover:text-zinc-200 transition-colors">
+              <span className="group-open:hidden">▶ 高级 / 外部技能（可选）</span>
+              <span className="hidden group-open:inline">▼ 高级 / 外部技能（可选）</span>
+            </summary>
+            <div className="mt-3 rounded-xl border border-zinc-700/50 bg-zinc-900/30 p-3">
+              {skillsRootControls}
+            </div>
+          </details>
+        ) : skillsRootControls}
       </div>
       <div className="mt-4 grid gap-3 lg:grid-cols-2">
         {(dependencies?.checks || []).map(check => (
@@ -978,8 +1001,8 @@ export default function SettingsPage() {
         </label>
         <label>
           保存位置
-          <select value={String(preferenceDraft.scope || 'output')} onChange={e => setPreferenceDraft(prev => ({ ...prev, scope: e.target.value }))}>
-            {(preferenceInfo?.targets || []).filter(target => target.scope !== 'xdg').map(target => (
+          <select value={String(preferenceDraft.scope || 'config')} onChange={e => setPreferenceDraft(prev => ({ ...prev, scope: e.target.value }))}>
+            {(preferenceInfo?.targets || []).map(target => (
               <option key={target.scope} value={target.scope}>{target.label}{target.exists ? ' · 已有' : ''}</option>
             ))}
           </select>

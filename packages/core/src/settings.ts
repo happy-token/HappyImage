@@ -1,14 +1,52 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs'
-import { resolve } from 'path'
+import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'fs'
+import { dirname, join, resolve } from 'path'
 
 const PROJECT_ROOT = resolve(import.meta.dirname, '..', '..', '..')
-const ROOT_ENV = resolve(PROJECT_ROOT, '.env')
-const LEGACY_ENV = resolve(PROJECT_ROOT, 'web-ui', '.env')
-const NEW_WEB_UI_ENV = resolve(PROJECT_ROOT, 'packages', 'web-ui', '.env')
+const IS_DEV = existsSync(join(PROJECT_ROOT, '.git'))
 
-const ENV_PATH = existsSync(ROOT_ENV) 
-  ? ROOT_ENV 
-  : (existsSync(LEGACY_ENV) ? LEGACY_ENV : NEW_WEB_UI_ENV)
+export function resolveConfigRoot(): string {
+  if (IS_DEV) return PROJECT_ROOT
+  const home = process.env.HOME || process.env.USERPROFILE || '/tmp'
+  switch (process.platform) {
+    case 'win32': {
+      const appData = process.env.APPDATA || join(process.env.USERPROFILE || home, 'AppData', 'Roaming')
+      return join(appData, 'HappyImage')
+    }
+    case 'darwin':
+      return join(home, 'Library', 'Application Support', 'HappyImage')
+    default:
+      return join(process.env.XDG_CONFIG_HOME || join(home, '.config'), 'happyimage')
+  }
+}
+
+// Always resolves to the user's home-based config directory, ignoring IS_DEV.
+// Used for user-facing preferences that must live in user-space even in dev environments.
+export function resolveUserConfigRoot(): string {
+  const home = process.env.HOME || process.env.USERPROFILE || '/tmp'
+  switch (process.platform) {
+    case 'win32': {
+      const appData = process.env.APPDATA || join(process.env.USERPROFILE || home, 'AppData', 'Roaming')
+      return join(appData, 'HappyImage')
+    }
+    case 'darwin':
+      return join(home, 'Library', 'Application Support', 'HappyImage')
+    default:
+      return join(process.env.XDG_CONFIG_HOME || join(home, '.config'), 'happyimage')
+  }
+}
+
+function resolveEnvPath(): string {
+  const configRoot = resolveConfigRoot()
+  const primary = join(configRoot, '.env')
+  if (existsSync(primary)) return primary
+  if (IS_DEV) {
+    const webUiEnv = join(PROJECT_ROOT, 'packages', 'web-ui', '.env')
+    if (existsSync(webUiEnv)) return webUiEnv
+  }
+  return primary
+}
+
+const ENV_PATH = resolveEnvPath()
 
 interface EnvMap {
   ANTHROPIC_API_KEY: string
@@ -137,9 +175,16 @@ export function readSettingsSanitized(): EnvMap {
 }
 
 export function writeSetting(key: string, value: string): void {
+  const configRoot = resolveConfigRoot()
+  const envPath = join(configRoot, '.env')
+  mkdirSync(configRoot, { recursive: true })
+
   let content = ''
-  if (existsSync(ENV_PATH)) {
-    content = readFileSync(ENV_PATH, 'utf-8')
+  if (existsSync(envPath)) {
+    content = readFileSync(envPath, 'utf-8')
+  } else if (IS_DEV) {
+    const webUiEnv = join(PROJECT_ROOT, 'packages', 'web-ui', '.env')
+    if (existsSync(webUiEnv)) content = readFileSync(webUiEnv, 'utf-8')
   }
 
   const lines = content.split('\n')
@@ -162,14 +207,15 @@ export function writeSetting(key: string, value: string): void {
     lines.push(`${key}=${value}`)
   }
 
-  writeFileSync(ENV_PATH, lines.join('\n') + '\n')
+  writeFileSync(envPath, lines.join('\n') + '\n')
 
-  if (!existsSync(resolve(PROJECT_ROOT, '.gitignore'))) {
-    writeFileSync(resolve(PROJECT_ROOT, '.gitignore'), '.env\n')
-  } else {
-    const gi = readFileSync(resolve(PROJECT_ROOT, '.gitignore'), 'utf-8')
-    if (!gi.includes('.env')) {
-      writeFileSync(resolve(PROJECT_ROOT, '.gitignore'), gi + (gi.endsWith('\n') ? '' : '\n') + '.env\n')
+  if (IS_DEV) {
+    const gitignore = join(PROJECT_ROOT, '.gitignore')
+    if (!existsSync(gitignore)) {
+      writeFileSync(gitignore, '.env\n')
+    } else {
+      const gi = readFileSync(gitignore, 'utf-8')
+      if (!gi.includes('.env')) writeFileSync(gitignore, gi + (gi.endsWith('\n') ? '' : '\n') + '.env\n')
     }
   }
 }

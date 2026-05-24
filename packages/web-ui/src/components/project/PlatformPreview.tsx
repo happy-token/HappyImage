@@ -103,7 +103,7 @@ export default function PlatformPreview({ platform, projectPath, images, caption
   }
 
   return (
-    <div className="platform-preview bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden flex flex-col">
+    <div className="platform-preview bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden flex flex-col shrink-0">
       {/* Header */}
       {showHeader && (
         <div className="flex items-center justify-between p-4 border-b border-zinc-800 bg-zinc-950/40">
@@ -140,7 +140,7 @@ export default function PlatformPreview({ platform, projectPath, images, caption
       <div className="px-3 py-4 flex flex-col items-center bg-zinc-950/60 min-h-0">
         {/* Xiaohongshu Mockup */}
         {platform === 'xiaohongshu' && (
-          <div className="w-full max-w-[340px] bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col isolate">
+          <div className="w-full max-w-[340px] bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col isolate shrink-0">
             {/* Header */}
             <div className="flex items-center justify-between p-3 border-b border-zinc-800/40">
               <div className="flex items-center gap-2">
@@ -206,18 +206,18 @@ export default function PlatformPreview({ platform, projectPath, images, caption
             </div>
 
             {/* Content Area */}
-            <div className="p-3 flex flex-col gap-1.5 overflow-auto max-h-[140px]">
-              {title && (
-                <EditableText
-                  text={title}
-                  onCommit={t => onCaptionChange?.(reconstructCaption(t, bodyText, hashtags))}
-                  className="text-zinc-150 font-bold text-sm leading-snug"
-                />
-              )}
+            <div className="p-3 flex flex-col gap-1.5 overflow-auto max-h-[140px] shrink-0">
+              <EditableText
+                text={title}
+                placeholder="添加标题..."
+                onCommit={t => onCaptionChange?.(reconstructCaption(t, bodyText, hashtags))}
+                className="text-zinc-150 font-bold text-sm leading-snug"
+              />
               <EditableText
                 text={bodyText}
+                placeholder="添加正文内容..."
                 onCommit={b => onCaptionChange?.(reconstructCaption(title, b, hashtags))}
-                className="text-zinc-300 text-xs leading-relaxed whitespace-pre-wrap"
+                className="text-zinc-300 text-xs leading-relaxed whitespace-pre-wrap mt-1"
               />
               {hashtags.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mt-1">
@@ -255,7 +255,7 @@ export default function PlatformPreview({ platform, projectPath, images, caption
 
             {/* Feed Card Card */}
             {wechatView === 'feed' && (
-              <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-2xl p-4 flex flex-col gap-2">
+              <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-2xl p-4 flex flex-col gap-2 shrink-0">
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-6 h-6 rounded-full bg-emerald-600 flex items-center justify-center text-white text-[10px] font-bold">公众号</div>
                   <span className="text-zinc-300 text-xs font-semibold">Happy Official Account</span>
@@ -265,33 +265,45 @@ export default function PlatformPreview({ platform, projectPath, images, caption
                   {images.length > 0 ? (
                     <div className="w-full relative" style={{ aspectRatio: '2.35 / 1' }}>
                       <img src={images[0]} alt="WeChat Cover" className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-3">
-                        <h4 className="text-white font-bold text-sm leading-snug line-clamp-2 drop-shadow-md">
-                          {title || 'WeChat Article Title Placeholder'}
-                        </h4>
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-3 w-full">
+                        <EditableText
+                          text={title}
+                          placeholder="添加微信标题..."
+                          onCommit={t => onCaptionChange?.(reconstructCaption(t, bodyText, hashtags))}
+                          className="text-white font-bold text-sm leading-snug line-clamp-2 drop-shadow-md w-full text-left"
+                        />
                       </div>
                     </div>
                   ) : (
-                    <div className="aspect-[16/9] bg-zinc-900/50 flex flex-col items-center justify-center text-zinc-600 gap-1.5 p-4">
+                    <div className="aspect-[16/9] bg-zinc-900/50 flex flex-col items-center justify-center text-zinc-600 gap-1.5 p-4 w-full">
                       <span className="text-xl">📰</span>
-                      <h4 className="text-zinc-300 font-bold text-xs text-center">{title || 'WeChat Title Placeholder'}</h4>
+                      <EditableText
+                        text={title}
+                        placeholder="添加微信标题..."
+                        onCommit={t => onCaptionChange?.(reconstructCaption(t, bodyText, hashtags))}
+                        className="text-zinc-300 font-bold text-xs text-center w-full"
+                      />
                       <p className="text-[10px] text-zinc-500 text-center">No cover image available</p>
                     </div>
                   )}
-                  {bodyText && (
-                    <div className="p-3 border-t border-zinc-850 bg-zinc-900/30">
-                      <p className="text-zinc-400 text-xs leading-relaxed line-clamp-2">{bodyText}</p>
-                    </div>
-                  )}
+                  <div className="p-3 border-t border-zinc-850 bg-zinc-900/30">
+                    <EditableText
+                      text={bodyText}
+                      placeholder="添加摘要/正文内容..."
+                      onCommit={b => onCaptionChange?.(reconstructCaption(title, b, hashtags))}
+                      className="text-zinc-400 text-xs leading-relaxed line-clamp-2 w-full text-left"
+                    />
+                  </div>
                 </div>
               </div>
             )}
 
             {/* Article Detail Detail */}
             {wechatView === 'detail' && (
-              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl p-4 flex flex-col gap-3 overflow-auto max-h-[380px] text-left">
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl p-4 flex flex-col gap-3 overflow-auto max-h-[380px] text-left shrink-0">
                 <EditableText
-                  text={title || 'WeChat Article Title'}
+                  text={title}
+                  placeholder="WeChat Article Title"
                   onCommit={t => onCaptionChange?.(reconstructCaption(t, bodyText, hashtags))}
                   className="text-zinc-150 font-bold text-base leading-snug"
                 />
@@ -302,8 +314,9 @@ export default function PlatformPreview({ platform, projectPath, images, caption
 
                 <EditableText
                   text={bodyText}
+                  placeholder="添加正文内容..."
                   onCommit={b => onCaptionChange?.(reconstructCaption(title, b, hashtags))}
-                  className="text-zinc-300 text-xs leading-relaxed whitespace-pre-wrap font-sans"
+                  className="text-zinc-300 text-xs leading-relaxed whitespace-pre-wrap font-sans mt-1"
                 />
 
                 {images.map((src, idx) => (
@@ -321,7 +334,7 @@ export default function PlatformPreview({ platform, projectPath, images, caption
 
         {/* Weibo Mockup */}
         {platform === 'weibo' && (
-          <div className="w-full max-w-[340px] bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl p-3.5 flex flex-col gap-3 text-left">
+          <div className="w-full max-w-[340px] bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl p-3.5 flex flex-col gap-3 text-left shrink-0">
             {/* User Header */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -342,20 +355,20 @@ export default function PlatformPreview({ platform, projectPath, images, caption
 
             {/* Weibo Text Body */}
             <div className="flex flex-col gap-1.5">
-              {title && (
-                <EditableText
-                  text={`【${title}】`}
-                  onCommit={t => {
-                    const stripped = t.replace(/^【|】$/g, '')
-                    onCaptionChange?.(reconstructCaption(stripped, bodyText, hashtags))
-                  }}
-                  className="text-zinc-200 font-bold text-xs"
-                />
-              )}
+              <EditableText
+                text={title ? `【${title}】` : ''}
+                placeholder="【添加标题（可选）】"
+                onCommit={t => {
+                  const stripped = t.replace(/^【|】$/g, '')
+                  onCaptionChange?.(reconstructCaption(stripped, bodyText, hashtags))
+                }}
+                className="text-zinc-200 font-bold text-xs"
+              />
               <EditableText
                 text={bodyText}
+                placeholder="分享新鲜事..."
                 onCommit={b => onCaptionChange?.(reconstructCaption(title, b, hashtags))}
-                className="text-zinc-300 text-xs leading-relaxed whitespace-pre-wrap"
+                className="text-zinc-300 text-xs leading-relaxed whitespace-pre-wrap mt-1"
               />
               {bodyText.length > 140 && (
                 <span className="text-indigo-400 text-xxs font-bold cursor-pointer hover:underline">...展开全文</span>
@@ -402,7 +415,7 @@ export default function PlatformPreview({ platform, projectPath, images, caption
 
         {/* X Mockup */}
         {platform === 'x' && (
-          <div className="w-full max-w-[340px] bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl p-4 flex flex-col gap-2.5 text-left font-sans">
+          <div className="w-full max-w-[340px] bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl p-4 flex flex-col gap-2.5 text-left font-sans shrink-0">
             {/* Header */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -420,17 +433,17 @@ export default function PlatformPreview({ platform, projectPath, images, caption
 
             {/* Tweet content */}
             <div className="text-zinc-150 text-xs leading-normal flex flex-col gap-1">
-              {title && (
-                <EditableText
-                  text={title}
-                  onCommit={t => onCaptionChange?.(reconstructCaption(t, bodyText, hashtags))}
-                  className="font-bold"
-                />
-              )}
+              <EditableText
+                text={title}
+                placeholder="添加主题（可选）"
+                onCommit={t => onCaptionChange?.(reconstructCaption(t, bodyText, hashtags))}
+                className="font-bold text-zinc-150 text-xs"
+              />
               <EditableText
                 text={bodyText}
+                placeholder="What is happening?!"
                 onCommit={b => onCaptionChange?.(reconstructCaption(title, b, hashtags))}
-                className="whitespace-pre-wrap"
+                className="whitespace-pre-wrap mt-0.5"
               />
             </div>
 
@@ -524,8 +537,9 @@ export default function PlatformPreview({ platform, projectPath, images, caption
   )
 }
 
-function EditableText({ text, onCommit, className }: {
+function EditableText({ text, placeholder, onCommit, className }: {
   text: string
+  placeholder?: string
   onCommit: (s: string) => void
   className?: string
 }) {
@@ -546,6 +560,7 @@ function EditableText({ text, onCommit, className }: {
     <div
       ref={ref}
       contentEditable
+      data-placeholder={placeholder}
       suppressContentEditableWarning
       onFocus={() => { focused.current = true }}
       onBlur={e => { focused.current = false; onCommit(e.currentTarget.innerText) }}

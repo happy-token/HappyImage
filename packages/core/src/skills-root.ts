@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, statSync } from 'fs'
 import { join, resolve } from 'path'
-import { readSettings } from './settings.js'
+import { readSettings, PROJECT_ROOT, resolveConfigRoot } from './settings.js'
 
 export const CORE_SKILL_NAMES = [
   'baoyu-image-cards',
@@ -53,6 +53,16 @@ function inspectRoot(root: string, source: SkillsRootStatus['source']): SkillsRo
 }
 
 export function resolveSkillsRoot(): SkillsRootStatus {
+  // 1. Project-embedded skills (dev monorepo)
+  const projectSkills = join(PROJECT_ROOT, 'skills')
+  const projectStatus = inspectRoot(projectSkills, 'home')
+  if (projectStatus.ready) return projectStatus
+
+  // 2. Installed context: user config dir skills
+  const configSkills = join(resolveConfigRoot(), 'skills')
+  const configStatus = inspectRoot(configSkills, 'home')
+  if (configStatus.ready) return configStatus
+
   const settings = readSettings()
   const envRoot = process.env.BAOYU_SKILLS_ROOT || ''
   const settingsRoot = settings.BAOYU_SKILLS_ROOT || ''
@@ -112,6 +122,10 @@ export function discoverSkillsRoots(): SkillsRootCandidate[] {
   const settingsPath = settingsRoot ? resolve(expandHome(settingsRoot)) : ''
   const configured = envRoot || settingsRoot || ''
   const candidates: SkillsRootCandidate[] = []
+
+  // Project-embedded skills listed first
+  addCandidate(candidates, '项目内嵌技能目录', join(PROJECT_ROOT, 'skills'), 'home')
+  addCandidate(candidates, '用户配置技能目录', join(resolveConfigRoot(), 'skills'), 'home')
 
   if (envPath && settingsPath && !isDirectory(envPath) && isDirectory(settingsPath)) {
     addCandidate(candidates, '当前配置', settingsRoot, 'BAOYU_SKILLS_ROOT')

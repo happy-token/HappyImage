@@ -1856,3 +1856,12 @@ textarea[aria-label="Chat message input"]:focus {
   animation: scale-up 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
 }
 
+/* Placeholder support for contenteditable elements */
+[contenteditable]:empty::before {
+  content: attr(data-placeholder);
+  color: #71717a; /* zinc-500 */
+  font-style: italic;
+  pointer-events: none;
+  display: block;
+}
+

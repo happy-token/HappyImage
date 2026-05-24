@@ -90,7 +90,14 @@ export default function ChatThread({
                 </span>
               </span>
             ) : msg.role === 'user' ? (
-              msg.text
+              <div className="flex flex-col gap-1.5">
+                <div>{msg.text}</div>
+                {typeof msg.targetImageIndex === 'number' && (
+                  <div className="mt-1.5 pt-1.5 border-t border-white/20 text-xxs tracking-wide text-indigo-100/90 flex items-center gap-1 select-none">
+                    <span>🎯 修改图片 #{msg.targetImageIndex + 1} ({msg.targetImageName || '无名称'})</span>
+                  </div>
+                )}
+              </div>
             ) : (
               <Markdown text={msg.text} />
             )}
@@ -105,6 +112,7 @@ export default function ChatThread({
                 onCancel={onCancelPlan}
                 onTogglePrompt={onTogglePrompt}
                 disabledPrompts={disabledPlanPrompts}
+                confirmed={msg.confirmed || messages.indexOf(msg) < messages.length - 1 || !!projectData}
               />
             </div>
           )}

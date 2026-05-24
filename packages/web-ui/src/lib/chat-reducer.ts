@@ -8,6 +8,9 @@ export interface ChatMessage {
   planData?: ProjectPlan
   sourceContent?: string
   retryFn?: () => void
+  targetImageIndex?: number
+  targetImageName?: string
+  confirmed?: boolean
 }
 
 export interface ChatState {

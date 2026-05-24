@@ -21,6 +21,37 @@ function parseYamlFrontMatter(content: string): Record<string, string> {
   return result
 }
 
+export function extractPromptFromMarkdown(markdown: string): string {
+  if (!markdown) return ''
+
+  // 1. Try matching code block
+  const codeBlockMatch = markdown.match(/```[\s\S]*?\n([\s\S]*?)```/)
+  if (codeBlockMatch && codeBlockMatch[1].trim()) {
+    return codeBlockMatch[1].trim()
+  }
+
+  // 2. Try matching front-matter prompt: key
+  const frontMatterMatch = markdown.match(/^prompt:\s*(.+)/im)
+  if (frontMatterMatch && frontMatterMatch[1].trim()) {
+    return frontMatterMatch[1].trim()
+  }
+
+  // 3. Try matching everything after "# Prompt" or "# prompt" or "# PROMPT"
+  const promptHeaderMatch = markdown.match(/#+\s+Prompt\b([\s\S]*)/i)
+  if (promptHeaderMatch && promptHeaderMatch[1].trim()) {
+    return promptHeaderMatch[1].trim()
+  }
+
+  // 4. Fallback: if there is front-matter, strip it and return the rest
+  let cleaned = markdown.replace(/^---[\s\S]*?---\n/, '').trim()
+  if (cleaned.startsWith('#')) {
+    // If it starts with headers, strip the first header
+    cleaned = cleaned.replace(/^#+.*?\n/, '').trim()
+  }
+  return cleaned || markdown
+}
+
+
 function readSkillMd(skillId: string): string | null {
   const skillDir = resolveSkillDir(skillId)
   if (!skillDir) return null
@@ -273,7 +304,11 @@ function extractJson(text: string): ProjectPlan {
   const start = cleaned.indexOf('{')
   const end = cleaned.lastIndexOf('}')
   if (start === -1 || end === -1) throw new Error('Claude did not return a project JSON plan')
-  return JSON.parse(cleaned.slice(start, end + 1)) as ProjectPlan
+  try {
+    return JSON.parse(cleaned.slice(start, end + 1)) as ProjectPlan
+  } catch {
+    throw new Error('Claude returned an invalid project plan. Please try again.')
+  }
 }
 
 function safeMarkdownName(name: string, fallback: string): string {
@@ -284,6 +319,17 @@ function safeMarkdownName(name: string, fallback: string): string {
 function safeImageName(name: string, fallback: string): string {
   const safe = basename(name || fallback).replace(/[^a-zA-Z0-9._-]/g, '-')
   return safe.endsWith('.png') ? safe : `${safe}.png`
+}
+
+export function applyWatermark(prompt: string, preferences: { found: boolean; values: Record<string, unknown> } | null): string {
+  if (!preferences?.found) return prompt
+  const wm = preferences.values.watermark as Record<string, unknown> | undefined
+  if (!wm || !wm.enabled) return prompt
+  const content = ((wm.content as string) || '').trim()
+  if (!content) return prompt
+  const position = (wm.position as string) || 'bottom-right'
+  const opacity = typeof wm.opacity === 'number' ? wm.opacity : 0.7
+  return `${prompt}\n\nWatermark requirement: Add a subtle text watermark "${content}" at ${position} with ${Math.round(opacity * 100)}% opacity.`
 }
 
 interface ProjectChatOptions {
@@ -301,6 +347,17 @@ interface ProjectChatOptions {
 export async function streamProjectChat(opts: ProjectChatOptions): Promise<void> {
   const apiKey = readApiKey()
   if (!apiKey) { await opts.onError?.('ANTHROPIC_API_KEY not set'); return }
+
+  const metadataPath = join(opts.projectPath, 'metadata.json')
+  let projectPreferences = null
+  let skillId = ''
+  if (existsSync(metadataPath)) {
+    try {
+      const meta = JSON.parse(readFileSync(metadataPath, 'utf-8'))
+      skillId = meta.skillId || ''
+      if (meta.skillId) projectPreferences = getPreferenceInfo(meta.skillId)
+    } catch { /* ignore */ }
+  }
   if (opts.signal?.aborted) return
 
   const { projectPath, message, target } = opts
@@ -384,12 +441,30 @@ export async function streamProjectChat(opts: ProjectChatOptions): Promise<void>
     'If the request is about text/copy only, return an empty updatedPrompts array.',
   ].filter(Boolean).join('\n')
 
-  const systemPrompt = [
+  const systemParts: string[] = [
     'You are a project editing assistant for a content generation Web UI.',
     'The user has already generated content and wants to modify it.',
     'Be precise about which images need regenerating — only include ones that truly need changes.',
+    'When generating "updatedPrompts", you MUST base the updated prompt and markdown on the existing "Target Prompt" or original prompt content, and update it incrementally on top of the original text to incorporate the user\'s modification request. Do NOT rewrite the prompt from scratch or discard existing style definitions, page outline context, or structure unless explicitly requested.',
     'Return only valid JSON. No markdown fences.',
-  ].join('\n')
+  ]
+
+  if (skillId) {
+    const skillMd = readSkillMd(skillId)
+    if (skillMd) {
+      systemParts.push(`Here are the rules and documentation for the skill being used (${skillId}):\n\n${skillMd}`)
+    }
+  }
+
+  if (projectPreferences?.found && projectPreferences.raw.trim()) {
+    systemParts.push([
+      `Saved user preferences from ${projectPreferences.path}:`,
+      projectPreferences.raw.slice(0, 8000),
+      'Ensure modifications respect these preferences and constraints.',
+    ].join('\n'))
+  }
+
+  const systemPrompt = systemParts.join('\n\n')
 
   const response = await client.messages.create({
     model,
@@ -484,9 +559,11 @@ export async function streamProjectChat(opts: ProjectChatOptions): Promise<void>
     const outputFile = `${imageBase}${versionSuffix}.png`
 
     try {
+      const promptToUse = up.prompt?.trim() || extractPromptFromMarkdown(up.markdown)
       const imagePath = await executeImagineWithRateLimitRetry({
-        prompt: up.prompt,
+        prompt: applyWatermark(promptToUse, projectPreferences),
         aspect_ratio: promptAspectRatio,
+        backend: (projectPreferences?.values?.preferred_image_backend as string) || settings.IMAGE_BACKEND || 'auto',
         output_dir: projectPath,
         output_file: outputFile,
         signal: opts.signal,
@@ -565,10 +642,11 @@ export async function generatePlan(opts: { skillId: string; content: string; sel
 
   const client = new Anthropic({ apiKey, ...(baseURL ? { baseURL } : {}) })
 
+  const planSystem = systemParts.join('\n\n')
   const planMessage = await client.messages.create({
     model,
     max_tokens: 20000,
-    system: systemParts.join('\n\n'),
+    system: planSystem,
     messages: [{ role: 'user', content: userMessage }],
   })
 
@@ -577,7 +655,24 @@ export async function generatePlan(opts: { skillId: string; content: string; sel
     .map(block => block.text)
     .join('\n')
 
-  return extractJson(planText)
+  try {
+    return extractJson(planText)
+  } catch {
+    const retryMessage = await client.messages.create({
+      model,
+      max_tokens: 20000,
+      system: planSystem + '\nCRITICAL: You MUST return ONLY valid RFC 8259 JSON. Every string value must be enclosed in double quotes. No unquoted values, no trailing commas, no comments.',
+      messages: [
+        { role: 'user', content: userMessage },
+        { role: 'assistant', content: '{' },
+      ],
+    })
+    const retryText = '{' + retryMessage.content
+      .filter(block => block.type === 'text')
+      .map(block => block.text)
+      .join('\n')
+    return extractJson(retryText)
+  }
 }
 
 export async function streamGenerate(opts: GenerateOptions): Promise<void> {
@@ -661,46 +756,62 @@ export async function streamGenerate(opts: GenerateOptions): Promise<void> {
     plan = opts.prebuiltPlan
     await opts.onText?.('使用已确认的计划...\n')
   } else {
+    const streamPlanSystem = [
+      systemParts.join('\n\n'),
+      'You are running a baoyu-skill project workflow for a Web UI.',
+      'You must produce the same kinds of project artifacts that baoyu skills create: source markdown, analysis.md, outline.md, prompts/NN-*.md, copy.md, and images.',
+      'Return only valid JSON. No markdown fences.',
+    ].join('\n\n')
+    const streamPlanUserContent = [
+      ...userMessage,
+      '',
+      `Requested image count: ${requestedCount}`,
+      `Aspect ratio: ${aspectRatio}`,
+      styleSummary ? `Selected visual parameters: ${styleSummary}` : '',
+      '',
+      'Return this exact JSON shape:',
+      '{',
+      '  "title": "short project title",',
+      '  "slug": "kebab-case-ascii-or-pinyin-project-slug",',
+      '  "analysisMarkdown": "full markdown analysis with YAML frontmatter when useful",',
+      '  "outlineMarkdown": "full markdown outline with page-by-page plan",',
+      '  "copyMarkdown": "ready-to-edit publishing copy for the likely platform, including title/body/hashtags where appropriate",',
+      '  "prompts": [',
+      '    { "fileName": "01-cover-topic.md", "imageFileName": "01-cover-topic.png", "markdown": "full prompt markdown with frontmatter and visible text rules", "prompt": "the exact image generation prompt text" }',
+      '  ]',
+      '}',
+      '',
+      `Create exactly ${requestedCount} prompt objects unless the skill strongly requires fewer.`,
+    ].filter(Boolean).join('\n')
     const planMessage = await client.messages.create({
       model,
       max_tokens: 20000,
-      system: [
-        systemParts.join('\n\n'),
-        'You are running a baoyu-skill project workflow for a Web UI.',
-        'You must produce the same kinds of project artifacts that baoyu skills create: source markdown, analysis.md, outline.md, prompts/NN-*.md, copy.md, and images.',
-        'Return only valid JSON. No markdown fences.',
-      ].join('\n\n'),
-      messages: [{
-        role: 'user',
-        content: [
-          ...userMessage,
-          '',
-          `Requested image count: ${requestedCount}`,
-          `Aspect ratio: ${aspectRatio}`,
-          styleSummary ? `Selected visual parameters: ${styleSummary}` : '',
-          '',
-          'Return this exact JSON shape:',
-          '{',
-          '  "title": "short project title",',
-          '  "slug": "kebab-case-ascii-or-pinyin-project-slug",',
-          '  "analysisMarkdown": "full markdown analysis with YAML frontmatter when useful",',
-          '  "outlineMarkdown": "full markdown outline with page-by-page plan",',
-          '  "copyMarkdown": "ready-to-edit publishing copy for the likely platform, including title/body/hashtags where appropriate",',
-          '  "prompts": [',
-          '    { "fileName": "01-cover-topic.md", "imageFileName": "01-cover-topic.png", "markdown": "full prompt markdown with frontmatter and visible text rules", "prompt": "the exact image generation prompt text" }',
-          '  ]',
-          '}',
-          '',
-          `Create exactly ${requestedCount} prompt objects unless the skill strongly requires fewer.`,
-        ].filter(Boolean).join('\n'),
-      }],
+      system: streamPlanSystem,
+      messages: [{ role: 'user', content: streamPlanUserContent }],
     })
 
     const planText = planMessage.content
       .filter(block => block.type === 'text')
       .map(block => block.text)
       .join('\n')
-    plan = extractJson(planText)
+    try {
+      plan = extractJson(planText)
+    } catch {
+      const retryMessage = await client.messages.create({
+        model,
+        max_tokens: 20000,
+        system: streamPlanSystem + '\nCRITICAL: You MUST return ONLY valid RFC 8259 JSON. Every string value must be enclosed in double quotes. No unquoted values, no trailing commas, no comments.',
+        messages: [
+          { role: 'user', content: streamPlanUserContent },
+          { role: 'assistant', content: '{' },
+        ],
+      })
+      const retryText = '{' + retryMessage.content
+        .filter(block => block.type === 'text')
+        .map(block => block.text)
+        .join('\n')
+      plan = extractJson(retryText)
+    }
   }
 
   try {
@@ -713,6 +824,8 @@ export async function streamGenerate(opts: GenerateOptions): Promise<void> {
 
     await opts.onProject?.(projectDir)
     await opts.onText?.(`项目目录: ${projectDir}\n`)
+
+    writeFileSync(join(projectDir, 'metadata.json'), JSON.stringify({ skillId: opts.skillId }), 'utf-8')
 
     const sourcePath = join(projectDir, `source-${projectSlug}.md`)
     writeFileSync(sourcePath, opts.content, 'utf-8')
@@ -749,7 +862,7 @@ export async function streamGenerate(opts: GenerateOptions): Promise<void> {
 
       try {
         const imagePath = await executeImagineWithRateLimitRetry({
-          prompt: prompt.prompt || prompt.markdown,
+          prompt: applyWatermark(prompt.prompt || prompt.markdown, preferences),
           aspect_ratio: aspectRatio,
           backend: opts.selections.backend || settings.IMAGE_BACKEND || 'auto',
           output_dir: projectDir,

@@ -7,6 +7,7 @@ import {
   createSkillSession, updateSkillSession, appendSessionEvent,
   appendSessionArtifact, createSessionTask, updateSessionTask,
   getSkillSession, listSkillSessions, appendSessionMessage,
+  getPreferenceInfo, applyWatermark, extractPromptFromMarkdown,
 } from '@happyimage/core'
 
 const projects = new Hono()
@@ -201,7 +202,24 @@ projects.post('/:encodedId/chat', async (c) => {
     updateSkillSession(s.id, { status: 'reviewing', projectPath })
     sessionId = s.id
   }
-  appendSessionMessage(sessionId, 'user', chatMessage)
+
+  const extra: Record<string, any> = {}
+  if (body.target && body.target.type === 'image' && typeof body.target.index === 'number') {
+    extra.targetImageIndex = body.target.index
+    const promptsDir = join(projectPath, 'prompts')
+    const promptFiles = existsSync(promptsDir)
+      ? readdirSync(promptsDir).filter(n => n.endsWith('.md')).sort()
+      : []
+    if (body.target.index >= 0 && body.target.index < promptFiles.length) {
+      extra.targetImageName = promptFiles[body.target.index].replace(/\.md$/, '.png')
+    }
+  }
+
+  const session = getSkillSession(sessionId)
+  const lastMsg = session?.messages[session.messages.length - 1]
+  if (!lastMsg || lastMsg.role !== 'user' || lastMsg.content !== chatMessage) {
+    appendSessionMessage(sessionId, 'user', chatMessage, extra)
+  }
 
   return streamSSE(c, async (stream) => {
     const conv = loadConversation(projectPath)
@@ -289,8 +307,7 @@ projects.post('/:encodedId/regenerate', async (c) => {
     if (!prompt) {
       const promptPath = join(promptsDir, promptFiles[idx])
       promptMarkdown = readFileSync(promptPath, 'utf-8')
-      const promptMatch = promptMarkdown.match(/^prompt:\s*(.+)/im) || promptMarkdown.match(/```[\s\S]*?\n([\s\S]*?)```/)
-      prompt = promptMatch ? promptMatch[1].trim() : promptMarkdown.trim().slice(0, 2000)
+      prompt = extractPromptFromMarkdown(promptMarkdown)
     } else {
       const promptPath = join(promptsDir, promptFiles[idx])
       promptMarkdown = existsSync(promptPath) ? readFileSync(promptPath, 'utf-8') : ''
@@ -302,9 +319,20 @@ projects.post('/:encodedId/regenerate', async (c) => {
     const versionSuffix = existingVersions.length > 0 ? `.v${existingVersions.length + 1}` : ''
     const outputFile = `${imageBase}${versionSuffix}.png`
 
+    const metadataPath = join(projectPath, 'metadata.json')
+    let projectPreferences = null
+    if (existsSync(metadataPath)) {
+      try {
+        const meta = JSON.parse(readFileSync(metadataPath, 'utf-8'))
+        if (meta.skillId) projectPreferences = getPreferenceInfo(meta.skillId)
+      } catch { /* ignore */ }
+    }
+    const settings = readSettings()
+
     const imagePath = await executeImagineWithRateLimitRetry({
-      prompt,
+      prompt: applyWatermark(prompt, projectPreferences),
       aspect_ratio: aspectRatio,
+      backend: (projectPreferences?.values?.preferred_image_backend as string) || settings.IMAGE_BACKEND || 'auto',
       output_dir: projectPath,
       output_file: outputFile,
     })

@@ -91,12 +91,27 @@ sessionsRoute.get('/', (c) => {
 
 sessionsRoute.post('/', async (c) => {
   const body = await c.req.json().catch(() => ({}))
+  const hasProjectPath = typeof body.projectPath === 'string' && body.projectPath.trim()
+  const hasTitle = typeof body.title === 'string' && body.title.trim()
+  const hasMessage = typeof body.message === 'string' && body.message.trim()
+  const hasCommandRequest = !!body.commandRequest
+
+  // For blank session requests (no content), reuse existing blank to prevent race-condition duplicates
+  if (!hasProjectPath && !hasTitle && !hasMessage && !hasCommandRequest) {
+    const blank = listSkillSessions().find(s => {
+      const lastMsg = s.messages.slice().reverse().find(m => m.role === 'user')
+      const imageCount = s.artifacts.filter(a => a.type === 'image').length
+      return !s.projectPath && !s.activeProjectPath && !lastMsg && imageCount === 0
+    })
+    if (blank) return c.json(sessionResponse(blank.id) || blank)
+  }
+
   const session = createSkillSession({
-    title: typeof body.title === 'string' ? body.title : undefined,
-    message: typeof body.message === 'string' ? body.message : undefined,
+    title: hasTitle ? body.title : undefined,
+    message: hasMessage ? body.message : undefined,
     commandRequest: body.commandRequest as CommandRequest | undefined,
   })
-  if (typeof body.projectPath === 'string' && body.projectPath.trim()) {
+  if (hasProjectPath) {
     updateSkillSession(session.id, { status: 'reviewing', projectPath: body.projectPath.trim() })
   }
   return c.json(sessionResponse(session.id) || session)
@@ -128,9 +143,10 @@ sessionsRoute.patch('/:id', async (c) => {
   const body = await c.req.json().catch(() => ({}))
   const result = sessionResponse(sessionId)
   if (!result) return c.json({ error: 'Session not found' }, 404)
-  if (typeof body.title === 'string') {
-    updateSkillSession(sessionId, { title: body.title.trim() || undefined })
-  }
+  const patch: Record<string, string | undefined> = {}
+  if (typeof body.title === 'string') patch.title = body.title.trim() || undefined
+  if (typeof body.projectPath === 'string') patch.projectPath = body.projectPath.trim() || undefined
+  if (Object.keys(patch).length > 0) updateSkillSession(sessionId, patch)
   return c.json(sessionResponse(sessionId))
 })
 
@@ -151,7 +167,15 @@ sessionsRoute.post('/:id/messages', async (c) => {
   const message = String(body.message || '').trim()
   if (!message) return c.json({ error: 'message required' }, 400)
 
-  appendSessionMessage(sessionId, 'user', message)
+  const extra: Record<string, any> = {}
+  if (typeof body.targetImageIndex === 'number') {
+    extra.targetImageIndex = body.targetImageIndex
+  }
+  if (body.targetImageName) {
+    extra.targetImageName = String(body.targetImageName)
+  }
+
+  appendSessionMessage(sessionId, 'user', message, extra)
 
   const parsed = parseSlashCommand(message)
   if (parsed) {

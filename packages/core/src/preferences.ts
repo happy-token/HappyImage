@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { dirname, join, resolve } from 'path'
-import { PROJECT_ROOT, readSettings } from './settings.js'
+import { PROJECT_ROOT, resolveConfigRoot, resolveUserConfigRoot, readSettings } from './settings.js'
 
 export interface PreferenceInfo {
   skillId: string
@@ -13,7 +13,7 @@ export interface PreferenceInfo {
   targets: PreferenceTarget[]
 }
 
-export type PreferenceScope = 'project' | 'output' | 'xdg' | 'user'
+export type PreferenceScope = 'config' | 'legacy' | 'project'
 
 export interface PreferenceTarget {
   scope: PreferenceScope
@@ -46,23 +46,47 @@ function parseLooseYaml(raw: string): Record<string, unknown> {
 
   for (const line of body.split('\n')) {
     if (!line.trim() || line.trim().startsWith('#')) continue
-    const top = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/)
+    const top = line.match(/^([A-Za-z0-9_.-]+):\s*(.*)$/)
     if (top) {
-      const [, key, value = ''] = top
-      if (value === '') {
-        values[key] = {}
-        currentObject = key
+      const [, fullKey, value = ''] = top
+      const parsedVal = value === '' ? {} : parseScalar(value)
+
+      if (fullKey.includes('.')) {
+        const parts = fullKey.split('.')
+        let current: any = values
+        for (let i = 0; i < parts.length - 1; i++) {
+          const part = parts[i]
+          if (!current[part] || typeof current[part] !== 'object') {
+            current[part] = {}
+          }
+          current = current[part]
+        }
+        current[parts[parts.length - 1]] = parsedVal
       } else {
-        values[key] = parseScalar(value)
-        currentObject = null
+        values[fullKey] = parsedVal
+        if (value === '') {
+          currentObject = fullKey
+        } else {
+          currentObject = null
+        }
       }
       continue
     }
 
-    const nested = line.match(/^\s+([A-Za-z0-9_-]+):\s*(.*)$/)
+    const nested = line.match(/^\s+([A-Za-z0-9_.-]+):\s*(.*)$/)
     if (nested && currentObject && typeof values[currentObject] === 'object' && values[currentObject]) {
-      const [, key, value = ''] = nested
-      ;(values[currentObject] as Record<string, unknown>)[key] = parseScalar(value)
+      const [, fullKey, value = ''] = nested
+      const parsedVal = parseScalar(value)
+      const parts = fullKey.split('.')
+      let current: any = values[currentObject]
+      for (let i = 0; i < parts.length - 1; i++) {
+        const part = parts[i]
+        if (!current[part] || typeof current[part] !== 'object') {
+          current[part] = {}
+        }
+        current = current[part]
+      }
+      current[parts[parts.length - 1]] = parsedVal
     }
   }
 
@@ -108,30 +132,56 @@ function summarize(values: Record<string, unknown>) {
 
 function preferenceTargets(skillId: string): PreferenceTarget[] {
   const skillName = skillId.startsWith('baoyu-') ? skillId : `baoyu-${skillId}`
-  const settings = readSettings()
-  const outputRoot = resolve((settings.OUTPUT_DIR || '~/output/happyimage').replace('~', process.env.HOME || '/Users/forever'))
-  const xdgRoot = process.env.XDG_CONFIG_HOME || join(process.env.HOME || '', '.config')
-  const isPublishingSkill = skillName.startsWith('baoyu-post-to-')
+  const userConfigRoot = resolveUserConfigRoot()
+  const home = process.env.HOME || process.env.USERPROFILE || '/tmp'
   const targets: PreferenceTarget[] = [
     { scope: 'project', label: '当前项目', path: join(PROJECT_ROOT, '.baoyu-skills', skillName, 'EXTEND.md'), exists: false },
-    ...(isPublishingSkill ? [] : [{ scope: 'output' as const, label: '输出目录', path: join(outputRoot, '.baoyu-skills', skillName, 'EXTEND.md'), exists: false }]),
-    { scope: 'xdg', label: '系统配置', path: join(xdgRoot, 'baoyu-skills', skillName, 'EXTEND.md'), exists: false },
-    { scope: 'user', label: '用户全局', path: join(process.env.HOME || '', '.baoyu-skills', skillName, 'EXTEND.md'), exists: false },
+    { scope: 'config', label: '配置目录', path: join(userConfigRoot, 'skills', skillName, 'EXTEND.md'), exists: false },
+    { scope: 'legacy', label: '旧版路径', path: join(home, '.baoyu-skills', skillName, 'EXTEND.md'), exists: false },
   ]
   return targets.map(target => ({ ...target, exists: existsSync(target.path) }))
 }
 
 function resolveTarget(skillId: string, scope?: PreferenceScope, fallbackPath?: string | null) {
   const targets = preferenceTargets(skillId)
-  if (scope) return targets.find(target => target.scope === scope) || targets[1]
+  if (scope) return targets.find(target => target.scope === scope) || targets[0]
   if (fallbackPath) {
     const found = targets.find(target => target.path === fallbackPath)
     if (found) return found
   }
-  return targets.find(target => target.exists) || targets[1]
+  return targets.find(target => target.exists) || targets[0]
 }
 
 export function getPreferenceInfo(skillId: string): PreferenceInfo {
+  const skillName = skillId.startsWith('baoyu-') ? skillId : `baoyu-${skillId}`
+  const userConfigRoot = resolveUserConfigRoot()
+
+  // 1. Auto-migrate legacy userConfigRoot/skills/<skillName>.md to skills/<skillName>/EXTEND.md
+  const legacyMdPath = join(userConfigRoot, 'skills', `${skillName}.md`)
+  if (existsSync(legacyMdPath)) {
+    try {
+      const targetPath = join(userConfigRoot, 'skills', skillName, 'EXTEND.md')
+      if (!existsSync(targetPath)) {
+        mkdirSync(dirname(targetPath), { recursive: true })
+        const content = readFileSync(legacyMdPath, 'utf-8')
+        writeFileSync(targetPath, content, 'utf-8')
+      }
+    } catch { /* ignore */ }
+  }
+
+  // 2. Auto-migrate dev-mode workspace PROJECT_ROOT/skills/<skillName>.md to .baoyu-skills/<skillName>/EXTEND.md
+  const devLegacyMdPath = join(PROJECT_ROOT, 'skills', `${skillName}.md`)
+  if (existsSync(devLegacyMdPath)) {
+    try {
+      const targetPath = join(PROJECT_ROOT, '.baoyu-skills', skillName, 'EXTEND.md')
+      if (!existsSync(targetPath)) {
+        mkdirSync(dirname(targetPath), { recursive: true })
+        const content = readFileSync(devLegacyMdPath, 'utf-8')
+        writeFileSync(targetPath, content, 'utf-8')
+      }
+    } catch { /* ignore */ }
+  }
+
   const targets = preferenceTargets(skillId)
 
   for (const target of targets) {
@@ -152,7 +202,6 @@ export function getPreferenceInfo(skillId: string): PreferenceInfo {
   }
 
   // Fallback to deprecated xhs-images preferences if this is image-cards
-  const skillName = skillId.startsWith('baoyu-') ? skillId : `baoyu-${skillId}`
   if (skillName === 'baoyu-image-cards') {
     const fallbackTargets = preferenceTargets('baoyu-xhs-images')
     for (const target of fallbackTargets) {

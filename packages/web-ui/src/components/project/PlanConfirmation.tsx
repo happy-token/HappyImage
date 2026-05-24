@@ -9,9 +9,10 @@ interface PlanConfirmationProps {
   onCancel: () => void
   onTogglePrompt: (index: number) => void
   disabledPrompts: Set<number>
+  confirmed?: boolean
 }
 
-export default function PlanConfirmation({ plan, imageCount, onConfirm, onCancel, onTogglePrompt, disabledPrompts }: PlanConfirmationProps) {
+export default function PlanConfirmation({ plan, imageCount, onConfirm, onCancel, onTogglePrompt, disabledPrompts, confirmed }: PlanConfirmationProps) {
   const firstPrompt = plan.prompts[0]?.prompt || ''
   const previewText = firstPrompt.length > 200 ? firstPrompt.slice(0, 200) + '...' : firstPrompt
   const activeCount = plan.prompts.length - disabledPrompts.size
@@ -50,6 +51,7 @@ export default function PlanConfirmation({ plan, imageCount, onConfirm, onCancel
                   type="checkbox"
                   checked={!disabledPrompts.has(i)}
                   onChange={() => onTogglePrompt(i)}
+                  disabled={confirmed}
                 />
                 <code>{p.fileName}</code>
                 <span>{p.prompt.slice(0, 60)}{p.prompt.length > 60 ? '...' : ''}</span>
@@ -65,10 +67,21 @@ export default function PlanConfirmation({ plan, imageCount, onConfirm, onCancel
       </div>
 
       <div className="plan-confirm-actions">
-        <Button variant="ghost" onClick={onCancel}>取消</Button>
-        <Button onClick={() => onConfirm(plan)}>
-          确认生成 {activeCount} 张
-        </Button>
+        {confirmed ? (
+          <div className="flex items-center justify-between w-full">
+            <span className="text-xs text-emerald-400 font-semibold flex items-center gap-1.5 select-none">
+              ✓ 计划已确认并完成生成
+            </span>
+            <Button variant="ghost" disabled>已生成</Button>
+          </div>
+        ) : (
+          <>
+            <Button variant="ghost" onClick={onCancel}>取消</Button>
+            <Button onClick={() => onConfirm(plan)}>
+              确认生成 {activeCount} 张
+            </Button>
+          </>
+        )}
       </div>
     </div>
   )

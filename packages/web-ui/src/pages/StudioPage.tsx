@@ -19,6 +19,7 @@ interface PreferenceInfo {
   found: boolean
   path: string | null
   summary: Array<{ key: string; value: string }>
+  targets?: Array<{ scope: string; label: string; path: string; exists: boolean }>
 }
 
 interface SchemaField {
@@ -269,7 +270,7 @@ export default function StudioPage() {
   const [preferenceSchema, setPreferenceSchema] = useState<PreferenceSchema | null>(null)
   const [prefFormValues, setPrefFormValues] = useState<Record<string, unknown>>({})
   const [prefSaving, setPrefSaving] = useState(false)
-  const [prefScope, setPrefScope] = useState<string>('user')
+  const [prefScope, setPrefScope] = useState<string>('legacy')
   const [usePreferences, setUsePreferences] = useState(true)
   const [skipPlanConfirmation, setSkipPlanConfirmation] = useState(false)
 
@@ -334,6 +335,10 @@ export default function StudioPage() {
       .catch(err => console.warn('Failed to load settings:', err))
   }, [])
 
+  // Set to true before navigating to project page after generation, so the project
+  // loading effect doesn't reset the in-memory chat messages.
+  const justNavigatedFromGenerationRef = useRef(false)
+
   // Auto-create session on first visit if none in URL
   // Reuses an existing blank session to prevent accumulation of empty New Chat entries
   const autoCreateRef = useRef(false)
@@ -354,7 +359,7 @@ export default function StudioPage() {
         if (!cancelled && data.session?.id) setActiveSessionId(data.session.id)
       })
       .catch(() => {})
-    return () => { cancelled = true }
+    return () => { cancelled = true; autoCreateRef.current = false }
   }, [urlProjectId])
 
   // Load active project from URL
@@ -412,12 +417,16 @@ export default function StudioPage() {
         }
 
         const initialMsg = makeMessage('assistant', `Loaded project "${data.name}". You can now review files in the workspace on the right, or type modifications below (e.g. "make the 2nd image layout cleaner").`)
-        const historyMsgs: ChatMessage[] = (data.conversations || []).flatMap((c: any, index: number) => [
-          makeMessage('user', c.message),
-          makeMessage('assistant', c.plan),
-        ])
 
-        dispatch({ type: 'RESET_MESSAGES', messages: [initialMsg, ...historyMsgs] })
+        // Only reset messages if we didn't just navigate here from a live generation
+        // (in that case the in-memory chat already has the full generation history)
+        if (!justNavigatedFromGenerationRef.current) {
+          const historyMsgs: ChatMessage[] = (data.conversations || []).flatMap((c: any) => [
+            makeMessage('user', c.message),
+            makeMessage('assistant', c.plan),
+          ])
+          dispatch({ type: 'RESET_MESSAGES', messages: [initialMsg, ...historyMsgs] })
+        }
 
         fetch(`/api/sessions?projectPath=${encodeURIComponent(data.path)}`)
           .then(res => res.json())
@@ -447,6 +456,35 @@ export default function StudioPage() {
                 }).catch(() => {})
               }
             }
+
+            // On page reload (not navigating from generation), load session events for history
+            const fromGeneration = justNavigatedFromGenerationRef.current
+            justNavigatedFromGenerationRef.current = false
+            if (sessionId && !fromGeneration && !cancelled) {
+              try {
+                const evData = await fetch(`/api/sessions/${sessionId}/events`).then(r => r.json())
+                const sessionMessages: ChatMessage[] = []
+                for (const msg of (evData?.session?.messages || [])) {
+                  if (msg.role && msg.content) {
+                    sessionMessages.push(makeMessage(msg.role as 'user' | 'assistant', msg.content))
+                  }
+                }
+                const evts: any[] = evData?.events || []
+                const planEvt = [...evts].reverse().find((e: any) => e.type === 'plan')
+                if (planEvt?.plan) {
+                  sessionMessages.push(makeMessage('assistant', `Plan: ${planEvt.plan.title || ''}`, 'plan', { planData: planEvt.plan }))
+                }
+                if (evts.some((e: any) => e.type === 'done')) {
+                  sessionMessages.push(makeMessage('assistant', 'Generation completed.'))
+                }
+                if (sessionMessages.length > 0 && !cancelled) {
+                  dispatch({ type: 'RESET_MESSAGES', messages: [initialMsg, ...sessionMessages] })
+                }
+              } catch { /* keep historyMsgs */ }
+            } else {
+              justNavigatedFromGenerationRef.current = false
+            }
+
             if (sessionId) setActiveSessionId(sessionId)
           })
           .catch(err => { if (!cancelled) console.warn('Failed to fetch/create chat session:', err) })
@@ -720,12 +758,29 @@ export default function StudioPage() {
       }
     }
 
+    // Update session title and persist user message to session history
+    const userMessage = query || generationContent || uploadedSourceName
+    const titleFromInput = userMessage.slice(0, 60)
+    if (sessionId && titleFromInput) {
+      fetch(`/api/sessions/${sessionId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: titleFromInput }),
+      }).catch(() => {})
+      fetch(`/api/sessions/${sessionId}/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: [{ role: 'user', content: userMessage }] }),
+      }).catch(() => {})
+    }
+
     appendMessage('user', query || `使用${uploadedSourceName ? `上传文件 ${uploadedSourceName}` : '已选择的内容源'}生成图片`)
 
     if (skipPlanConfirmation) {
       const streamId = appendMessage('assistant', '', 'runner')
       dispatch({ type: 'SET_STREAMING', messageId: streamId })
       setIsSending(false)
+      let capturedPath = ''
       sse.start(activeSkillId, generationContent, payload, {
         onText: (text) => dispatch({ type: 'APPEND_TEXT', messageId: streamId, text }),
         onError: (errMsg) => {
@@ -735,10 +790,14 @@ export default function StudioPage() {
         onDone: (doneImages) => {
           dispatch({ type: 'APPEND_TEXT', messageId: streamId, text: doneImages.length > 0 ? `\n\n✓ Generated ${doneImages.length} images.` : '\n\n⚠ No images returned.' })
           dispatch({ type: 'SET_STREAMING', messageId: null })
+          if (capturedPath) {
+            justNavigatedFromGenerationRef.current = true
+            navigate(`/projects/${encodeProjectId(capturedPath)}${sessionId ? `?session=${sessionId}` : ''}`)
+          }
         },
         onProject: (path) => {
-          const pid = encodeProjectId(path)
-          dispatch({ type: 'APPEND_TEXT', messageId: streamId, text: `\n\n[→ Open project workspace](/projects/${pid})` })
+          capturedPath = path
+          dispatch({ type: 'APPEND_TEXT', messageId: streamId, text: `\n\n[→ Open project workspace](/projects/${encodeProjectId(path)})` })
         },
       }, { sourceMode, sourceRef, sessionId: sessionId || undefined, commandRequest: commandRequest as unknown as Record<string, unknown> })
       return
@@ -787,12 +846,15 @@ export default function StudioPage() {
     const activePrompts = confirmedPlan.prompts.filter((_, i) => !disabledPrompts.has(i))
     const adjustedPlan = { ...confirmedPlan, prompts: activePrompts }
 
-    dispatch({ type: 'REMOVE_MESSAGE', messageId: chat.planningMsgId! })
+    if (chat.planningMsgId) {
+      dispatch({ type: 'SET_MESSAGE', messageId: chat.planningMsgId, patch: { confirmed: true } })
+    }
     dispatch({ type: 'CLEAR_PLANNING' })
 
     const streamId = appendMessage('assistant', '', 'runner')
     dispatch({ type: 'SET_STREAMING', messageId: streamId })
 
+    let capturedPath = ''
     sse.start(pendingGenerationSkillId || skill.id, content, payload, {
       onText: (text) => dispatch({ type: 'APPEND_TEXT', messageId: streamId, text }),
       onError: (errMsg) => {
@@ -802,10 +864,14 @@ export default function StudioPage() {
       onDone: (doneImages) => {
         dispatch({ type: 'APPEND_TEXT', messageId: streamId, text: doneImages.length > 0 ? `\n\n✓ Generated ${doneImages.length} images.` : '\n\n⚠ No images returned.' })
         dispatch({ type: 'SET_STREAMING', messageId: null })
+        if (capturedPath) {
+          justNavigatedFromGenerationRef.current = true
+          navigate(`/projects/${encodeProjectId(capturedPath)}${activeSessionId ? `?session=${activeSessionId}` : ''}`)
+        }
       },
       onProject: (path) => {
-        const pid = encodeProjectId(path)
-        dispatch({ type: 'APPEND_TEXT', messageId: streamId, text: `\n\n[→ Open project workspace](/projects/${pid})` })
+        capturedPath = path
+        dispatch({ type: 'APPEND_TEXT', messageId: streamId, text: `\n\n[→ Open project workspace](/projects/${encodeProjectId(path)})` })
       },
     }, {
       sourceMode, sourceRef,
@@ -846,12 +912,22 @@ export default function StudioPage() {
     setIsSending(true)
     setChatInput('')
 
-    appendMessage('user', query)
+    const targetImageIndex = selectedImage !== null ? selectedImage : undefined
+    const targetImageName = (selectedImage !== null && projectData?.images?.[selectedImage])
+      ? projectData.images[selectedImage].name
+      : undefined
+
+    appendMessage('user', query, undefined, { targetImageIndex, targetImageName })
     if (activeSessionId) {
       fetch(`/api/sessions/${activeSessionId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: query, targetArtifactId: selectedImage !== null ? `image-${selectedImage}` : undefined }),
+        body: JSON.stringify({
+          message: query,
+          targetArtifactId: selectedImage !== null ? `image-${selectedImage}` : undefined,
+          targetImageIndex,
+          targetImageName,
+        }),
       }).catch(err => console.warn('Failed to post session message:', err))
     }
 
@@ -1208,10 +1284,9 @@ export default function StudioPage() {
                   onChange={e => setPrefScope(e.target.value)}
                   className="text-[10px] bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1 text-zinc-300 outline-none focus:border-indigo-500"
                 >
-                  <option value="user">~/.baoyu-skills (全局)</option>
-                  <option value="project">项目目录</option>
-                  <option value="xdg">XDG 配置</option>
-                  <option value="output">输出目录</option>
+                  {(preferenceInfo?.targets ?? []).map(t => (
+                    <option key={t.scope} value={t.scope}>{t.label} — {t.path}{t.exists ? ' · 已有' : ''}</option>
+                  ))}
                 </select>
               </div>
               {preferenceSchema.fields.map(field => {
