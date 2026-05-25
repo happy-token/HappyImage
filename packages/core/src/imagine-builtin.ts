@@ -13,6 +13,7 @@ const VENDOR_MAIN = join(VENDOR_DIR, 'main.ts')
 export interface BuiltinImagineInput {
   prompt: string
   aspect_ratio?: string
+  size?: string
   backend?: string
   output_dir?: string
   output_file?: string
@@ -74,6 +75,7 @@ export function executeImagineVendored(input: BuiltinImagineInput): Promise<stri
     const backend = input.backend || settings.IMAGE_BACKEND || 'auto'
     const args = ['run', VENDOR_MAIN, '--prompt', input.prompt, '--image', outFile, '--json']
     if (input.aspect_ratio) args.push('--ar', input.aspect_ratio)
+    if (input.size) args.push('--size', input.size)
     if (backend && backend !== 'auto') args.push('--provider', backend)
 
     const bunPath = findBunExecutable()

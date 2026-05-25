@@ -8,6 +8,7 @@ import {
   appendSessionArtifact, createSessionTask, updateSessionTask,
   getSkillSession, listSkillSessions, appendSessionMessage,
   getPreferenceInfo, applyWatermark, extractPromptFromMarkdown,
+  getExistingImageSize,
 } from '@happyimage/core'
 
 const projects = new Hono()
@@ -257,7 +258,7 @@ projects.post('/:encodedId/chat', async (c) => {
         },
         onError: async (error) => {
           updateSessionTask(sessionId, task.id, { status: 'failed', error })
-          appendSessionEvent(sessionId, { type: 'error', message: error })
+          appendSessionEvent(sessionId, { type: 'error', code: 'GENERATION_ERROR', message: error, retryable: true, action: 'retry', details: `taskId: ${task.id}` })
           await stream.writeSSE({ data: JSON.stringify({ type: 'error', error }) })
         },
         onDone: async () => {
@@ -272,7 +273,7 @@ projects.post('/:encodedId/chat', async (c) => {
       conv.sessions.push(session)
       saveConversation(projectPath, conv)
       updateSessionTask(sessionId, task.id, { status: 'failed', error: err.message || 'Chat failed' })
-      appendSessionEvent(sessionId, { type: 'error', message: err.message || 'Chat failed' })
+      appendSessionEvent(sessionId, { type: 'error', code: 'UNEXPECTED_ERROR', message: err.message || 'Chat failed', retryable: true, action: 'retry', details: `taskId: ${task.id}` })
       await stream.writeSSE({ data: JSON.stringify({ type: 'error', error: err.message || 'Chat failed' }) })
       await stream.writeSSE({ data: JSON.stringify({ type: 'done', sessionId }) })
     }
@@ -312,7 +313,20 @@ projects.post('/:encodedId/regenerate', async (c) => {
       const promptPath = join(promptsDir, promptFiles[idx])
       promptMarkdown = existsSync(promptPath) ? readFileSync(promptPath, 'utf-8') : ''
     }
-    const aspectRatio = promptMarkdown.match(/^aspectRatio:\s*['"]?([^'"\n]+)['"]?/im)?.[1]?.trim() || '1:1'
+    let aspectRatio = promptMarkdown.match(/^aspectRatio:\s*['"]?([^'"\n]+)['"]?/im)?.[1]?.trim() || ''
+
+    // Fallback cascade: prompt file → analysis.md → '1:1'
+    if (!aspectRatio) {
+      const analysisPath = join(projectPath, 'analysis.md')
+      if (existsSync(analysisPath)) {
+        try {
+          const analysisContent = readFileSync(analysisPath, 'utf-8')
+          const am = analysisContent.match(/^aspectRatio:\s*['"]?([^'"\n]+)['"]?/im)
+          if (am) aspectRatio = am[1].trim()
+        } catch { /* ignore */ }
+      }
+    }
+    if (!aspectRatio) aspectRatio = '1:1'
 
     const imageBase = promptFiles[idx].replace(/\.md$/, '')
     const existingVersions = imageVersions(projectPath, imageBase + '.png')
@@ -329,9 +343,11 @@ projects.post('/:encodedId/regenerate', async (c) => {
     }
     const settings = readSettings()
 
+    const existingSize = getExistingImageSize(projectPath)
     const imagePath = await executeImagineWithRateLimitRetry({
       prompt: applyWatermark(prompt, projectPreferences),
       aspect_ratio: aspectRatio,
+      size: existingSize || undefined,
       backend: (projectPreferences?.values?.preferred_image_backend as string) || settings.IMAGE_BACKEND || 'auto',
       output_dir: projectPath,
       output_file: outputFile,

@@ -224,7 +224,7 @@ export default function ProjectWorkspace({
             )}
 
             {(images.length > 0 || newImages.length > 0) && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '10px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px' }}>
                 {images.map((img, i) => {
                   const hasVersions = img.versions.length > 1
                   const currentVerIdx = imageVersions[i] ?? (img.versions.length - 1)
@@ -553,7 +553,7 @@ export default function ProjectWorkspace({
               </Button>
               <Button
                 onClick={onOpenPublisher}
-                disabled={!packageResult || (platform === 'xiaohongshu' && !xhsAvailable) || isPublishing}
+                disabled={!projectPath || images.length === 0 || (platform === 'xiaohongshu' && !xhsAvailable) || isPublishing || isPackaging}
                 className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center gap-1.5"
               >
                 {isPublishing ? (

@@ -15,7 +15,10 @@ function parseYamlFrontMatter(content: string): Record<string, string> {
     const colonIdx = line.indexOf(':')
     if (colonIdx === -1) continue
     const key = line.slice(0, colonIdx).trim()
-    const val = line.slice(colonIdx + 1).trim()
+    let val = line.slice(colonIdx + 1).trim()
+    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+      val = val.slice(1, -1).trim()
+    }
     if (key && val) result[key] = val
   }
   return result
@@ -51,6 +54,48 @@ export function extractPromptFromMarkdown(markdown: string): string {
   return cleaned || markdown
 }
 
+function getImageDimensions(filePath: string): { width: number; height: number } | null {
+  if (!existsSync(filePath)) return null
+  try {
+    const fd = readFileSync(filePath)
+    const header = fd.slice(0, 24)
+
+    // PNG: 8-byte signature 89 50 4E 47 0D 0A 1A 0A, then IHDR at bytes 12-24
+    if (header[0] === 0x89 && header[1] === 0x50 && header[2] === 0x4E && header[3] === 0x47) {
+      const width = fd.readUInt32BE(16)
+      const height = fd.readUInt32BE(20)
+      if (width > 0 && height > 0 && width < 100000 && height < 100000) return { width, height }
+    }
+
+    // JPEG: starts with FF D8 FF
+    if (header[0] === 0xFF && header[1] === 0xD8 && header[2] === 0xFF) {
+      let offset = 2
+      while (offset < fd.length - 9) {
+        if (fd[offset] !== 0xFF) break
+        const marker = fd[offset + 1]
+        if (marker === 0xC0 || marker === 0xC2) {
+          const height = fd.readUInt16BE(offset + 5)
+          const width = fd.readUInt16BE(offset + 7)
+          if (width > 0 && height > 0 && width < 100000 && height < 100000) return { width, height }
+        }
+        offset += 2 + fd.readUInt16BE(offset + 2)
+      }
+    }
+  } catch { /* ignore */ }
+  return null
+}
+
+export function getExistingImageSize(projectPath: string): string | null {
+  if (!existsSync(projectPath)) return null
+  try {
+    for (const name of readdirSync(projectPath)) {
+      if (!/\.(png|jpe?g|webp|gif)$/i.test(name)) continue
+      const dims = getImageDimensions(join(projectPath, name))
+      if (dims) return `${dims.width}x${dims.height}`
+    }
+  } catch { /* ignore */ }
+  return null
+}
 
 function readSkillMd(skillId: string): string | null {
   const skillDir = resolveSkillDir(skillId)
@@ -87,6 +132,7 @@ function readSkillMd(skillId: string): string | null {
 interface ImagineInput {
   prompt: string
   aspect_ratio?: string
+  size?: string
   backend?: string
   output_dir?: string
   output_file?: string
@@ -134,6 +180,7 @@ function executeImagineExternal(input: ImagineInput): Promise<string> {
     const backend = input.backend || settings.IMAGE_BACKEND || 'auto'
     const args: string[] = ['run', scriptPath, '--prompt', input.prompt, '--image', outFile, '--json']
     if (input.aspect_ratio) args.push('--ar', input.aspect_ratio)
+    if (input.size) args.push('--size', input.size)
     if (backend && backend !== 'auto') args.push('--provider', backend)
 
     const bunExec = findBunExecutable()
@@ -216,6 +263,19 @@ function sleep(ms: number, signal?: AbortSignal) {
       rejectSleep(new DOMException('Aborted', 'AbortError'))
     }, { once: true })
   })
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string, signal?: AbortSignal): Promise<T> {
+  return Promise.race([
+    promise,
+    sleep(ms, signal).then(() => { throw new Error(`${label} timed out after ${Math.round(ms / 1000)}s`) }),
+  ])
+}
+
+function heartbeat(ms: number, onTick: () => Promise<void> | void, signal?: AbortSignal) {
+  const timer = setInterval(() => onTick(), ms)
+  signal?.addEventListener('abort', () => clearInterval(timer), { once: true })
+  return timer
 }
 
 export async function executeImagineWithRateLimitRetry(
@@ -404,9 +464,23 @@ export async function streamProjectChat(opts: ProjectChatOptions): Promise<void>
     }
   }
 
-  const imageFiles = existsSync(projectPath)
-    ? readdirSync(projectPath).filter(n => /\.(png|jpe?g|webp|gif)$/i.test(n)).sort()
-    : []
+  const projectImages = promptFiles.map((pf, i) => {
+    const base = pf.replace(/\.md$/, '')
+    let latestImageName = `${base}.png`
+    if (existsSync(projectPath)) {
+      const versions = readdirSync(projectPath)
+        .filter(n => /\.(png|jpe?g|webp|gif)$/i.test(n))
+        .filter(n => {
+          const fileBase = n.replace(/\.(png|jpe?g|webp|gif)$/i, '')
+          return fileBase === base || fileBase.startsWith(base.replace(/\.v\d+$/, '') + '.v')
+        })
+        .sort()
+      if (versions.length > 0) {
+        latestImageName = versions[versions.length - 1]
+      }
+    }
+    return `Index ${i} (Image #${i + 1}): ${latestImageName} (associated with prompt file: prompts/${pf})`
+  })
 
   const projectContext = contextParts.join('\n\n')
 
@@ -424,8 +498,8 @@ export async function streamProjectChat(opts: ProjectChatOptions): Promise<void>
     '',
     targetDesc,
     '',
-    `## Existing Images`,
-    imageFiles.map((n, i) => `${i + 1}. ${n}`).join('\n'),
+    `## Project Images & Prompts (aligned by 0-based Index)`,
+    projectImages.join('\n'),
     '',
     `## Project Context`,
     projectContext,
@@ -445,7 +519,7 @@ export async function streamProjectChat(opts: ProjectChatOptions): Promise<void>
     'You are a project editing assistant for a content generation Web UI.',
     'The user has already generated content and wants to modify it.',
     'Be precise about which images need regenerating — only include ones that truly need changes.',
-    'When generating "updatedPrompts", you MUST base the updated prompt and markdown on the existing "Target Prompt" or original prompt content, and update it incrementally on top of the original text to incorporate the user\'s modification request. Do NOT rewrite the prompt from scratch or discard existing style definitions, page outline context, or structure unless explicitly requested.',
+    'When generating "updatedPrompts", you MUST base the updated prompt and markdown on the existing "Target Prompt" or original prompt content, and update it incrementally on top of the original text to incorporate the user\'s modification request. Do NOT rewrite the prompt from scratch or discard existing style definitions, page outline context, or structure unless explicitly requested. Critically, you MUST keep all YAML front-matter fields (aspectRatio, style, layout, palette, etc.) identical to the original — only change the prompt body as needed.',
     'Return only valid JSON. No markdown fences.',
   ]
 
@@ -502,8 +576,8 @@ export async function streamProjectChat(opts: ProjectChatOptions): Promise<void>
 
   for (const up of updatedPrompts) {
     if (opts.signal?.aborted) return
-    const idx = up.index
-    if (idx < 0 || idx >= promptFiles.length) continue
+    const idx = Number(up.index)
+    if (isNaN(idx) || idx < 0 || idx >= promptFiles.length) continue
     const promptPath = join(promptsDir, promptFiles[idx])
 
     // Parse the aspect ratio from the updated prompt front-matter
@@ -540,7 +614,18 @@ export async function streamProjectChat(opts: ProjectChatOptions): Promise<void>
       promptAspectRatio = '1:1'
     }
 
-    writeFileSync(promptPath, up.markdown, 'utf-8')
+    // Ensure aspectRatio is present in the front-matter before writing,
+    // so future modifications/regenerations don't lose it.
+    let markdownToWrite = up.markdown
+    if (!fm.aspectRatio && !fm.aspect_ratio) {
+      const fmMatch = markdownToWrite.match(/^---\n([\s\S]*?)\n---/)
+      if (fmMatch) {
+        markdownToWrite = markdownToWrite.replace(/^---\n([\s\S]*?)\n---/, `---\naspectRatio: ${promptAspectRatio}\n$1\n---`)
+      } else {
+        markdownToWrite = `---\naspectRatio: ${promptAspectRatio}\n---\n\n${markdownToWrite}`
+      }
+    }
+    writeFileSync(promptPath, markdownToWrite, 'utf-8')
     await opts.onFile?.(promptPath, 'prompt')
 
     const imageBase = promptFiles[idx].replace(/\.md$/, '')
@@ -560,9 +645,11 @@ export async function streamProjectChat(opts: ProjectChatOptions): Promise<void>
 
     try {
       const promptToUse = up.prompt?.trim() || extractPromptFromMarkdown(up.markdown)
+      const existingSize = getExistingImageSize(projectPath)
       const imagePath = await executeImagineWithRateLimitRetry({
         prompt: applyWatermark(promptToUse, projectPreferences),
         aspect_ratio: promptAspectRatio,
+        size: existingSize || undefined,
         backend: (projectPreferences?.values?.preferred_image_backend as string) || settings.IMAGE_BACKEND || 'auto',
         output_dir: projectPath,
         output_file: outputFile,
@@ -609,7 +696,7 @@ export async function generatePlan(opts: { skillId: string; content: string; sel
   const model = readModel()
   const baseURL = readBaseUrl()
 
-  const requestedCount = Math.max(1, Math.min(10, Number(opts.selections.imageCount || opts.selections.count || 4) || 4))
+  const requestedCount = Math.max(1, Math.min(10, Number(opts.selections.imageCount || opts.selections.count || skill?.defaultImageCount || 4) || 4))
   const aspectRatio = opts.selections.aspectRatio || opts.selections.aspect || settings.DEFAULT_ASPECT_RATIO || skill?.defaultAspectRatio || '1:1'
   const selectedParameters = Object.entries(opts.selections)
     .filter(([key]) => !['usePreferences', 'imageCount', 'count'].includes(key))
@@ -632,7 +719,7 @@ export async function generatePlan(opts: { skillId: string; content: string; sel
     '  "slug": "kebab-case-ascii-or-pinyin-project-slug",',
     '  "analysisMarkdown": "full markdown analysis with YAML frontmatter when useful",',
     '  "outlineMarkdown": "full markdown outline with page-by-page plan",',
-    '  "copyMarkdown": "ready-to-edit publishing copy for the likely platform",',
+    '  "copyMarkdown": "ready-to-edit publishing copy. Use structured format: Title: <title> followed by blank line, body text, blank line, then #tag1 #tag2. Omit hashtag lines for WeChat, keep hashtags inline in body for Weibo (#topic#) and X (#tag).",',
     '  "prompts": [',
     '    { "fileName": "01-cover-topic.md", "imageFileName": "01-cover-topic.png", "markdown": "full prompt markdown with frontmatter and visible text rules", "prompt": "the exact image generation prompt text" }',
     '  ]',
@@ -737,7 +824,7 @@ export async function streamGenerate(opts: GenerateOptions): Promise<void> {
     ...(baseURL ? { baseURL } : {}),
   })
 
-  const requestedCount = Math.max(1, Math.min(10, Number(opts.selections.imageCount || opts.selections.count || 4) || 4))
+  const requestedCount = Math.max(1, Math.min(10, Number(opts.selections.imageCount || opts.selections.count || skill?.defaultImageCount || 4) || 4))
   const aspectRatio = opts.selections.aspectRatio || opts.selections.aspect || settings.DEFAULT_ASPECT_RATIO || skill?.defaultAspectRatio || '1:1'
   const styleSummary = Object.entries(opts.selections)
     .filter(([key]) => !['aspectRatio', 'aspect', 'language', 'imageCount', 'count', 'backend', 'usePreferences'].includes(key))
@@ -775,7 +862,7 @@ export async function streamGenerate(opts: GenerateOptions): Promise<void> {
       '  "slug": "kebab-case-ascii-or-pinyin-project-slug",',
       '  "analysisMarkdown": "full markdown analysis with YAML frontmatter when useful",',
       '  "outlineMarkdown": "full markdown outline with page-by-page plan",',
-      '  "copyMarkdown": "ready-to-edit publishing copy for the likely platform, including title/body/hashtags where appropriate",',
+      '  "copyMarkdown": "ready-to-edit publishing copy. Use structured format: Title: <title> followed by blank line, body text, blank line, then #tag1 #tag2. Omit hashtag lines for WeChat, keep hashtags inline in body for Weibo (#topic#) and X (#tag).",',
       '  "prompts": [',
       '    { "fileName": "01-cover-topic.md", "imageFileName": "01-cover-topic.png", "markdown": "full prompt markdown with frontmatter and visible text rules", "prompt": "the exact image generation prompt text" }',
       '  ]',
@@ -860,17 +947,26 @@ export async function streamGenerate(opts: GenerateOptions): Promise<void> {
       await opts.onFile?.(promptPath, 'prompt')
       await opts.onText?.(`生成图片 ${i + 1}/${prompts.length}: ${imageName}\n`)
 
+      const hb = heartbeat(15000, () => opts.onText?.(`  仍在生成 ${imageName}...\n`), opts.signal)
+
       try {
-        const imagePath = await executeImagineWithRateLimitRetry({
-          prompt: applyWatermark(prompt.prompt || prompt.markdown, preferences),
-          aspect_ratio: aspectRatio,
-          backend: opts.selections.backend || settings.IMAGE_BACKEND || 'auto',
-          output_dir: projectDir,
-          output_file: imageName,
-          signal: opts.signal,
-        }, opts.onText, opts.onRetry)
+        const imagePath = await withTimeout(
+          executeImagineWithRateLimitRetry({
+            prompt: applyWatermark(prompt.prompt || prompt.markdown, preferences),
+            aspect_ratio: aspectRatio,
+            backend: opts.selections.backend || settings.IMAGE_BACKEND || 'auto',
+            output_dir: projectDir,
+            output_file: imageName,
+            signal: opts.signal,
+          }, opts.onText, opts.onRetry),
+          300_000,
+          `Image generation ${i + 1}/${prompts.length}`,
+          opts.signal,
+        )
+        clearInterval(hb)
         await opts.onImage?.(imagePath)
       } catch (err: any) {
+        clearInterval(hb)
         await opts.onError?.(`Image generation failed: ${friendlyImageError(err.message || String(err))}`)
       }
     }
