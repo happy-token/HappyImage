@@ -28,14 +28,14 @@ for pkg in "${PACKAGES[@]}"; do
   echo -e "  ${CYAN}${name}${RESET}: ${old} → ${GREEN}${VERSION}${RESET}"
 done
 
-# 替换 workspace:^ 引用为实际 semver
+# 更新 workspace:^ 引用，保留 workspace 协议
 echo ""
-echo "Replacing workspace:^ references..."
+echo "Updating workspace:^ references..."
 for pkg in "${PACKAGES[@]}"; do
   pjson="${PROJECT_DIR}/${pkg}/package.json"
-  sed -i '' "s/\"workspace:\^[0-9.]*\"/\"^${VERSION}\"/g" "$pjson"
+  sed -i '' "s/\"workspace:\^[0-9.]*\"/\"workspace:^${VERSION}\"/g" "$pjson"
 done
-echo -e "  ${GREEN}✔${RESET} All workspace:^ → ^${VERSION}"
+echo -e "  ${GREEN}✔${RESET} All workspace:^ updated to workspace:^${VERSION}"
 
 echo ""
 echo -e "${GREEN}Version bump complete.${RESET}"

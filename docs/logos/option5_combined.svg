@@ -1,0 +1,34 @@
+<svg width="1024" height="1024" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="4" y1="4" x2="36" y2="36" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#4F46E5" />
+      <stop offset="50%" stop-color="#8B5CF6" />
+      <stop offset="100%" stop-color="#EC4899" />
+    </linearGradient>
+    <clipPath id="squircle">
+      <rect x="4" y="4" width="32" height="32" rx="7" ry="7" />
+    </clipPath>
+  </defs>
+
+  <!-- Squircle background: 10% padding matches macOS icon spec -->
+  <rect x="4" y="4" width="32" height="32" rx="7" ry="7" fill="url(#bg)" />
+
+  <!-- Elements clipped to squircle -->
+  <g clip-path="url(#squircle)">
+    <!-- Left Eye (normal circle) -->
+    <circle cx="15" cy="16" r="2.8" fill="white" />
+
+    <!-- Right Eye (Magic Sparkle star representing AI generation) -->
+    <path d="M25,12 Q25,16 29,16 Q25,16 25,20 Q25,16 21,16 Q25,16 25,12 Z" fill="white" />
+
+    <!-- Smile arc -->
+    <path d="M11.5,22 Q20,30 28.5,22"
+          stroke="white" stroke-width="3.2" stroke-linecap="round" fill="none" />
+
+    <!-- Focus corners representing camera framing/cropping -->
+    <path d="M12,8 H8 V12" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+    <path d="M28,8 H32 V12" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+    <path d="M8,28 V32 H12" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+    <path d="M32,28 V32 H28" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+  </g>
+</svg>

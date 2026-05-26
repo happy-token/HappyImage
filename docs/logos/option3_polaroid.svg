@@ -1,0 +1,31 @@
+<svg width="1024" height="1024" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="4" y1="4" x2="36" y2="36" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#06B6D4" />
+      <stop offset="100%" stop-color="#10B981" />
+    </linearGradient>
+    <clipPath id="squircle">
+      <rect x="4" y="4" width="32" height="32" rx="7" ry="7" />
+    </clipPath>
+  </defs>
+
+  <!-- Squircle background: 10% padding matches macOS icon spec -->
+  <rect x="4" y="4" width="32" height="32" rx="7" ry="7" fill="url(#bg)" />
+
+  <!-- Elements clipped to squircle -->
+  <g clip-path="url(#squircle)">
+    <!-- Polaroid card body -->
+    <rect x="8" y="7" width="24" height="26" rx="2" fill="white" />
+    
+    <!-- Photo viewport inside Polaroid (dark developed film look) -->
+    <rect x="10" y="9" width="20" height="17" rx="1" fill="#18181B" />
+    
+    <!-- Smiley Face inside the photo viewport -->
+    <!-- Eyes -->
+    <circle cx="16" cy="15" r="2.2" fill="white" />
+    <circle cx="24" cy="15" r="2.2" fill="white" />
+    
+    <!-- Smile -->
+    <path d="M13.5,19 Q20,24 26.5,19" stroke="white" stroke-width="2.4" stroke-linecap="round" fill="none" />
+  </g>
+</svg>
