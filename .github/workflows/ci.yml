@@ -37,6 +37,11 @@ jobs:
       - name: Build CLI
         run: bun run build:cli
 
+      - name: Build shared packages
+        run: |
+          bun run --cwd packages/baoyu-md build
+          bun run --cwd packages/baoyu-chrome-cdp build
+
       - name: Typecheck Desktop
         working-directory: packages/desktop
         run: npx tsc
