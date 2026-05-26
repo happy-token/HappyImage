@@ -13,6 +13,9 @@ files:
   - package.json
 
 extraResources:
+  # Runtime npm dependencies for the sidecar server
+  - from: deps/node_modules
+    to: node_modules
   # Core as node_modules entry so Bun can resolve @happytokenai/happyimage-core
   - from: ../core/dist
     to: node_modules/@happytokenai/happyimage-core/dist

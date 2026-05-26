@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { getSkill } from '../../src/data/index'
+import { getSkill } from '@happytokenai/happyimage-core'
 
 const exportRoute = new Hono()
 

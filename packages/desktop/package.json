@@ -19,9 +19,9 @@
   "type": "module",
   "scripts": {
     "dev": "sh -c 'tsc && (tsc -w --preserveWatchOutput & TSC_PID=$!; electron .; STATUS=$?; kill $TSC_PID 2>/dev/null || true; exit $STATUS)'",
-    "build": "tsc && electron-builder build --mac",
-    "build:dir": "tsc && electron-builder build --mac --dir",
-    "release": "tsc && electron-builder build --mac --publish always",
+    "build": "tsc && bash scripts/bundle-deps.sh && electron-builder build --mac",
+    "build:dir": "tsc && bash scripts/bundle-deps.sh && electron-builder build --mac --dir",
+    "release": "tsc && bash scripts/bundle-deps.sh && electron-builder build --mac --publish always",
     "sign:check": "sh scripts/sign-check.sh",
     "start": "tsc && electron .",
     "test": "bun test tests/",
