@@ -39,7 +39,7 @@ function loadCurrentApp(): void {
 createLifecycle(app, {
   onReady: async () => {
     initNotifications()
-    app.dock?.setIcon(getIconPath('icon.png'))
+    try { app.dock?.setIcon(getIconPath('icon.png')) } catch {}
 
     mainWindow = createWindow()
     createAppMenu(mainWindow)

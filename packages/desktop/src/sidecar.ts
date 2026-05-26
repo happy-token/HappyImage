@@ -168,10 +168,17 @@ export function createSidecar(config: SidecarConfig): SidecarInstance {
       if (activePort !== config.port) {
         config.onError?.(`Port ${config.port} is in use, using ${activePort}`)
       }
+      const cliEntry = resolveCliEntry()
+      const bun = resolveBunCommand()
+      if (!bun) {
+        throw new Error('Bun runtime not found. Install Bun or set BUN_PATH.')
+      }
       serverProcess = startProcess()
       attachHandlers(serverProcess)
-      return waitForReady()
+      const ready = await waitForReady()
+      return ready
     } catch (err) {
+      console.error('[Sidecar] Start error:', err)
       config.onError?.(err instanceof Error ? err.message : String(err))
       return false
     }

@@ -1,3 +1,4 @@
+import { existsSync } from 'fs'
 import { Tray, Menu, nativeImage, BrowserWindow, app } from 'electron'
 import { getIconPath } from '../paths.js'
 
@@ -15,10 +16,12 @@ export function createTray(mainWindow: BrowserWindow): Tray {
   const iconPath = getIconPath('iconTemplate.png')
   let icon: Electron.NativeImage
   try {
+    if (!existsSync(iconPath)) throw new Error('icon not found')
     icon = nativeImage.createFromPath(iconPath)
     icon.setTemplateImage(true)
   } catch {
-    icon = nativeImage.createEmpty()
+    icon = nativeImage.createFromPath(getIconPath('icon.png'))
+    try { icon.setTemplateImage(true) } catch {}
   }
 
   tray = new Tray(icon)

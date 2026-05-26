@@ -13,6 +13,9 @@ files:
   - package.json
 
 extraResources:
+  # App icon for dock
+  - from: build/icon.png
+    to: icon.png
   # Runtime npm dependencies for the sidecar server
   - from: deps/node_modules
     to: node_modules
@@ -54,7 +57,6 @@ mac:
   notarize: false
   icon: build/icon.icns
   category: public.app-category.graphics-design
-  timestamp: false
 
 dmg:
   window:
