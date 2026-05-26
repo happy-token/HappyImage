@@ -3,12 +3,24 @@
   "version": "0.1.0",
   "description": "CLI tool for HappyImage content generation workspace.",
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
   "bin": {
     "happyimage": "./dist/bin.js"
   },
   "files": [
     "dist"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/happy-token/HappyImage.git",
+    "directory": "packages/cli"
+  },
+  "bugs": {
+    "url": "https://github.com/happy-token/HappyImage/issues"
+  },
+  "homepage": "https://github.com/happy-token/HappyImage/tree/main/packages/cli#readme",
   "scripts": {
     "build": "tsc",
     "dev": "tsc -w"

@@ -1,0 +1,69 @@
+name: Publish npm Packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (semver)'
+        required: true
+        type: string
+      npm-tag:
+        description: 'npm dist-tag'
+        required: false
+        default: 'latest'
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  publish:
+    name: Publish @happyimage packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.23
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - run: bun install --frozen-lockfile
+
+      - name: Bump versions
+        run: bash scripts/version-bump.sh "${{ github.event.inputs.version }}"
+
+      - name: Build core
+        run: bun run build:core
+
+      - name: Publish @happyimage/core
+        working-directory: packages/core
+        run: npm publish --access public --tag ${{ github.event.inputs.npm-tag }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Build CLI
+        run: bun run build:cli
+
+      - name: Publish @happyimage/cli
+        working-directory: packages/cli
+        run: npm publish --access public --tag ${{ github.event.inputs.npm-tag }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Commit version bump
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          VERSION="${{ github.event.inputs.version }}"
+          git add packages/*/package.json
+          git commit -m "chore: bump @happyimage packages to v${VERSION}" || echo "No changes to commit"
+          git tag "npm-v${VERSION}"
+          git push origin main --tags

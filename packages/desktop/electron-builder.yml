@@ -6,6 +6,8 @@ directories:
   output: release
   buildResources: build
 
+npmRebuild: false
+
 files:
   - dist/**/*
   - package.json

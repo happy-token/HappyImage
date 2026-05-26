@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'screenshots/**'
+      - 'skills/**'
+      - '**.md'
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.23
+
+      - run: bun install --frozen-lockfile
+
+      - name: Build core
+        run: bun run build:core
+
+      - name: Build web-ui
+        run: bun run build:web
+
+      - name: Build CLI
+        run: bun run build:cli
+
+      - name: Build Desktop (typecheck only)
+        working-directory: packages/desktop
+        run: bun run build
+
+      - name: Run tests
+        run: bun test
