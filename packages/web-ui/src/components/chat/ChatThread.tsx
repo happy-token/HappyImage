@@ -2,6 +2,7 @@ import { useRef, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import PlanConfirmation from '../project/PlanConfirmation'
 import Markdown from './Markdown'
+import ToolCard from './ToolCard'
 import type { ChatMessage } from '../../lib/chat-reducer'
 
 interface ChatThreadProps {
@@ -80,7 +81,14 @@ export default function ChatThread({
               ? 'bg-indigo-600 border-indigo-500 text-white rounded-tr-none shadow-md shadow-indigo-600/10'
               : 'bg-zinc-900/60 border-zinc-850/80 text-zinc-150 rounded-tl-none backdrop-blur-sm'
           }`}>
-            {msg.type === 'thinking' ? (
+            {msg.type === 'tool' && msg.toolName && msg.toolStatus ? (
+              <ToolCard
+                name={msg.toolName}
+                status={msg.toolStatus}
+                message={msg.text}
+                input={msg.toolInput}
+              />
+            ) : msg.type === 'thinking' ? (
               <span className="inline-flex items-center gap-1">
                 Thinking
                 <span className="inline-flex gap-0.5 ml-0.5">

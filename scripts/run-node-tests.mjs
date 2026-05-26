@@ -5,7 +5,15 @@ import process from "node:process";
 
 const ROOT_DIR = process.cwd();
 const TEST_FILE_PATTERN = /\.test\.(?:[cm]?[jt]s|tsx)$/;
-const SKIP_DIRECTORIES = new Set([".git", "node_modules"]);
+const SKIP_DIRECTORIES = new Set([
+  ".claude",
+  ".git",
+  ".gstack",
+  "coverage",
+  "dist",
+  "node_modules",
+  "release",
+]);
 const BUN_TEST_IMPORT_PATTERN = /from\s+["']bun:test["']/;
 
 async function collectTestFiles(directory) {

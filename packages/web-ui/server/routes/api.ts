@@ -1,9 +1,10 @@
 import { Hono } from 'hono'
-import { existsSync, readdirSync, statSync } from 'fs'
-import { join, resolve } from 'path'
+import { existsSync, readdirSync, statSync, readFileSync } from 'fs'
+import { dirname, join, resolve } from 'path'
 import { spawnSync } from 'child_process'
-import { skills, getSkill, readSettings, resolveSkillsRoot, discoverSkillsRoots, CORE_COMMANDS, parseSlashCommand } from '@happyimage/core'
-import { checkImagineEnvironment } from '@happyimage/core'
+import { fileURLToPath } from 'url'
+import { skills, getSkill, readSettings, resolveSkillsRoot, discoverSkillsRoots, CORE_COMMANDS, parseSlashCommand, PROJECT_ROOT } from '@happytokenai/happyimage-core'
+import { checkImagineEnvironment } from '@happytokenai/happyimage-core'
 
 const api = new Hono()
 
@@ -250,6 +251,42 @@ api.get('/projects', (c) => {
 
   projects.sort((a, b) => b.updatedAt - a.updatedAt)
   return c.json(projects.slice(0, 100))
+})
+
+const docs: Record<string, string> = {
+  'user-guide': join('docs', 'user-guide.md'),
+  'quick-start': join('docs', 'guides', 'zh', 'quick-start.md'),
+  settings: join('docs', 'guides', 'zh', 'settings-guide.md'),
+  publish: join('docs', 'guides', 'zh', 'publish-guide.md'),
+}
+
+function resolveDocPath(docPath: string) {
+  const here = dirname(fileURLToPath(import.meta.url))
+  const roots = [
+    PROJECT_ROOT,
+    process.cwd(),
+    resolve(here, '..', '..', '..', '..'),
+    resolve(here, '..', '..', '..', '..', '..'),
+  ]
+  for (const root of roots) {
+    const candidate = join(root, docPath)
+    if (existsSync(candidate)) return candidate
+  }
+  return null
+}
+
+api.get('/docs/:doc', (c) => {
+  const doc = c.req.param('doc')
+  const docPath = docs[doc]
+  if (!docPath) {
+    return c.json({ error: 'Document not found' }, 404)
+  }
+  const guidePath = resolveDocPath(docPath)
+  if (!guidePath) {
+    return c.json({ error: 'Document not found' }, 404)
+  }
+  const content = readFileSync(guidePath, 'utf-8')
+  return c.json({ content })
 })
 
 export default api

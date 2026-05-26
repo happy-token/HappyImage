@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'fs'
 import { join, relative, resolve } from 'path'
 import { spawn } from 'child_process'
-import { PROJECT_ROOT, readSettings, resolveSkillDir } from '@happyimage/core'
+import { PROJECT_ROOT, readSettings, resolveSkillDir } from '@happytokenai/happyimage-core'
 
 const publishRoute = new Hono()
 
@@ -41,7 +41,7 @@ function platformProfile(platform: string, settings: Record<string, string>) {
 function requiredSkillDir(skillId: string) {
   const skillDir = resolveSkillDir(skillId)
   if (!skillDir) {
-    throw new Error(`Required skill not found: baoyu-${skillId}. Configure BAOYU_SKILLS_ROOT or install baoyu-skills to ~/.baoyu-skills.`)
+    throw new Error(`Required skill not found: baoyu-${skillId}. Configure BAOYU_SKILLS_ROOT or install baoyu-skills to the skills/ directory under the HappyImage config path.`)
   }
   return skillDir
 }

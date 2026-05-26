@@ -110,6 +110,7 @@ const coverImage: SkillDefinition = {
   hasCLI: false,
   outputType: 'images',
   defaultAspectRatio: '16:9',
+  defaultImageCount: 1,
   screenshotDirs: [
     { dimension: 'style', path: 'cover-image-styles' },
     { dimension: 'type', path: 'cover-image-types' },

@@ -58,13 +58,13 @@ export function resolveBunCommand(): string | null {
 
 export function resolveCliEntry(): string {
   try {
-    const entry = import.meta.resolve('@happyimage/cli')
+    const entry = import.meta.resolve('@happytokenai/happyimage-cli')
     return entry.startsWith('file:') ? fileURLToPath(entry) : resolve(entry)
   } catch {
     const devEntry = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'cli', 'dist', 'bin.js')
     if (existsSync(devEntry)) return devEntry
     const resourcesPath = process.resourcesPath || ''
-    const unpacked = join(resourcesPath, 'app.asar.unpacked', 'node_modules', '@happyimage', 'cli', 'dist', 'bin.js')
+    const unpacked = join(resourcesPath, 'app.asar.unpacked', 'node_modules', '@happytokenai', 'happyimage-cli', 'dist', 'bin.js')
     if (existsSync(unpacked)) return unpacked
     return join(resourcesPath, 'cli', 'dist', 'bin.js')
   }

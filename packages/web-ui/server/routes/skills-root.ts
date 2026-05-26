@@ -3,16 +3,20 @@ import { existsSync, cpSync, mkdirSync, rmSync, statSync, writeFileSync } from '
 import { join, resolve } from 'path'
 import { tmpdir } from 'os'
 import { spawnSync } from 'child_process'
-import { readSettingsSanitized, resolveSkillsRoot, writeSetting } from '@happyimage/core'
+import { readSettingsSanitized, resolveSkillsRoot, resolveUserConfigRoot, writeSetting } from '@happytokenai/happyimage-core'
 
 const skillsRootRoute = new Hono()
+
+function defaultSkillsRoot() {
+  return join(resolveUserConfigRoot(), 'skills')
+}
 
 function expandHome(value: string) {
   return value.replace(/^~(?=\/|$)/, process.env.HOME || '')
 }
 
 function normalizePath(value: string) {
-  return resolve(expandHome(value || '~/.baoyu-skills'))
+  return resolve(expandHome(value || defaultSkillsRoot()))
 }
 
 function copySkillsFromClone(cloneRoot: string, targetRoot: string) {
@@ -25,22 +29,25 @@ function copySkillsFromClone(cloneRoot: string, targetRoot: string) {
 
   // Create a stub post-to-xiaohongshu skill so that probe/publish works for Xiaohongshu.
   const xhsDir = join(targetRoot, 'baoyu-post-to-xiaohongshu')
-  const xhsScriptsDir = join(xhsDir, 'scripts')
-  mkdirSync(xhsScriptsDir, { recursive: true })
-  writeFileSync(join(xhsDir, 'SKILL.md'), '---\nname: baoyu-post-to-xiaohongshu\ndescription: Posts content to Xiaohongshu.\nversion: 1.0.0\n---\n\n# Post to Xiaohongshu\n', 'utf-8')
-  writeFileSync(join(xhsScriptsDir, 'xhs-browser.ts'), 'console.log("Mock Xiaohongshu browser publisher.");\n', 'utf-8')
+  const xhsScriptPath = join(xhsDir, 'scripts', 'xhs-browser.ts')
+  if (!existsSync(xhsScriptPath)) {
+    const xhsScriptsDir = join(xhsDir, 'scripts')
+    mkdirSync(xhsScriptsDir, { recursive: true })
+    writeFileSync(join(xhsDir, 'SKILL.md'), '---\nname: baoyu-post-to-xiaohongshu\ndescription: Posts content to Xiaohongshu.\nversion: 1.0.0\n---\n\n# Post to Xiaohongshu\n', 'utf-8')
+    writeFileSync(xhsScriptPath, 'console.log("Mock Xiaohongshu browser publisher.");\n', 'utf-8')
+  }
 }
 
 skillsRootRoute.post('/use', async (c) => {
   const body = await c.req.json().catch(() => ({}))
-  const root = normalizePath(String(body.root || '~/.baoyu-skills'))
+  const root = normalizePath(String(body.root || defaultSkillsRoot()))
   writeSetting('BAOYU_SKILLS_ROOT', root)
   return c.json({ success: true, settings: readSettingsSanitized(), skillsRoot: resolveSkillsRoot() })
 })
 
 skillsRootRoute.post('/install', async (c) => {
   const body = await c.req.json().catch(() => ({}))
-  const targetRoot = normalizePath(String(body.root || '~/.baoyu-skills'))
+  const targetRoot = normalizePath(String(body.root || defaultSkillsRoot()))
   const tempRoot = join(tmpdir(), `happyimage-baoyu-skills-${Date.now()}`)
   const repoUrl = 'https://github.com/JimLiu/baoyu-skills.git'
 

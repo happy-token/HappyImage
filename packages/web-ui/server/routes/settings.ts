@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { readSettingsSanitized, writeSetting, readSettings } from '@happyimage/core'
+import { readSettingsSanitized, writeSetting, readSettings } from '@happytokenai/happyimage-core'
 
 const settingsRoute = new Hono()
 

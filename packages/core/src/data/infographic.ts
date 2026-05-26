@@ -102,6 +102,7 @@ const infographic: SkillDefinition = {
   hasCLI: false,
   outputType: 'images',
   defaultAspectRatio: '16:9',
+  defaultImageCount: 1,
   screenshotDirs: [
     { dimension: 'style', path: 'infographic-styles' },
     { dimension: 'layout', path: 'infographic-layouts' },

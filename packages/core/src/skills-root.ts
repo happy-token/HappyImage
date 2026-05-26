@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, statSync } from 'fs'
+import { existsSync, statSync } from 'fs'
 import { join, resolve } from 'path'
 import { readSettings, PROJECT_ROOT, resolveConfigRoot } from './settings.js'
 
@@ -53,58 +53,30 @@ function inspectRoot(root: string, source: SkillsRootStatus['source']): SkillsRo
 }
 
 export function resolveSkillsRoot(): SkillsRootStatus {
-  // 1. Project-embedded skills (dev monorepo)
-  const projectSkills = join(PROJECT_ROOT, 'skills')
-  const projectStatus = inspectRoot(projectSkills, 'home')
-  if (projectStatus.ready) return projectStatus
+  // 1. Explicit BAOYU_SKILLS_ROOT env/setting override (highest priority)
+  const settings = readSettings()
+  const envRoot = process.env.BAOYU_SKILLS_ROOT || settings.BAOYU_SKILLS_ROOT || ''
+  if (envRoot) {
+    const path = resolve(expandHome(envRoot))
+    const status = inspectRoot(path, 'BAOYU_SKILLS_ROOT')
+    if (status.ready) return status
+  }
 
-  // 2. Installed context: user config dir skills
+  // 2. User-installed skills in config root
   const configSkills = join(resolveConfigRoot(), 'skills')
   const configStatus = inspectRoot(configSkills, 'home')
   if (configStatus.ready) return configStatus
 
-  const settings = readSettings()
-  const envRoot = process.env.BAOYU_SKILLS_ROOT || ''
-  const settingsRoot = settings.BAOYU_SKILLS_ROOT || ''
-  const envPath = envRoot ? resolve(expandHome(envRoot)) : ''
-  const settingsPath = settingsRoot ? resolve(expandHome(settingsRoot)) : ''
+  // 3. Project-bundled skills
+  const projectSkills = join(PROJECT_ROOT, 'skills')
+  const projectStatus = inspectRoot(projectSkills, 'home')
+  if (projectStatus.ready) return projectStatus
 
-  if (envPath && settingsPath && !isDirectory(envPath) && isDirectory(settingsPath)) {
-    const result = inspectRoot(settingsPath, 'BAOYU_SKILLS_ROOT')
-    if (result.ready) return result
-  }
-
-  const configured = envRoot || settingsRoot || ''
-  const root = configured
-    ? resolve(expandHome(configured))
-    : resolve(process.env.HOME || '/tmp', '.baoyu-skills')
-  const primary = inspectRoot(root, configured ? 'BAOYU_SKILLS_ROOT' : 'home')
-
-  // If the configured path doesn't exist or isn't ready, fallback to discovered candidates
-  if (!primary.ready) {
-    const home = process.env.HOME || '/tmp'
-    const fallbackRoots = [
-      join(home, '.baoyu-skills'),
-      join(home, '.baoyu-skills', 'skills'),
-      join(home, '.claude', 'plugins', 'marketplaces', 'baoyu-skills', 'skills'),
-    ]
-    const cacheBase = join(home, '.claude', 'plugins', 'cache', 'baoyu-skills', 'baoyu-skills')
-    if (isDirectory(cacheBase)) {
-      try {
-        for (const entry of readdirSync(cacheBase)) {
-          fallbackRoots.push(join(cacheBase, entry, 'skills'))
-        }
-      } catch { /* ignore */ }
-    }
-    for (const candidate of fallbackRoots) {
-      const normalized = resolve(candidate)
-      if (normalized === primary.root) continue
-      const status = inspectRoot(normalized, 'home')
-      if (status.ready) return status
-    }
-  }
-
-  return primary
+  // Return the best available status for diagnostics
+  return projectStatus.exists ? projectStatus
+    : configStatus.exists ? configStatus
+    : envRoot ? inspectRoot(resolve(expandHome(envRoot)), 'BAOYU_SKILLS_ROOT')
+    : configStatus
 }
 
 function addCandidate(candidates: SkillsRootCandidate[], label: string, root: string, source: SkillsRootStatus['source']) {
@@ -114,33 +86,15 @@ function addCandidate(candidates: SkillsRootCandidate[], label: string, root: st
 }
 
 export function discoverSkillsRoots(): SkillsRootCandidate[] {
-  const home = process.env.HOME || '/tmp'
   const settings = readSettings()
-  const envRoot = process.env.BAOYU_SKILLS_ROOT || ''
-  const settingsRoot = settings.BAOYU_SKILLS_ROOT || ''
-  const envPath = envRoot ? resolve(expandHome(envRoot)) : ''
-  const settingsPath = settingsRoot ? resolve(expandHome(settingsRoot)) : ''
-  const configured = envRoot || settingsRoot || ''
   const candidates: SkillsRootCandidate[] = []
 
-  // Project-embedded skills listed first
-  addCandidate(candidates, '项目内嵌技能目录', join(PROJECT_ROOT, 'skills'), 'home')
-  addCandidate(candidates, '用户配置技能目录', join(resolveConfigRoot(), 'skills'), 'home')
+  addCandidate(candidates, '项目内嵌技能', join(PROJECT_ROOT, 'skills'), 'home')
+  addCandidate(candidates, '用户配置技能', join(resolveConfigRoot(), 'skills'), 'home')
 
-  if (envPath && settingsPath && !isDirectory(envPath) && isDirectory(settingsPath)) {
-    addCandidate(candidates, '当前配置', settingsRoot, 'BAOYU_SKILLS_ROOT')
-  } else if (configured) {
-    addCandidate(candidates, '当前配置', configured, 'BAOYU_SKILLS_ROOT')
-  }
-  addCandidate(candidates, '默认技能目录', join(home, '.baoyu-skills'), 'home')
-  addCandidate(candidates, '默认目录下的 skills 子目录', join(home, '.baoyu-skills', 'skills'), 'home')
-  addCandidate(candidates, 'Claude 插件安装目录', join(home, '.claude', 'plugins', 'marketplaces', 'baoyu-skills', 'skills'), 'home')
-
-  const cacheRoot = join(home, '.claude', 'plugins', 'cache', 'baoyu-skills', 'baoyu-skills')
-  if (isDirectory(cacheRoot)) {
-    for (const entry of readdirSync(cacheRoot)) {
-      addCandidate(candidates, 'Claude 插件缓存目录', join(cacheRoot, entry, 'skills'), 'home')
-    }
+  const envRoot = process.env.BAOYU_SKILLS_ROOT || settings.BAOYU_SKILLS_ROOT || ''
+  if (envRoot) {
+    addCandidate(candidates, 'BAOYU_SKILLS_ROOT', envRoot, 'BAOYU_SKILLS_ROOT')
   }
 
   return candidates

@@ -5,8 +5,8 @@ import {
   parseSlashCommand, resolveSkillDir, isVendorAvailable,
   createSkillSession, updateSkillSession, appendSessionEvent,
   appendSessionArtifact, updateSessionTask, createSessionTask,
-  getSkillSession,
-} from '@happyimage/core'
+  getSkillSession, createSessionStreamAdapter,
+} from '@happytokenai/happyimage-core'
 
 const generate = new Hono()
 
@@ -17,7 +17,7 @@ function normalizeGenerationRequest(body: GenerateBody): GenerateBody {
   if (!parsed) return body
   if (!parsed.command) throw new Error(`Unknown slash command: ${parsed.commandId}`)
   if (!isVendorAvailable() && !resolveSkillDir(parsed.command.requiredSkill)) {
-    throw new Error(`Required skill not found: ${parsed.command.requiredSkill}. Configure BAOYU_SKILLS_ROOT or install baoyu-skills to ~/.baoyu-skills.`)
+    throw new Error(`Required skill not found: ${parsed.command.requiredSkill}. Configure BAOYU_SKILLS_ROOT or install baoyu-skills to the skills/ directory under the HappyImage config path.`)
   }
   if (parsed.command.category !== 'content' || !parsed.command.skillId) {
     throw new Error(`${parsed.commandId} is registered, but this chat flow currently supports content generation commands only.`)
@@ -69,7 +69,7 @@ generate.post('/plan', async (c) => {
     return c.json({ ...plan, sessionId: session.id })
   } catch (err: any) {
     updateSkillSession(session.id, { status: 'error' })
-    appendSessionEvent(session.id, { type: 'error', message: err.message || String(err) })
+    appendSessionEvent(session.id, { type: 'error', code: 'PLAN_FAILED', message: err.message || String(err), retryable: true, action: 'retry' })
     return c.json({ error: err.message || String(err), sessionId: session.id }, 500)
   }
 })
@@ -103,8 +103,7 @@ generate.post('/', async (c) => {
   const task = createSessionTask(session.id, { kind: 'generate', status: 'running' })
 
   return streamSSE(c, async (stream) => {
-    let imagePaths: string[] = []
-    let projectPath = ''
+    const adapter = createSessionStreamAdapter({ sessionId: session.id, taskId: task.id })
 
     try {
       await streamGenerate({
@@ -114,50 +113,41 @@ generate.post('/', async (c) => {
         prebuiltPlan: body.prebuiltPlan,
         signal: c.req.raw.signal,
         onText: (text) => {
-          appendSessionEvent(session.id, { type: 'progress', message: text })
+          adapter.callbacks.onText(text)
           return stream.writeSSE({ data: JSON.stringify({ type: 'text', text }) })
         },
         onToolUse: (name, input) => {
-          appendSessionEvent(session.id, { type: 'tool', name, status: 'started', input })
+          adapter.callbacks.onToolUse(name, input)
           return stream.writeSSE({ data: JSON.stringify({ type: 'tool_use', name, input }) })
         },
         onProject: (path) => {
-          projectPath = path
-          updateSkillSession(session.id, { projectPath: path })
-          updateSessionTask(session.id, task.id, { projectPath: path })
-          appendSessionArtifact(session.id, { type: 'project', path, title: 'Project' })
+          adapter.callbacks.onProject(path)
           return stream.writeSSE({ data: JSON.stringify({ type: 'project', path }) })
         },
         onFile: (path, kind) => {
-          appendSessionArtifact(session.id, { type: kind === 'prompt' ? 'prompt' : 'file', path, title: kind })
+          adapter.callbacks.onFile(path, kind)
           return stream.writeSSE({ data: JSON.stringify({ type: 'file', path, kind }) })
         },
         onCaption: (caption) => stream.writeSSE({ data: JSON.stringify({ type: 'caption', caption }) }),
         onImage: (path) => {
-          const url = `/api/image?path=${encodeURIComponent(path)}`
-          imagePaths.push(url)
-          appendSessionArtifact(session.id, { type: 'image', path, url, title: 'Generated image' })
-          return stream.writeSSE({ data: JSON.stringify({ type: 'image', path: url }) })
+          adapter.callbacks.onImage(path)
+          return stream.writeSSE({ data: JSON.stringify({ type: 'image', path: `/api/image?path=${encodeURIComponent(path)}` }) })
         },
         onError: (error) => {
-          updateSkillSession(session.id, { status: 'error' })
-          updateSessionTask(session.id, task.id, { status: 'failed', error })
-          appendSessionEvent(session.id, { type: 'error', message: error })
+          adapter.callbacks.onError(error)
           return stream.writeSSE({ data: JSON.stringify({ type: 'error', error }) })
         },
         onDone: () => {
-          updateSkillSession(session.id, { status: 'reviewing', projectPath })
-          updateSessionTask(session.id, task.id, { status: 'succeeded', projectPath })
-          appendSessionEvent(session.id, { type: 'review', artifacts: getSkillSession(session.id)?.artifacts || [] })
-          return stream.writeSSE({ data: JSON.stringify({ type: 'done', images: imagePaths, projectPath, sessionId: session.id }) })
+          adapter.callbacks.onDone()
+          return stream.writeSSE({ data: JSON.stringify({ type: 'done', images: adapter.getImagePaths(), projectPath: adapter.getProjectPath(), sessionId: session.id }) })
         },
       })
     } catch (err: any) {
       updateSkillSession(session.id, { status: 'error' })
       updateSessionTask(session.id, task.id, { status: 'failed', error: err.message || 'Unexpected error' })
-      appendSessionEvent(session.id, { type: 'error', message: err.message || 'Unexpected error' })
+      appendSessionEvent(session.id, { type: 'error', code: 'UNEXPECTED_ERROR', message: err.message || 'Unexpected error', retryable: true, action: 'retry', details: `taskId: ${task.id}` })
       await stream.writeSSE({ data: JSON.stringify({ type: 'error', error: err.message || 'Unexpected error' }) })
-      await stream.writeSSE({ data: JSON.stringify({ type: 'done', images: imagePaths, sessionId: session.id }) })
+      await stream.writeSSE({ data: JSON.stringify({ type: 'done', images: adapter.getImagePaths(), sessionId: session.id }) })
     }
   })
 })

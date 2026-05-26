@@ -1,6 +1,6 @@
 {
   "name": "@happyimage/cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "CLI tool for HappyImage content generation workspace.",
   "type": "module",
   "publishConfig": {
@@ -26,8 +26,8 @@
     "dev": "tsc -w"
   },
   "dependencies": {
-    "@happyimage/core": "workspace:^0.1.0",
-    "@happyimage/web": "workspace:^0.1.0"
+    "@happyimage/core": "^0.2.0",
+    "@happyimage/web": "^0.2.0"
   },
   "devDependencies": {
     "@types/node": "^25.9.1",

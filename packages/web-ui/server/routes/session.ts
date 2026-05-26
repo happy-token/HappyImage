@@ -1,8 +1,8 @@
 import { Hono } from 'hono'
 import { existsSync, mkdirSync } from 'fs'
 import { spawn } from 'child_process'
-import { resolve } from 'path'
-import { readSettings } from '@happyimage/core'
+import { join, resolve } from 'path'
+import { readSettings, resolveConfigRoot } from '@happytokenai/happyimage-core'
 
 const sessionRoute = new Hono()
 
@@ -10,18 +10,21 @@ const platformUrls: Record<string, string> = {
   wechat: 'https://mp.weixin.qq.com/',
   weibo: 'https://weibo.com/',
   x: 'https://x.com/',
+  xiaohongshu: 'https://creator.xiaohongshu.com/',
 }
 
 const chromeEnvKeys: Record<string, string> = {
   wechat: 'WECHAT_BROWSER_CHROME_PATH',
   weibo: 'WEIBO_BROWSER_CHROME_PATH',
   x: 'X_BROWSER_CHROME_PATH',
+  xiaohongshu: 'XHS_BROWSER_CHROME_PATH',
 }
 
 const profileEnvKeys: Record<string, string> = {
   wechat: 'WECHAT_BROWSER_PROFILE_DIR',
   weibo: 'WEIBO_BROWSER_PROFILE_DIR',
   x: 'X_BROWSER_PROFILE_DIR',
+  xiaohongshu: 'XHS_BROWSER_PROFILE_DIR',
 }
 
 function expandHome(value: string) {
@@ -38,7 +41,7 @@ function defaultChromePath(settings: Record<string, string>, platform: string) {
 function defaultProfileDir(settings: Record<string, string>, platform: string, accountAlias?: string) {
   const specific = settings[profileEnvKeys[platform]]
   const shared = settings.BAOYU_CHROME_PROFILE_DIR
-  const base = resolve(expandHome(specific || shared || '~/.baoyu-skills/chrome-profile'))
+  const base = resolve(expandHome(specific || shared || join(resolveConfigRoot(), 'chrome-profile')))
   if (platform === 'wechat' && accountAlias && accountAlias !== 'default') {
     return resolve(base, `wechat-${accountAlias}`)
   }

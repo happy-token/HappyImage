@@ -17,7 +17,7 @@ import accountsRoute from './routes/accounts'
 import projectsRoute from './routes/projects'
 import uploadRoute from './routes/upload'
 import skillsRootRoute from './routes/skills-root'
-import { readSettings, PROJECT_ROOT } from '@happyimage/core'
+import { readSettings, PROJECT_ROOT } from '@happytokenai/happyimage-core'
 
 const app = new Hono()
 const webUiRoot = resolve(import.meta.dirname, '..')

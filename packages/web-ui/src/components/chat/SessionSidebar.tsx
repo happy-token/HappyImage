@@ -66,8 +66,20 @@ export default function SessionSidebar({ sessions, activeId, loading, onCreate, 
 
       <div className="flex-1 overflow-auto session-sidebar-scroll">
         {sorted.length === 0 && (
-          <div className="px-4 py-8 text-center text-xs text-zinc-500">
-            No sessions yet. Click + to start.
+          <div className="px-4 py-12 flex flex-col items-center gap-3 text-center">
+            <MessageSquare className="h-8 w-8 text-zinc-700" />
+            <div>
+              <p className="text-sm font-medium text-zinc-400">No sessions yet</p>
+              <p className="text-xs text-zinc-600 mt-1">Start a new chat to begin creating</p>
+            </div>
+            <button
+              onClick={onCreate}
+              disabled={loading}
+              className="px-4 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-sm font-medium transition-colors flex items-center gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              New Chat
+            </button>
           </div>
         )}
 
@@ -107,10 +119,27 @@ export default function SessionSidebar({ sessions, activeId, loading, onCreate, 
               {s.lastMessage || 'Empty conversation'}
             </p>
 
-            <div className="mt-1 ml-5.5 flex items-center gap-2 text-xxs text-zinc-600">
-              {s.status === 'generating' && <span className="text-indigo-400 animate-pulse">Generating...</span>}
-              {s.imageCount > 0 && <span>{s.imageCount} images</span>}
-              <span>{timeAgo(s.updatedAt)}</span>
+            <div className="mt-1 ml-5.5 flex items-center gap-2 text-xxs">
+              {s.status === 'generating' && (
+                <span className="text-indigo-400 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
+                  Generating
+                </span>
+              )}
+              {s.status === 'error' && (
+                <span className="text-red-400 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                  Error
+                </span>
+              )}
+              {s.status === 'reviewing' && (
+                <span className="text-emerald-400 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                  Ready
+                </span>
+              )}
+              {s.imageCount > 0 && <span className="text-zinc-500">{s.imageCount} images</span>}
+              <span className="text-zinc-600">{timeAgo(s.updatedAt)}</span>
             </div>
 
             <div className="absolute right-3 top-3 hidden group-hover:flex items-center gap-0.5">

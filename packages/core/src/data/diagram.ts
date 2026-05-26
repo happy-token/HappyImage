@@ -50,6 +50,7 @@ const diagram: SkillDefinition = {
   hasCLI: false,
   outputType: 'svg',
   defaultAspectRatio: '16:9',
+  defaultImageCount: 1,
   screenshotDirs: [
     { dimension: 'type', path: 'diagram-types' },
   ],

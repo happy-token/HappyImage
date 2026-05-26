@@ -1,6 +1,8 @@
 {
-  "name": "@happyimage/core",
-  "version": "0.1.0",
+  "name": "@happytokenai/happyimage-core",
+  "version": "0.2.0",
+  "description": "Core runtime, skill definitions, settings, and session persistence for HappyImage.",
+  "license": "MIT",
   "type": "module",
   "publishConfig": {
     "access": "public"
@@ -16,15 +18,15 @@
   "homepage": "https://github.com/happy-token/HappyImage/tree/main/packages/core#readme",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
   "exports": {
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
     }
   },
-  "files": [
-    "dist"
-  ],
   "scripts": {
     "build": "tsc"
   },

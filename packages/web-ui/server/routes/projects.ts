@@ -9,7 +9,7 @@ import {
   getSkillSession, listSkillSessions, appendSessionMessage,
   getPreferenceInfo, applyWatermark, extractPromptFromMarkdown,
   getExistingImageSize,
-} from '@happyimage/core'
+} from '@happytokenai/happyimage-core'
 
 const projects = new Hono()
 
@@ -292,7 +292,7 @@ projects.post('/:encodedId/regenerate', async (c) => {
   }
 
   try {
-    const { executeImagineWithRateLimitRetry } = await import('@happyimage/core')
+    const { executeImagineWithRateLimitRetry } = await import('@happytokenai/happyimage-core')
     const promptsDir = join(projectPath, 'prompts')
     const promptFiles = existsSync(promptsDir)
       ? readdirSync(promptsDir).filter(n => n.endsWith('.md')).sort()

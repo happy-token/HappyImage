@@ -360,35 +360,47 @@ export default function PlatformPreview({ platform, projectPath, images, caption
                 placeholder="【添加标题（可选）】"
                 onCommit={t => {
                   const stripped = t.replace(/^【|】$/g, '')
-                  onCaptionChange?.(reconstructCaption(stripped, bodyText, hashtags))
+                  onCaptionChange?.(reconstructCaption(stripped, extractBodyText(caption, true), []))
                 }}
                 className="text-zinc-200 font-bold text-xs"
               />
               <EditableText
-                text={bodyText}
+                text={extractBodyText(caption, true)}
                 placeholder="分享新鲜事..."
-                onCommit={b => onCaptionChange?.(reconstructCaption(title, b, hashtags))}
+                onCommit={b => onCaptionChange?.(reconstructCaption(title, b, []))}
                 className="text-zinc-300 text-xs leading-relaxed whitespace-pre-wrap mt-1"
               />
-              {bodyText.length > 140 && (
+              {extractBodyText(caption, true).length > 140 && (
                 <span className="text-indigo-400 text-xxs font-bold cursor-pointer hover:underline">...展开全文</span>
               )}
             </div>
 
             {/* Images Grid */}
-            {images.length > 0 && (
+            {images.length > 0 && images.length === 3 ? (
+              <div className="grid grid-cols-2 gap-1.5">
+                <div className="bg-zinc-950 border border-zinc-800 rounded overflow-hidden relative cursor-pointer hover:opacity-90 transition-opacity row-span-2">
+                  <img src={images[0]} alt="" className="w-full h-full object-cover absolute inset-0" />
+                </div>
+                <div className="bg-zinc-950 border border-zinc-800 rounded overflow-hidden relative cursor-pointer hover:opacity-90 transition-opacity" style={{ aspectRatio: '1 / 1' }}>
+                  <img src={images[1]} alt="" className="w-full h-full object-cover absolute inset-0" />
+                </div>
+                <div className="bg-zinc-950 border border-zinc-800 rounded overflow-hidden relative cursor-pointer hover:opacity-90 transition-opacity" style={{ aspectRatio: '1 / 1' }}>
+                  <img src={images[2]} alt="" className="w-full h-full object-cover absolute inset-0" />
+                </div>
+              </div>
+            ) : images.length > 0 && (
               <div className={`grid gap-1.5 ${
-                images.length === 1 
-                  ? 'grid-cols-1' 
+                images.length === 1
+                  ? 'grid-cols-1'
                   : images.length === 2 || images.length === 4
-                  ? 'grid-cols-2' 
+                  ? 'grid-cols-2'
                   : 'grid-cols-3'
               }`}>
                 {images.slice(0, 9).map((src, idx) => {
                   const isNinth = idx === 8 && images.length > 9
                   return (
-                    <div 
-                      key={idx} 
+                    <div
+                      key={idx}
                       className="bg-zinc-950 border border-zinc-800 rounded overflow-hidden relative cursor-pointer hover:opacity-90 transition-opacity"
                       style={{ aspectRatio: images.length === 1 ? getWeiboSingleAspectRatio(aspectRatio) : '1 / 1' }}
                     >
@@ -433,17 +445,19 @@ export default function PlatformPreview({ platform, projectPath, images, caption
 
             {/* Tweet content */}
             <div className="text-zinc-150 text-xs leading-normal flex flex-col gap-1">
+              {title && (
+                <EditableText
+                  text={title}
+                  placeholder=""
+                  onCommit={t => onCaptionChange?.(reconstructCaption(t, extractBodyText(caption, true), []))}
+                  className="font-bold text-zinc-150 text-xs"
+                />
+              )}
               <EditableText
-                text={title}
-                placeholder="添加主题（可选）"
-                onCommit={t => onCaptionChange?.(reconstructCaption(t, bodyText, hashtags))}
-                className="font-bold text-zinc-150 text-xs"
-              />
-              <EditableText
-                text={bodyText}
+                text={extractBodyText(caption, true)}
                 placeholder="What is happening?!"
-                onCommit={b => onCaptionChange?.(reconstructCaption(title, b, hashtags))}
-                className="whitespace-pre-wrap mt-0.5"
+                onCommit={b => onCaptionChange?.(reconstructCaption(title, b, []))}
+                className="whitespace-pre-wrap"
               />
             </div>
 
@@ -516,11 +530,18 @@ export default function PlatformPreview({ platform, projectPath, images, caption
           </div>
           <div className="flex flex-col items-center justify-center p-2.5 border-r border-zinc-800">
             <span className="text-zinc-500 text-[9px] font-bold uppercase tracking-wider">Body</span>
-            <span className="text-zinc-200 text-xs font-semibold mt-0.5">{bodyText.length} chars</span>
+            <span className="text-zinc-200 text-xs font-semibold mt-0.5">
+              {(platform === 'weibo' || platform === 'x'
+                ? extractBodyText(caption, true).length
+                : bodyText.length
+              )} chars
+            </span>
           </div>
           <div className="flex flex-col items-center justify-center p-2.5">
             <span className="text-zinc-500 text-[9px] font-bold uppercase tracking-wider">Hashtags</span>
-            <span className="text-zinc-200 text-xs font-semibold mt-0.5">{hashtags.length}</span>
+            <span className="text-zinc-200 text-xs font-semibold mt-0.5">
+              {platform === 'weibo' || platform === 'x' ? 'inline' : hashtags.length}
+            </span>
           </div>
         </div>
       )}
@@ -584,12 +605,14 @@ function extractTitle(caption: string): string {
   return match ? match[1].trim() : ''
 }
 
-function extractBodyText(caption: string): string {
-  return caption
+function extractBodyText(caption: string, keepHashtags = false): string {
+  let text = caption
     .replace(/^(?:#+\s*)?(?:标题[：:]|Title:)\s*.+/im, '')
-    .replace(/#\S+/g, '')
     .replace(/\*\*/g, '')
-    .trim()
+  if (!keepHashtags) {
+    text = text.replace(/#\S+/g, '')
+  }
+  return text.trim()
 }
 
 function extractHashtags(caption: string): string[] {

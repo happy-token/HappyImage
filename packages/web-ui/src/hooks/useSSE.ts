@@ -181,5 +181,15 @@ export function useSSE() {
     abortRef.current?.abort()
   }, [])
 
-  return { start, stop, retry, isStreaming, log, images, files, projectPath, error }
+  const reset = useCallback(() => {
+    abortRef.current?.abort()
+    setIsStreaming(false)
+    setLog([])
+    setImages([])
+    setFiles([])
+    setProjectPath(null)
+    setError(null)
+  }, [])
+
+  return { start, stop, retry, reset, isStreaming, log, images, files, projectPath, error }
 }

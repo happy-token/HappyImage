@@ -16,17 +16,33 @@ renderer.image = function ({ href, title, text }) {
   return `<span class="text-zinc-500 text-xs">[Image: ${text || href}]</span>`
 }
 
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/<[^>]*>/g, '')
+    .replace(/[^\w一-鿿\s-]/g, '')
+    .replace(/\s+/g, '-')
+}
+renderer.heading = function ({ text, depth }: { text: string; depth: number }) {
+  const id = slugify(text)
+  return `<h${depth} id="${id}">${text}</h${depth}>`
+}
+
 marked.setOptions({ renderer })
 
-export default function Markdown({ text }: { text: string }) {
+export default function Markdown({ text, className }: { text: string; className?: string }) {
   const html = useMemo(() => {
     if (!text) return ''
     const raw = marked.parse(text, { async: false }) as string
     return DOMPurify.sanitize(raw, {
       ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'a', 'ul', 'ol', 'li', 'code', 'pre', 'blockquote', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'hr', 'del', 'img'],
-      ALLOWED_ATTR: ['href', 'target', 'rel', 'class', 'title', 'src', 'alt'],
+      ALLOWED_ATTR: ['href', 'target', 'rel', 'class', 'title', 'src', 'alt', 'id'],
     })
   }, [text])
+
+  if (className) {
+    return <div className={className} dangerouslySetInnerHTML={{ __html: html }} />
+  }
 
   return (
     <div

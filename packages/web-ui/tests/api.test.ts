@@ -296,6 +296,49 @@ describe('Chat Session API', () => {
     expect(res.status).toBe(404)
   })
 
+  test('PATCH /api/sessions/:id updates session title', async () => {
+    const create = await fetch(`${BASE}/api/sessions`, { method: 'POST' }).then(res => res.json())
+    const res = await fetch(`${BASE}/api/sessions/${create.session.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'Renamed session' }),
+    })
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data.session.title).toBe('Renamed session')
+  })
+
+  test('DELETE /api/sessions/:id removes session and returns ok', async () => {
+    const create = await fetch(`${BASE}/api/sessions`, { method: 'POST' }).then(res => res.json())
+    const res = await fetch(`${BASE}/api/sessions/${create.session.id}`, { method: 'DELETE' })
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data.ok).toBe(true)
+    const reload = await fetch(`${BASE}/api/sessions/${create.session.id}`)
+    expect(reload.status).toBe(404)
+  })
+
+  test('DELETE /api/sessions/:id returns 404 for unknown session', async () => {
+    const res = await fetch(`${BASE}/api/sessions/nonexistent-session`, { method: 'DELETE' })
+    expect(res.status).toBe(404)
+  })
+
+  test('error events use structured fields (code, retryable, action)', async () => {
+    const create = await fetch(`${BASE}/api/sessions`, { method: 'POST' }).then(res => res.json())
+    const res = await fetch(`${BASE}/api/sessions/${create.session.id}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: '/nonexistent-command' }),
+    })
+    expect(res.status).toBe(404)
+    const session = await fetch(`${BASE}/api/sessions/${create.session.id}`).then(res => res.json())
+    const errorEvent = session.session.events.find((e: any) => e.type === 'error')
+    expect(errorEvent).toBeDefined()
+    expect(errorEvent.code).toBe('UNKNOWN_COMMAND')
+    expect(errorEvent.retryable).toBe(true)
+    expect(errorEvent.action).toBeDefined()
+  })
+
   test('POST /api/generate returns sessionId in done event', async () => {
     const res = await fetch(`${BASE}/api/generate`, {
       method: 'POST',
@@ -552,3 +595,15 @@ describe('Accounts API', () => {
     expect(data).toHaveProperty('accounts')
   })
 })
+
+describe('Docs API', () => {
+  test('GET /api/docs/user-guide returns the user guide content', async () => {
+    const res = await fetch(`${BASE}/api/docs/user-guide`)
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data).toHaveProperty('content')
+    expect(typeof data.content).toBe('string')
+    expect(data.content).toContain('HappyImage 用户与多平台发布配置指南')
+  })
+})
+

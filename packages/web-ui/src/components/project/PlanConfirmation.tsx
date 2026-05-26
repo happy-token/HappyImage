@@ -1,6 +1,6 @@
 import Button from '../ui/Button'
 import Markdown from '../chat/Markdown'
-import type { ProjectPlan } from '@happyimage/core'
+import type { ProjectPlan } from '@happytokenai/happyimage-core'
 
 interface PlanConfirmationProps {
   plan: ProjectPlan

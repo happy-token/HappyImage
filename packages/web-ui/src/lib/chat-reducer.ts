@@ -1,16 +1,19 @@
-import type { ProjectPlan } from '@happyimage/core'
+import type { ProjectPlan } from '@happytokenai/happyimage-core'
 
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant' | 'system'
   text: string
-  type?: 'text' | 'plan' | 'runner' | 'thinking' | 'error'
+  type?: 'text' | 'plan' | 'runner' | 'thinking' | 'error' | 'tool'
   planData?: ProjectPlan
   sourceContent?: string
   retryFn?: () => void
   targetImageIndex?: number
   targetImageName?: string
   confirmed?: boolean
+  toolName?: string
+  toolStatus?: 'started' | 'progress' | 'succeeded' | 'failed'
+  toolInput?: Record<string, unknown>
 }
 
 export interface ChatState {
@@ -28,6 +31,7 @@ export type ChatAction =
   | { type: 'SET_PLANNING'; messageId: string | null }
   | { type: 'CLEAR_PLANNING' }
   | { type: 'RESET_MESSAGES'; messages: ChatMessage[] }
+  | { type: 'UPSERT_TOOL'; messageId: string; name: string; status: ChatMessage['toolStatus']; input?: Record<string, unknown> }
 
 export function chatReducer(state: ChatState, action: ChatAction): ChatState {
   switch (action.type) {
@@ -64,6 +68,27 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
 
     case 'CLEAR_PLANNING':
       return { ...state, planningMsgId: null }
+
+    case 'UPSERT_TOOL': {
+      const existing = state.messages.find(msg => msg.id === action.messageId)
+      if (existing) {
+        return {
+          ...state,
+          messages: state.messages.map(msg =>
+            msg.id === action.messageId
+              ? { ...msg, toolStatus: action.status, toolInput: action.input || msg.toolInput, text: action.status === 'succeeded' ? 'Done' : action.status === 'failed' ? 'Failed' : msg.text }
+              : msg
+          ),
+        }
+      }
+      const toolMsg = makeMessage('system', action.status === 'started' ? 'Starting...' : 'Running...', 'tool', {
+        id: action.messageId,
+        toolName: action.name,
+        toolStatus: action.status,
+        toolInput: action.input,
+      })
+      return { ...state, messages: [...state.messages, toolMsg] }
+    }
 
     default:
       return state

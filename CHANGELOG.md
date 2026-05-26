@@ -2,6 +2,28 @@
 
 English | [中文](./CHANGELOG.zh.md)
 
+## 1.118.0 - 2026-05-25
+
+### Features
+- `web-ui`: add HappyImage Web UI workspace with StudioPage, session chat, and multi-platform publishing
+- `web-ui`: add per-platform post preview mockups (Xiaohongshu, WeChat, Weibo, X) with inline hashtag handling
+- `web-ui`: add AI-powered per-platform caption generation (`/api/caption`) with strict format templates
+- `web-ui`: add configurable image watermark support via EXTEND.md preferences
+- `web-ui`: add persistent chat sessions with SSE streaming, artifact tracking, and plan confirmation
+- `web-ui`: add skills root management — install and select external baoyu-skills roots
+- `web-ui`: add platform rules validation (`/api/package/check`) for image count, title length, body length, hashtag constraints
+- `core`: add platform rules engine (`platform-rules.ts`) for Xiaohongshu, WeChat, Weibo, X
+- `core`: add structured caption format convention with `extractTitle`/`extractBodyText`/`extractHashtags` parser
+- `core`: add `@happyimage/core` shared runtime with Anthropic pipeline, settings, and skill resolution
+- `cli`: add CLI entry point for skill execution
+
+### Fixes
+- `web-ui`: fix Weibo 3-image grid layout (1+2 instead of 3-column)
+- `web-ui`: fix X/Twitter inline hashtag handling in preview
+- `web-ui`: fix session blank-state reuse to prevent empty session accumulation
+- `web-ui`: fix preference schema fields display when EXTEND.md not found
+- `web-ui`: fix nested button HTML and test assertions for watermark/session sidebar
+
 ## 1.117.1 - 2026-05-16
 
 ### Fixes

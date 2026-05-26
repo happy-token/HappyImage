@@ -9,7 +9,9 @@ node_modules/
 packages/*/node_modules/
 
 # Build outputs
+dist/
 packages/*/dist/
+packages/*/release/
 packages/*/tsconfig.tsbuildinfo
 *.tsbuildinfo
 
@@ -24,5 +26,7 @@ output/
 
 # Local app state
 .happyimage-desktop-profile/
+.claude/
+scratch/
 .DS_Store
 .gstack/

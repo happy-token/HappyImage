@@ -383,18 +383,39 @@ export default function GalleryPage() {
                 </div>
               )}
 
-              {currentStep.kind === 'parameter' && (
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                  {optionsForParameter(currentStep.parameter).map(item => (
-                    <TextChoiceCard
-                      key={item.id}
-                      item={item}
-                      active={(guideParameters[currentStep.key] || String(currentStep.parameter.defaultValue || '')) === item.id}
-                      onClick={() => setGuideParameters(prev => ({ ...prev, [currentStep.key]: item.id }))}
-                    />
-                  ))}
-                </div>
-              )}
+              {currentStep.kind === 'parameter' && (() => {
+                const isCountParam = ['imageCount', 'pageCount', 'slides'].includes(currentStep.parameter.name)
+                const currentVal = guideParameters[currentStep.key] || String(currentStep.parameter.defaultValue || '')
+                if (isCountParam) {
+                  return (
+                    <div className="max-w-xs">
+                      <input
+                        type="number"
+                        min={1}
+                        max={20}
+                        value={currentVal}
+                        onChange={e => {
+                          const v = Math.max(1, Math.min(20, parseInt(e.target.value, 10) || 1))
+                          setGuideParameters(prev => ({ ...prev, [currentStep.key]: String(v) }))
+                        }}
+                        className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-base font-semibold text-zinc-100 focus:border-indigo-500 focus:outline-none"
+                      />
+                    </div>
+                  )
+                }
+                return (
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    {optionsForParameter(currentStep.parameter).map(item => (
+                      <TextChoiceCard
+                        key={item.id}
+                        item={item}
+                        active={currentVal === item.id}
+                        onClick={() => setGuideParameters(prev => ({ ...prev, [currentStep.key]: item.id }))}
+                      />
+                    ))}
+                  </div>
+                )
+              })()}
 
               {currentStep.kind === 'review' && (
                 <div className="max-w-2xl mx-auto rounded-2xl border border-zinc-800 bg-zinc-950/40 p-6 w-full">

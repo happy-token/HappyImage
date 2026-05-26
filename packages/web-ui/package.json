@@ -1,8 +1,8 @@
 {
-  "name": "@happyimage/web",
-  "private": true,
-  "version": "0.1.0",
+  "name": "@happytokenai/happyimage-web",
+  "version": "0.2.0",
   "description": "Visual workspace for running baoyu-skills content generation workflows.",
+  "license": "MIT",
   "type": "module",
   "main": "./server/index.ts",
   "types": "./server/index.ts",
@@ -13,10 +13,25 @@
     }
   },
   "files": [
-    "dist",
+    "dist/assets",
+    "dist/index.html",
+    "dist/logo.svg",
     "server",
+    "README.md",
     "package.json"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/happy-token/HappyImage.git",
+    "directory": "packages/web-ui"
+  },
+  "bugs": {
+    "url": "https://github.com/happy-token/HappyImage/issues"
+  },
+  "homepage": "https://github.com/happy-token/HappyImage#readme",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "dev": "concurrently -n api,ui -c blue,green \"bun run server/index.ts\" \"vite\"",
     "build": "tsc -b && vite build",
@@ -27,7 +42,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.96.0",
-    "@happyimage/core": "workspace:^0.1.0",
+    "@happytokenai/happyimage-core": "^0.2.0",
     "dompurify": "^3.4.5",
     "hono": "^4.7.0",
     "lucide-react": "^1.16.0",

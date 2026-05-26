@@ -2,6 +2,28 @@
 
 [English](./CHANGELOG.md) | 中文
 
+## 1.118.0 - 2026-05-25
+
+### 新功能
+- `web-ui`：新增 HappyImage Web UI 工作台，包含 StudioPage 创作页、会话聊天和多平台一键发布
+- `web-ui`：新增各平台发布预览 mockup（小红书、微信、微博、X），支持话题标签内联显示
+- `web-ui`：新增 AI 驱动各平台文案生成（`/api/caption`），包含严格的平台格式模板
+- `web-ui`：新增可配置图片水印功能，通过 EXTEND.md 偏好设置
+- `web-ui`：新增持久化聊天会话，支持 SSE 流式传输、素材追踪和计划确认
+- `web-ui`：新增技能根目录管理 —— 安装和选择外部 baoyu-skills 根目录
+- `web-ui`：新增平台规则校验（`/api/package/check`），覆盖图片数量、标题长度、正文长度、话题标签限制
+- `core`：新增平台规则引擎（`platform-rules.ts`），支持小红书、微信、微博、X
+- `core`：新增结构化文案格式约定和 `extractTitle`/`extractBodyText`/`extractHashtags` 解析器
+- `core`：新增 `@happyimage/core` 共享运行时，包含 Anthropic 管线、设置和技能解析
+- `cli`：新增 CLI 入口用于技能执行
+
+### 修复
+- `web-ui`：修复微博 3 图布局（改为 1+2 布局，非 3 列网格）
+- `web-ui`：修复 X/Twitter 预览中话题标签内联处理
+- `web-ui`：修复会话空状态复用，防止空会话累积
+- `web-ui`：修复 EXTEND.md 未找到时偏好字段不显示的问题
+- `web-ui`：修复水印/会话侧边栏中嵌套按钮 HTML 和测试断言
+
 ## 1.117.1 - 2026-05-16
 
 ### 修复

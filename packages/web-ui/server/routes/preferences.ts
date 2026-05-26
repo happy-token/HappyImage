@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { getSkill, getPreferenceSchema, publishSchemas, getPreferenceInfo, writePreferenceInfo, type PreferenceScope } from '@happyimage/core'
+import { getSkill, getPreferenceSchema, publishSchemas, getPreferenceInfo, writePreferenceInfo, type PreferenceScope } from '@happytokenai/happyimage-core'
 
 const preferences = new Hono()
 const extraPreferenceSkills = new Set([
@@ -37,7 +37,7 @@ preferences.post('/:skillId', async (c) => {
     return c.json({ error: 'values object required' }, 400)
   }
   const scope = body.scope ? String(body.scope) as PreferenceScope : undefined
-  if (scope && !['config', 'legacy', 'project'].includes(scope)) {
+  if (scope && !['config', 'project'].includes(scope)) {
     return c.json({ error: 'Invalid preference scope' }, 400)
   }
   return c.json(writePreferenceInfo(skillId, values, scope, body.currentPath ? String(body.currentPath) : null))

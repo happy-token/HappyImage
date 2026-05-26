@@ -1,7 +1,17 @@
 {
   "name": "baoyu-skills",
   "private": true,
+  "description": "HappyImage AI visual content generation, web workspace, CLI, and desktop app.",
+  "license": "MIT",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/happy-token/HappyImage.git"
+  },
+  "bugs": {
+    "url": "https://github.com/happy-token/HappyImage/issues"
+  },
+  "homepage": "https://github.com/happy-token/HappyImage#readme",
   "workspaces": [
     "packages/*"
   ],
@@ -15,6 +25,9 @@
     "build:web": "bun run --cwd packages/web-ui build",
     "build:cli": "bun run --cwd packages/cli build",
     "build:desktop": "bun run --cwd packages/desktop build",
+    "pack:npm": "bash scripts/npm-pack.sh",
+    "publish:npm": "bash scripts/npm-publish.sh",
+    "release:desktop": "bash scripts/desktop-release.sh",
     "dev:web": "bun run --cwd packages/web-ui dev",
     "happyimage": "bun packages/cli/src/bin.ts",
     "test:web": "bun run --cwd packages/web-ui test",

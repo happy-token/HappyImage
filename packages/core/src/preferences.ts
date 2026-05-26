@@ -1,6 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
-import { dirname, join, resolve } from 'path'
-import { PROJECT_ROOT, resolveConfigRoot, resolveUserConfigRoot, readSettings } from './settings.js'
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from 'fs'
+import { dirname, join } from 'path'
+import { PROJECT_ROOT, resolveUserConfigRoot } from './settings.js'
 
 export interface PreferenceInfo {
   skillId: string
@@ -13,7 +13,7 @@ export interface PreferenceInfo {
   targets: PreferenceTarget[]
 }
 
-export type PreferenceScope = 'config' | 'legacy' | 'project'
+export type PreferenceScope = 'config' | 'project'
 
 export interface PreferenceTarget {
   scope: PreferenceScope
@@ -130,70 +130,30 @@ function summarize(values: Record<string, unknown>) {
     .map(key => ({ key, value: formatValue(values[key]) }))
 }
 
-function preferenceTargets(skillId: string): PreferenceTarget[] {
-  const skillName = skillId.startsWith('baoyu-') ? skillId : `baoyu-${skillId}`
-  const userConfigRoot = resolveUserConfigRoot()
-  const home = process.env.HOME || process.env.USERPROFILE || '/tmp'
-  const targets: PreferenceTarget[] = [
-    { scope: 'project', label: '当前项目', path: join(PROJECT_ROOT, '.baoyu-skills', skillName, 'EXTEND.md'), exists: false },
-    { scope: 'config', label: '配置目录', path: join(userConfigRoot, 'skills', skillName, 'EXTEND.md'), exists: false },
-    { scope: 'legacy', label: '旧版路径', path: join(home, '.baoyu-skills', skillName, 'EXTEND.md'), exists: false },
-  ]
-  return targets.map(target => ({ ...target, exists: existsSync(target.path) }))
+function sharedPreferencePath() {
+  return join(resolveUserConfigRoot(), 'EXTEND.md')
 }
 
-function resolveTarget(skillId: string, scope?: PreferenceScope, fallbackPath?: string | null) {
-  const targets = preferenceTargets(skillId)
-  if (scope) return targets.find(target => target.scope === scope) || targets[0]
-  if (fallbackPath) {
-    const found = targets.find(target => target.path === fallbackPath)
-    if (found) return found
-  }
-  return targets.find(target => target.exists) || targets[0]
+function preferenceTargets(_skillId: string): PreferenceTarget[] {
+  const path = sharedPreferencePath()
+  return [{ scope: 'config', label: '配置目录', path, exists: existsSync(path) }]
 }
 
 export function getPreferenceInfo(skillId: string): PreferenceInfo {
-  const skillName = skillId.startsWith('baoyu-') ? skillId : `baoyu-${skillId}`
-  const userConfigRoot = resolveUserConfigRoot()
-
-  // 1. Auto-migrate legacy userConfigRoot/skills/<skillName>.md to skills/<skillName>/EXTEND.md
-  const legacyMdPath = join(userConfigRoot, 'skills', `${skillName}.md`)
-  if (existsSync(legacyMdPath)) {
-    try {
-      const targetPath = join(userConfigRoot, 'skills', skillName, 'EXTEND.md')
-      if (!existsSync(targetPath)) {
-        mkdirSync(dirname(targetPath), { recursive: true })
-        const content = readFileSync(legacyMdPath, 'utf-8')
-        writeFileSync(targetPath, content, 'utf-8')
-      }
-    } catch { /* ignore */ }
-  }
-
-  // 2. Auto-migrate dev-mode workspace PROJECT_ROOT/skills/<skillName>.md to .baoyu-skills/<skillName>/EXTEND.md
-  const devLegacyMdPath = join(PROJECT_ROOT, 'skills', `${skillName}.md`)
-  if (existsSync(devLegacyMdPath)) {
-    try {
-      const targetPath = join(PROJECT_ROOT, '.baoyu-skills', skillName, 'EXTEND.md')
-      if (!existsSync(targetPath)) {
-        mkdirSync(dirname(targetPath), { recursive: true })
-        const content = readFileSync(devLegacyMdPath, 'utf-8')
-        writeFileSync(targetPath, content, 'utf-8')
-      }
-    } catch { /* ignore */ }
-  }
-
+  const mainPath = sharedPreferencePath()
   const targets = preferenceTargets(skillId)
 
-  for (const target of targets) {
-    const path = target.path
-    if (!existsSync(path)) continue
-    const raw = readFileSync(path, 'utf-8')
+  // On first access, scan all old per-skill locations and migrate into shared file
+  if (!existsSync(mainPath)) migrateAllOldPreferences(mainPath)
+
+  if (existsSync(mainPath)) {
+    const raw = readFileSync(mainPath, 'utf-8')
     const values = parseLooseYaml(raw)
     return {
       skillId,
       found: true,
-      path,
-      scope: target.scope,
+      path: mainPath,
+      scope: 'config',
       raw,
       values,
       summary: summarize(values),
@@ -201,37 +161,76 @@ export function getPreferenceInfo(skillId: string): PreferenceInfo {
     }
   }
 
-  // Fallback to deprecated xhs-images preferences if this is image-cards
-  if (skillName === 'baoyu-image-cards') {
-    const fallbackTargets = preferenceTargets('baoyu-xhs-images')
-    for (const target of fallbackTargets) {
-      const path = target.path
-      if (!existsSync(path)) continue
-      const raw = readFileSync(path, 'utf-8')
-      const values = parseLooseYaml(raw)
-      return {
-        skillId,
-        found: true,
-        path,
-        scope: target.scope,
-        raw,
-        values,
-        summary: summarize(values),
-        targets, // Return the main targets so any save will write to the new path
-      }
-    }
-  }
-
   return {
     skillId,
     found: false,
-    path: null,
-    scope: null,
+    path: mainPath,
+    scope: 'config',
     raw: '',
     values: {},
     summary: [],
     targets,
   }
+}
+
+function collectOldPreferencePaths(): string[] {
+  const paths: string[] = []
+  const userConfigRoot = resolveUserConfigRoot()
+
+  const scanDirs = [
+    join(userConfigRoot, 'skills'),
+  ]
+  for (const dir of scanDirs) {
+    if (!existsSync(dir)) continue
+    try {
+      for (const entry of readdirSync(dir)) {
+        const full = join(dir, entry)
+        if (entry.endsWith('.md') && !entry.startsWith('.')) {
+          paths.push(full)
+        } else if (existsSync(join(full, 'EXTEND.md'))) {
+          paths.push(join(full, 'EXTEND.md'))
+        }
+      }
+    } catch { /* skip */ }
+  }
+
+  // Also scan PROJECT_ROOT/skills/ for legacy .md files
+  const devSkillsDir = join(PROJECT_ROOT, 'skills')
+  if (existsSync(devSkillsDir)) {
+    try {
+      for (const entry of readdirSync(devSkillsDir)) {
+        if (entry.endsWith('.md') && !entry.startsWith('.')) {
+          paths.push(join(devSkillsDir, entry))
+        }
+      }
+    } catch { /* skip */ }
+  }
+
+  return paths
+}
+
+function migrateAllOldPreferences(mainPath: string) {
+  const merged: Record<string, unknown> = {}
+  const oldPaths = collectOldPreferencePaths()
+
+  for (const oldPath of oldPaths) {
+    try {
+      const oldRaw = readFileSync(oldPath, 'utf-8')
+      const oldValues = parseLooseYaml(oldRaw)
+      delete oldValues.version
+      Object.assign(merged, oldValues)
+    } catch { /* ignore */ }
+  }
+
+  if (Object.keys(merged).length === 0) return
+
+  mkdirSync(dirname(mainPath), { recursive: true })
+  const lines = ['---', 'version: 1']
+  for (const [key, value] of Object.entries(merged)) {
+    lines.push(...serializeValue(key, value))
+  }
+  lines.push('---', '')
+  writeFileSync(mainPath, lines.join('\n'), 'utf-8')
 }
 
 function serializeValue(key: string, value: unknown, indent = ''): string[] {
@@ -271,15 +270,20 @@ function formatYamlScalar(value: unknown) {
   return JSON.stringify(text)
 }
 
-export function writePreferenceInfo(skillId: string, values: Record<string, unknown>, scope?: PreferenceScope, currentPath?: string | null): PreferenceInfo {
-  const target = resolveTarget(skillId, scope, currentPath)
-  mkdirSync(dirname(target.path), { recursive: true })
+export function writePreferenceInfo(skillId: string, values: Record<string, unknown>, _scope?: PreferenceScope, _currentPath?: string | null): PreferenceInfo {
+  const targetPath = sharedPreferencePath()
+  mkdirSync(dirname(targetPath), { recursive: true })
+  const existing: Record<string, unknown> = existsSync(targetPath)
+    ? parseLooseYaml(readFileSync(targetPath, 'utf-8'))
+    : {}
+  const merged = { ...existing, ...values }
+  delete merged.version
   const lines = ['---', 'version: 1']
-  for (const [key, value] of Object.entries(values)) {
+  for (const [key, value] of Object.entries(merged)) {
     lines.push(...serializeValue(key, value))
   }
   lines.push('---', '')
-  writeFileSync(target.path, lines.join('\n'), 'utf-8')
+  writeFileSync(targetPath, lines.join('\n'), 'utf-8')
   return getPreferenceInfo(skillId)
 }
 

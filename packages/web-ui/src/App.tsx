@@ -8,6 +8,7 @@ import WizardPage from './pages/WizardPage'
 import ExportPage from './pages/ExportPage'
 import SettingsPage from './pages/SettingsPage'
 import HistoryPage from './pages/HistoryPage'
+import GuidePage from './pages/GuidePage'
 import { applyAccent } from './lib/accent'
 import { applyTheme } from './lib/theme'
 import DashboardLayout from './components/layout/DashboardLayout'
@@ -17,7 +18,8 @@ function PageTracker() {
   useEffect(() => {
     const page = location.pathname === '/' || location.pathname.startsWith('/projects/')
       ? 'studio' : location.pathname.startsWith('/settings')
-      ? 'settings' : 'gallery'
+      ? 'settings' : location.pathname.startsWith('/guide')
+      ? 'guide' : 'gallery'
     document.documentElement.dataset.page = page
   }, [location.pathname])
   return null
@@ -35,6 +37,8 @@ function AppRoutes() {
           <Route path="/gallery/:skill" element={<SkillDetailPage />} />
           <Route path="/history" element={<HistoryPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/guide" element={<GuidePage />} />
+          <Route path="/guide/:doc" element={<GuidePage />} />
         </Route>
         <Route path="/wizard" element={<WizardPage />} />
         <Route path="/wizard/:skill" element={<WizardPage />} />

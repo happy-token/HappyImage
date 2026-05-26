@@ -13,6 +13,9 @@ files:
 extraResources:
   - from: ../web-ui/dist
     to: web-ui
+    filter:
+      - '**/*'
+      - '!screenshots/**'
   - from: ../web-ui/server
     to: web-server
   - from: ../core/dist
@@ -42,7 +45,6 @@ mac:
   category: public.app-category.graphics-design
 
 dmg:
-  background: build/background.png
   window:
     width: 480
     height: 400

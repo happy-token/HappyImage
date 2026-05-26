@@ -100,7 +100,7 @@ export default function ProjectWorkspace({
       const res = await fetch('/api/skills-root/install', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ root: '~/.baoyu-skills' }),
+        body: JSON.stringify({}),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || '安装失败')

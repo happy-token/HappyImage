@@ -92,7 +92,7 @@ export type SessionEvent =
   | { id: string; seq?: number; createdAt: string; type: 'review'; artifacts: SessionArtifact[] }
   | { id: string; seq?: number; createdAt: string; type: 'revision-requested'; target: RevisionRequest['target']; instruction: string }
   | { id: string; seq?: number; createdAt: string; type: 'publish-status'; platform: string; status: string; message?: string }
-  | { id: string; seq?: number; createdAt: string; type: 'error'; message: string }
+  | { id: string; seq?: number; createdAt: string; type: 'error'; message: string; code?: string; retryable?: boolean; action?: string; details?: string }
   | { id: string; seq?: number; createdAt: string; type: 'done' }
 
 export interface RevisionRequest {
@@ -162,55 +162,94 @@ function parseJson<T>(raw: string | null | undefined, fallback: T): T {
 function getDb() {
   if (db) return db
   mkdirSync(happyImageDataDir(), { recursive: true })
-  db = new Database(sessionDatabasePath())
-  db.exec(`
-    PRAGMA journal_mode = WAL;
-    CREATE TABLE IF NOT EXISTS sessions (
-      id TEXT PRIMARY KEY,
-      title TEXT,
-      status TEXT NOT NULL,
-      commandRequestJson TEXT,
-      answersJson TEXT NOT NULL DEFAULT '{}',
-      activeProjectPath TEXT,
-      createdAt TEXT NOT NULL,
-      updatedAt TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS events (
-      seq INTEGER PRIMARY KEY AUTOINCREMENT,
-      id TEXT NOT NULL UNIQUE,
-      sessionId TEXT NOT NULL,
-      type TEXT NOT NULL,
-      payloadJson TEXT NOT NULL,
-      createdAt TEXT NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS events_session_seq_idx ON events(sessionId, seq);
-    CREATE TABLE IF NOT EXISTS artifacts (
-      id TEXT PRIMARY KEY,
-      sessionId TEXT NOT NULL,
-      type TEXT NOT NULL,
-      path TEXT,
-      url TEXT,
-      title TEXT,
-      version INTEGER NOT NULL,
-      parentArtifactId TEXT,
-      metadataJson TEXT NOT NULL DEFAULT '{}',
-      createdAt TEXT NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS artifacts_session_idx ON artifacts(sessionId, createdAt);
-    CREATE TABLE IF NOT EXISTS tasks (
-      id TEXT PRIMARY KEY,
-      sessionId TEXT NOT NULL,
-      kind TEXT NOT NULL,
-      status TEXT NOT NULL,
-      commandId TEXT,
-      projectPath TEXT,
-      error TEXT,
-      createdAt TEXT NOT NULL,
-      updatedAt TEXT NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS tasks_session_idx ON tasks(sessionId, updatedAt);
-  `)
-  return db
+  const dbPath = sessionDatabasePath()
+
+  function openDb() {
+    const database = new Database(dbPath)
+    database.exec('PRAGMA journal_mode = WAL')
+    return database
+  }
+
+  function runMigrations(database: Database) {
+    database.exec(`
+      CREATE TABLE IF NOT EXISTS schema_version (
+        version INTEGER PRIMARY KEY,
+        appliedAt TEXT NOT NULL
+      );
+    `)
+    const currentVersion = database.query('SELECT MAX(version) as v FROM schema_version').get() as { v: number | null } | null
+    const v = currentVersion?.v || 0
+    const migrations: Array<[number, string]> = [
+      [1, `
+        CREATE TABLE IF NOT EXISTS sessions (
+          id TEXT PRIMARY KEY,
+          title TEXT,
+          status TEXT NOT NULL,
+          commandRequestJson TEXT,
+          answersJson TEXT NOT NULL DEFAULT '{}',
+          activeProjectPath TEXT,
+          createdAt TEXT NOT NULL,
+          updatedAt TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS events (
+          seq INTEGER PRIMARY KEY AUTOINCREMENT,
+          id TEXT NOT NULL UNIQUE,
+          sessionId TEXT NOT NULL,
+          type TEXT NOT NULL,
+          payloadJson TEXT NOT NULL,
+          createdAt TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS events_session_seq_idx ON events(sessionId, seq);
+        CREATE TABLE IF NOT EXISTS artifacts (
+          id TEXT PRIMARY KEY,
+          sessionId TEXT NOT NULL,
+          type TEXT NOT NULL,
+          path TEXT,
+          url TEXT,
+          title TEXT,
+          version INTEGER NOT NULL,
+          parentArtifactId TEXT,
+          metadataJson TEXT NOT NULL DEFAULT '{}',
+          createdAt TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS artifacts_session_idx ON artifacts(sessionId, createdAt);
+        CREATE TABLE IF NOT EXISTS tasks (
+          id TEXT PRIMARY KEY,
+          sessionId TEXT NOT NULL,
+          kind TEXT NOT NULL,
+          status TEXT NOT NULL,
+          commandId TEXT,
+          projectPath TEXT,
+          error TEXT,
+          createdAt TEXT NOT NULL,
+          updatedAt TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS tasks_session_idx ON tasks(sessionId, updatedAt);
+      `],
+    ]
+    for (const [version, sql] of migrations) {
+      if (version > v) {
+        database.exec(sql)
+        database.query('INSERT INTO schema_version (version, appliedAt) VALUES (?, ?)').run(version, now())
+      }
+    }
+  }
+
+  try {
+    db = openDb()
+    runMigrations(db)
+    return db
+  } catch (err: any) {
+    // Auto-recover from database corruption
+    if (err?.code === 'SQLITE_NOTADB' || err?.code === 'SQLITE_CORRUPT' || err?.message?.includes('file is not a database')) {
+      const corruptPath = `${dbPath}.corrupt.${Date.now()}`
+      try { require('fs').renameSync(dbPath, corruptPath) } catch { require('fs').unlinkSync(dbPath) }
+      db = openDb()
+      runMigrations(db)
+      return db
+    }
+    throw err
+  }
 }
 
 function rowToEvent(row: EventRow): SessionEvent {
@@ -468,4 +507,67 @@ export function requestSessionRevision(sessionId: string, request: RevisionReque
   }
   appendSessionEvent(sessionId, { type: 'revision-requested', target: request.target, instruction: request.instruction })
   return getSkillSession(sessionId)
+}
+
+export interface SessionStreamAdapter {
+  sessionId: string
+  taskId: string
+}
+
+export function createSessionStreamAdapter(opts: SessionStreamAdapter) {
+  let projectPath = ''
+  const imagePaths: string[] = []
+
+  return {
+    getImagePaths: () => imagePaths,
+    getProjectPath: () => projectPath,
+    callbacks: {
+      onText: (text: string) => {
+        appendSessionEvent(opts.sessionId, { type: 'progress', message: text })
+        return Promise.resolve()
+      },
+      onToolUse: (name: string, input: Record<string, unknown>) => {
+        appendSessionEvent(opts.sessionId, { type: 'tool', name, status: 'started', input })
+        return Promise.resolve()
+      },
+      onRetry: (retry: { attempt: number; delayMs: number; provider?: string; reason: string }) => {
+        appendSessionEvent(opts.sessionId, { type: 'retry', attempt: retry.attempt, delayMs: retry.delayMs, provider: retry.provider, reason: retry.reason })
+        return Promise.resolve()
+      },
+      onProject: (path: string) => {
+        projectPath = path
+        updateSkillSession(opts.sessionId, { projectPath: path })
+        updateSessionTask(opts.sessionId, opts.taskId, { projectPath: path })
+        appendSessionArtifact(opts.sessionId, { type: 'project', path, title: 'Project' })
+        return Promise.resolve()
+      },
+      onFile: (path: string, kind: string) => {
+        const artifactType = kind === 'prompt' ? 'prompt' as const : 'file' as const
+        appendSessionArtifact(opts.sessionId, { type: artifactType, path, title: kind })
+        return Promise.resolve()
+      },
+      onCaption: (caption: string) => {
+        return Promise.resolve()
+      },
+      onImage: (path: string) => {
+        const url = `/api/image?path=${encodeURIComponent(path)}`
+        imagePaths.push(url)
+        appendSessionArtifact(opts.sessionId, { type: 'image', path, url, title: 'Generated image' })
+        return Promise.resolve()
+      },
+      onError: (error: string) => {
+        updateSkillSession(opts.sessionId, { status: 'error' })
+        updateSessionTask(opts.sessionId, opts.taskId, { status: 'failed', error })
+        appendSessionEvent(opts.sessionId, { type: 'error', code: 'GENERATION_ERROR', message: error, retryable: true, action: 'retry', details: `taskId: ${opts.taskId}` })
+        return Promise.resolve()
+      },
+      onDone: () => {
+        updateSkillSession(opts.sessionId, { status: 'reviewing', projectPath })
+        updateSessionTask(opts.sessionId, opts.taskId, { status: 'succeeded', projectPath })
+        appendSessionEvent(opts.sessionId, { type: 'review', artifacts: getSkillSession(opts.sessionId)?.artifacts || [] })
+        appendSessionEvent(opts.sessionId, { type: 'done' })
+        return Promise.resolve()
+      },
+    },
+  }
 }

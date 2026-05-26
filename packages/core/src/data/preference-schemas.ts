@@ -244,4 +244,13 @@ export const publishSchemas: Record<string, PreferenceSchema> = {
       { key: 'long_post_mode', label: 'Long Post', labelZh: '长文模式', type: 'boolean', defaultValue: false, skillPath: 'long_post_mode' },
     ],
   },
+  'post-to-xiaohongshu': {
+    skillId: 'post-to-xiaohongshu',
+    name: 'Xiaohongshu',
+    nameZh: '小红书',
+    fields: [
+      { key: 'default_author', label: 'Author', labelZh: '默认作者', type: 'text', defaultValue: '', skillPath: 'default_author' },
+      { key: 'default_title', label: 'Title', labelZh: '默认标题', type: 'text', defaultValue: '', skillPath: 'default_title' },
+    ],
+  },
 }

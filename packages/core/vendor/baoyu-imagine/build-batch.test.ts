@@ -7,7 +7,7 @@ import { promisify } from "node:util";
 import test from "node:test";
 
 const execFileAsync = promisify(execFile);
-const repoRoot = path.resolve(import.meta.dirname, "..", "..", "..");
+const repoRoot = path.resolve(import.meta.dirname, "..", "..", "..", "..");
 const scriptPath = path.join(repoRoot, "skills", "baoyu-imagine", "scripts", "build-batch.ts");
 
 async function makeFixture(): Promise<{

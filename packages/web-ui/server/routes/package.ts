@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'fs'
 import { basename, join, relative, resolve } from 'path'
-import { readSettings, checkPlatform, platformRules, type PlatformRule } from '@happyimage/core'
+import { readSettings, checkPlatform, platformRules, type PlatformRule } from '@happytokenai/happyimage-core'
 
 const packageRoute = new Hono()
 

@@ -8,7 +8,7 @@ import { useProjectChat } from '../hooks/useProjectChat'
 import ProjectWorkspace from '../components/project/ProjectWorkspace'
 import ChatThread from '../components/chat/ChatThread'
 import ChatComposer, { type ChatComposerHandle } from '../components/chat/ChatComposer'
-import type { CommandRequest, ProjectPlan } from '@happyimage/core'
+import type { CommandRequest, ProjectPlan } from '@happytokenai/happyimage-core'
 import { chatReducer, makeMessage } from '../lib/chat-reducer'
 import { parseSSEStream } from '../lib/sse'
 import type { ChatMessage } from '../lib/chat-reducer'
@@ -270,7 +270,7 @@ export default function StudioPage() {
   const [preferenceSchema, setPreferenceSchema] = useState<PreferenceSchema | null>(null)
   const [prefFormValues, setPrefFormValues] = useState<Record<string, unknown>>({})
   const [prefSaving, setPrefSaving] = useState(false)
-  const [prefScope, setPrefScope] = useState<string>('legacy')
+  const [prefScope, setPrefScope] = useState<string>('config')
   const [usePreferences, setUsePreferences] = useState(true)
   const [skipPlanConfirmation, setSkipPlanConfirmation] = useState(false)
 
@@ -368,6 +368,20 @@ export default function StudioPage() {
     if (!urlProjectId) {
       setProjectData(null)
       dispatch({ type: 'RESET_MESSAGES', messages: [welcomeMsg] })
+      sse.reset()
+      projectChat.reset()
+      setSkillId(defaultSkill.id)
+      setSelections(initialSelections(defaultSkill))
+      setAspectRatio(defaultSkill.defaultAspectRatio)
+      setImageCount(defaultImageCount(defaultSkill))
+      setExtraParams({})
+      setLanguage('zh')
+      setSourceMode('text')
+      setSourceRef('')
+      setUploadedSourceName('')
+      setCaption('')
+      setPackageResult(null)
+      setPublishResult(null)
       return
     }
 
@@ -783,6 +797,10 @@ export default function StudioPage() {
       let capturedPath = ''
       sse.start(activeSkillId, generationContent, payload, {
         onText: (text) => dispatch({ type: 'APPEND_TEXT', messageId: streamId, text }),
+        onToolUse: (name, input) => {
+          const toolId = `tool-${name}-${Date.now()}`
+          dispatch({ type: 'UPSERT_TOOL', messageId: toolId, name, status: 'started', input })
+        },
         onError: (errMsg) => {
           dispatch({ type: 'SET_MESSAGE', messageId: streamId, patch: { text: `Generation failed: ${errMsg}`, type: 'error', retryFn: () => sse.retry() } })
           dispatch({ type: 'SET_STREAMING', messageId: null })
@@ -857,6 +875,10 @@ export default function StudioPage() {
     let capturedPath = ''
     sse.start(pendingGenerationSkillId || skill.id, content, payload, {
       onText: (text) => dispatch({ type: 'APPEND_TEXT', messageId: streamId, text }),
+      onToolUse: (name, input) => {
+        const toolId = `tool-${name}-${Date.now()}`
+        dispatch({ type: 'UPSERT_TOOL', messageId: toolId, name, status: 'started', input })
+      },
       onError: (errMsg) => {
         dispatch({ type: 'SET_MESSAGE', messageId: streamId, patch: { text: `Generation failed: ${errMsg}`, type: 'error', retryFn: () => sse.retry() } })
         dispatch({ type: 'SET_STREAMING', messageId: null })
@@ -1069,14 +1091,24 @@ export default function StudioPage() {
   }
 
   const openPublisher = async () => {
-    if (!packageResult) return
+    if (!projectData) return
     setIsPublishing(true)
     setPublishError(null)
     try {
+      // Automatically prepare package first to capture latest caption & images
+      const resPack = await fetch('/api/package', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectPath: projectData.path, platform, caption }),
+      })
+      const dataPack = await resPack.json()
+      if (!resPack.ok) throw new Error(dataPack.error || `HTTP ${resPack.status}`)
+      setPackageResult(dataPack)
+
       const res = await fetch('/api/publish', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ packagePath: packageResult.packagePath, platform, accountAlias: publishingAccount }),
+        body: JSON.stringify({ packagePath: dataPack.packagePath, platform, accountAlias: publishingAccount }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
@@ -1231,30 +1263,46 @@ export default function StudioPage() {
               onChange = (val) => setExtraParams(prev => ({ ...prev, [param.name]: val }))
             }
             
+            const isCountParam = ['imageCount', 'pageCount', 'slides'].includes(param.name)
+
             return (
               <div key={param.name} className="flex flex-col gap-1.5">
                 <span className="text-zinc-400 text-[10px] font-bold uppercase tracking-wider">
                   {param.label}
                 </span>
-                <div className="flex flex-wrap gap-2">
-                  {options.map(opt => {
-                    const active = currentValue === opt.id
-                    return (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        onClick={() => onChange(opt.id)}
-                        className={`flex-grow py-1.5 px-2.5 text-xs font-semibold rounded-xl border text-center transition-all cursor-pointer min-w-[60px] ${
-                          active
-                            ? 'border-indigo-500 bg-indigo-950/20 text-indigo-400 font-bold'
-                            : 'border-zinc-850 bg-zinc-950 text-zinc-405 hover:text-zinc-200 hover:border-zinc-700'
-                        }`}
-                      >
-                        {opt.name}
-                      </button>
-                    )
-                  })}
-                </div>
+                {isCountParam ? (
+                  <input
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={currentValue}
+                    onChange={e => {
+                      const v = Math.max(1, Math.min(20, parseInt(e.target.value, 10) || 1))
+                      onChange(String(v))
+                    }}
+                    className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm font-semibold text-zinc-100 focus:border-indigo-500 focus:outline-none"
+                  />
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {options.map(opt => {
+                      const active = currentValue === opt.id
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => onChange(opt.id)}
+                          className={`flex-grow py-1.5 px-2.5 text-xs font-semibold rounded-xl border text-center transition-all cursor-pointer min-w-[60px] ${
+                            active
+                              ? 'border-indigo-500 bg-indigo-950/20 text-indigo-400 font-bold'
+                              : 'border-zinc-850 bg-zinc-950 text-zinc-405 hover:text-zinc-200 hover:border-zinc-700'
+                          }`}
+                        >
+                          {opt.name}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             )
           })}
@@ -1273,22 +1321,9 @@ export default function StudioPage() {
                 <input type="checkbox" checked={usePreferences} onChange={e => setUsePreferences(e.target.checked)} className="rounded text-indigo-600 focus:ring-0 cursor-pointer" />
                 Apply EXTEND.md preferences
               </label>
-              <code className="text-[10px] text-zinc-400 font-mono truncate bg-zinc-950 p-1.5 rounded border border-zinc-900">{preferenceInfo.path}</code>
             </div>
           ) : preferenceSchema && preferenceSchema.fields.length > 0 ? (
             <div className="flex flex-col gap-2.5">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-[10px] text-zinc-500">Save to:</span>
-                <select
-                  value={prefScope}
-                  onChange={e => setPrefScope(e.target.value)}
-                  className="text-[10px] bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1 text-zinc-300 outline-none focus:border-indigo-500"
-                >
-                  {(preferenceInfo?.targets ?? []).map(t => (
-                    <option key={t.scope} value={t.scope}>{t.label} — {t.path}{t.exists ? ' · 已有' : ''}</option>
-                  ))}
-                </select>
-              </div>
               {preferenceSchema.fields.map(field => {
                 const val = prefFormValues[field.key] ?? field.defaultValue ?? ''
                 return (

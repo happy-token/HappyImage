@@ -36,14 +36,7 @@ export function resolveUserConfigRoot(): string {
 }
 
 function resolveEnvPath(): string {
-  const configRoot = resolveConfigRoot()
-  const primary = join(configRoot, '.env')
-  if (existsSync(primary)) return primary
-  if (IS_DEV) {
-    const webUiEnv = join(PROJECT_ROOT, 'packages', 'web-ui', '.env')
-    if (existsSync(webUiEnv)) return webUiEnv
-  }
-  return primary
+  return join(resolveConfigRoot(), '.env')
 }
 
 const ENV_PATH = resolveEnvPath()
@@ -127,10 +120,18 @@ export function readSettings(): EnvMap {
     THEME_COLOR: 'indigo',
   }
 
-  if (!existsSync(ENV_PATH)) return defaults
+  if (existsSync(ENV_PATH)) {
+    const fileVars = parseEnv(readFileSync(ENV_PATH, 'utf-8'))
+    return { ...defaults, ...fileVars }
+  }
 
-  const fileVars = parseEnv(readFileSync(ENV_PATH, 'utf-8'))
-  return { ...defaults, ...fileVars }
+  const projectEnv = join(PROJECT_ROOT, '.env')
+  if (existsSync(projectEnv)) {
+    const fileVars = parseEnv(readFileSync(projectEnv, 'utf-8'))
+    return { ...defaults, ...fileVars }
+  }
+
+  return defaults
 }
 
 export function readApiKey(): string {
@@ -182,9 +183,6 @@ export function writeSetting(key: string, value: string): void {
   let content = ''
   if (existsSync(envPath)) {
     content = readFileSync(envPath, 'utf-8')
-  } else if (IS_DEV) {
-    const webUiEnv = join(PROJECT_ROOT, 'packages', 'web-ui', '.env')
-    if (existsSync(webUiEnv)) content = readFileSync(webUiEnv, 'utf-8')
   }
 
   const lines = content.split('\n')
@@ -208,16 +206,10 @@ export function writeSetting(key: string, value: string): void {
   }
 
   writeFileSync(envPath, lines.join('\n') + '\n')
+}
 
-  if (IS_DEV) {
-    const gitignore = join(PROJECT_ROOT, '.gitignore')
-    if (!existsSync(gitignore)) {
-      writeFileSync(gitignore, '.env\n')
-    } else {
-      const gi = readFileSync(gitignore, 'utf-8')
-      if (!gi.includes('.env')) writeFileSync(gitignore, gi + (gi.endsWith('\n') ? '' : '\n') + '.env\n')
-    }
-  }
+export function getDataDir(): string {
+  return resolveConfigRoot()
 }
 
 export { PROJECT_ROOT }

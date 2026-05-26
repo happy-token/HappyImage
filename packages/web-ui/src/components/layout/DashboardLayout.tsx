@@ -1,6 +1,6 @@
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
-import { MessageSquare, Compass, History, Settings, PanelLeftClose, PanelLeftOpen, Plus, Trash2, PenLine } from 'lucide-react'
+import { MessageSquare, Compass, History, Settings, PanelLeftClose, PanelLeftOpen, Plus, Trash2, PenLine, HelpCircle } from 'lucide-react'
 
 interface SessionPreview {
   id: string
@@ -197,6 +197,7 @@ export default function DashboardLayout() {
             { to: '/gallery', label: 'Styles Gallery', icon: Compass },
             { to: '/history', label: 'Projects History', icon: History },
             { to: '/settings', label: 'Settings', icon: Settings },
+            { to: '/guide', label: 'User Guide', icon: HelpCircle },
           ].map(item => {
             const Icon = item.icon
             return (

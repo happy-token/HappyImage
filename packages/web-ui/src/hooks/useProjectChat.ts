@@ -123,5 +123,15 @@ export function useProjectChat(projectId: string) {
     setError(null)
   }, [])
 
-  return { sendMessage, retrySend, stop, regenerate, clear, isStreaming, plan, logs, newImages, newFiles, error }
+  const reset = useCallback(() => {
+    abortRef.current?.abort()
+    setPlan(null)
+    setLogs([])
+    setNewImages([])
+    setNewFiles([])
+    setError(null)
+    setIsStreaming(false)
+  }, [])
+
+  return { sendMessage, retrySend, stop, regenerate, clear, reset, isStreaming, plan, logs, newImages, newFiles, error }
 }
