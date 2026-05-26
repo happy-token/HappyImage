@@ -62,6 +62,7 @@ mac:
   notarize: false
   icon: build/icon.icns
   category: public.app-category.graphics-design
+  timestamp: false
 
 dmg:
   window:
