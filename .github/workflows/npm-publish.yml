@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   publish:
-    name: Publish @happyimage packages
+    name: Publish packages to npm
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -40,21 +40,31 @@ jobs:
       - name: Bump versions
         run: bash scripts/version-bump.sh "${{ github.event.inputs.version }}"
 
-      - name: Build core
-        run: bun run build:core
-
-      - name: Publish @happyimage/core
+      - name: Build and publish @happytokenai/happyimage-core
         working-directory: packages/core
-        run: npm publish --access public --tag ${{ github.event.inputs.npm-tag }}
+        run: |
+          bun run build
+          npm publish --access public --tag ${{ github.event.inputs.npm-tag }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Build CLI
-        run: bun run build:cli
+      - name: Build and publish @happytokenai/happyimage-web
+        working-directory: packages/web-ui
+        run: |
+          bun run build
+          npm publish --access public --tag ${{ github.event.inputs.npm-tag }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Publish @happyimage/cli
+      - name: Build and publish @happyimage/cli
         working-directory: packages/cli
-        run: npm publish --access public --tag ${{ github.event.inputs.npm-tag }}
+        run: |
+          # Replace workspace protocol with semver for npm publish
+          sed -i 's/"workspace:\^[0-9.]*"/"^${{ github.event.inputs.version }}"/g' package.json
+          bun run build
+          npm publish --access public --tag ${{ github.event.inputs.npm-tag }}
+          # Restore workspace protocol for repo
+          sed -i 's/"^${{ github.event.inputs.version }}"/"workspace:^${{ github.event.inputs.version }}"/g' package.json
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -62,8 +72,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          VERSION="${{ github.event.inputs.version }}"
           git add packages/*/package.json
-          git commit -m "chore: bump @happyimage packages to v${VERSION}" || echo "No changes to commit"
-          git tag "npm-v${VERSION}"
-          git push origin main --tags
+          git commit -m "chore: bump packages to v${{ github.event.inputs.version }}" || echo "No changes to commit"
+          git tag -f "npm-v${{ github.event.inputs.version }}"
+          git push origin main --tags || echo "Push skipped"
