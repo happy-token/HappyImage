@@ -39,6 +39,9 @@ extraResources:
     to: cli/dist
   - from: ../cli/package.json
     to: cli/package.json
+  # Skills (required by the runtime)
+  - from: ../../skills
+    to: skills
   # Docs
   - from: ../../docs
     to: docs

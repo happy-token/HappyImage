@@ -1,8 +1,17 @@
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'fs'
 import { dirname, join, resolve } from 'path'
 
-const PROJECT_ROOT = resolve(import.meta.dirname, '..', '..', '..')
+// In dev:  packages/core/dist → 3 levels up = project root
+// In app:  Resources/node_modules/@happytokenai/happyimage-core/dist → 4 levels up = Resources
+let PROJECT_ROOT = resolve(import.meta.dirname, '..', '..', '..')
 const IS_DEV = existsSync(join(PROJECT_ROOT, '.git'))
+if (!IS_DEV) {
+  // Try 4 levels up for the packaged app layout
+  const alt = resolve(import.meta.dirname, '..', '..', '..', '..')
+  if (existsSync(join(alt, 'skills')) || existsSync(join(alt, 'cli'))) {
+    PROJECT_ROOT = alt
+  }
+}
 
 export function resolveConfigRoot(): string {
   if (IS_DEV) return PROJECT_ROOT
