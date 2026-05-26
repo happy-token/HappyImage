@@ -2,9 +2,17 @@
 
 English | [中文](./README.zh.md)
 
-AI-powered visual content creation and multi-platform publishing toolkit. Generate stunning image cards, infographics, comics, and slide decks — then publish to Xiaohongshu, WeChat, Weibo, and X with one click.
+HappyImage is a local AI visual content studio for creators and teams. Turn an idea, article, URL, or draft into image cards, infographics, comics, cover images, slide decks, and platform-ready publishing copy.
 
-**Three interfaces, zero friction:** CLI for automation · Web UI for visual workflow · Desktop app for double-click simplicity.
+It brings the full `baoyu-skills` content workflow into three interfaces:
+
+| Interface | Best for | Start with |
+|-----------|----------|------------|
+| Desktop App | A focused local workspace with native app behavior | `bun run dev:desktop` |
+| Web UI | Visual generation, previews, settings, and project history | `bun run dev:web` |
+| CLI | Automation, scripting, diagnostics, and repeatable jobs | `bun packages/cli/src/bin.ts doctor` |
+
+![HappyImage gallery preview](./screenshots/gallery-types/image-cards.png)
 
 ---
 
@@ -12,258 +20,234 @@ AI-powered visual content creation and multi-platform publishing toolkit. Genera
 
 <table>
 <tr>
-<td width="50%">
+<td width="50%" valign="top">
 
-<h3>Visual Preview — WYSIWYG</h3>
+<h3>Visual workflow, not guesswork</h3>
 
-Every post gets a **live platform mockup** before you publish. See exactly how your images, title, body, and hashtags will look on Xiaohongshu, WeChat, Weibo, or X — with real-time character counts, image grid layouts, and platform rule validation.
+<p>Create from a topic, article, URL, or local file. HappyImage plans the content, proposes a visual direction, generates prompts, renders images, and keeps the full project history together.</p>
+
+<p><strong>Outputs:</strong> <code>analysis.md</code>, <code>outline.md</code>, <code>prompts/*.md</code>, <code>copy.md</code>, and final images.</p>
 
 </td>
-<td width="50%">
+<td width="50%" valign="top">
 
-<h3>Style Controls — Your Look, Your Rules</h3>
+<h3>Style controls that are easy to scan</h3>
 
-**12 visual styles** × **8 layout densities** × **3 color palettes** — mix and match to match your brand. Every style is previewed visually so you pick what you see, not guess from a name.
+<p>Pick styles visually instead of memorizing option names. The gallery covers card, infographic, diagram, cover, comic, slide, and article illustration workflows.</p>
 
-<table>
-<tr><th>Style</th><th>Palette</th><th>Layout</th></tr>
-<tr><td>cute · fresh · warm</td><td>macaron · warm · neon</td><td>sparse → flow</td></tr>
-<tr><td>bold · minimal · retro</td><td></td><td></td></tr>
-<tr><td>pop · notion · chalkboard</td><td></td><td></td></tr>
-<tr><td>study-notes · screen-print · sketch-notes</td><td></td><td></td></tr>
-</table>
+<p><strong>Examples:</strong> fresh, warm, bold, minimal, retro, notion, chalkboard, screen-print, sketch-notes.</p>
 
 </td>
 </tr>
 <tr>
-<td width="50%">
+<td width="50%" valign="top">
 
-<h3>AI Caption + One-Click Publish</h3>
+<h3>Platform-aware publishing</h3>
 
-Generate platform-optimized copy with one click. Each platform gets its own format template — Xiaohongshu hashtags at the bottom, Weibo <code>#双#号#</code> inline, WeChat no hashtags, X inline <code>#tags</code> under 280 chars. Chrome automation fills in the draft while you review and click publish.
+<p>Generate copy and drafts for Xiaohongshu, WeChat, Weibo, and X. Each platform uses its own limits, hashtag rules, title format, and image constraints.</p>
+
+<p><strong>Safety:</strong> HappyImage fills forms for review, but it never clicks "Publish" for you.</p>
 
 </td>
-<td width="50%">
+<td width="50%" valign="top">
 
-<h3>CLI · Web UI · GUI</h3>
+<h3>One engine, three ways to work</h3>
 
-<pre><code># CLI — script it
-bun packages/cli/src/bin.ts web --port 3200
+<p>Use the desktop app for daily creation, the Web UI for visual workflows, or the CLI for automation. They share the same local runtime, settings, skills, and output folders.</p>
 
-# Web UI — visual workspace
-bun run dev:web
-# → http://localhost:3200
-
-# GUI — double-click app
-bun run dev:desktop
-</code></pre>
-
-Same skills, same output — pick the interface that fits your workflow.
+<p><strong>Local-first:</strong> API keys, Chrome profile, generated projects, and settings stay on your machine.</p>
 
 </td>
 </tr>
 </table>
+
+---
+
+## What You Can Create
+
+| Skill | Use it for | Example |
+|-------|------------|---------|
+| `baoyu-image-cards` | Xiaohongshu-style image cards and carousels | `/baoyu-image-cards article.md --style fresh --layout balanced` |
+| `baoyu-infographic` | Structured visual explainers and data/story infographics | `/baoyu-infographic content.md --layout pyramid --style technical-schematic` |
+| `baoyu-diagram` | Flowcharts, sequence diagrams, ER diagrams, architecture diagrams, timelines | `/baoyu-diagram architecture.md --type flowchart` |
+| `baoyu-cover-image` | Article, blog, podcast, and newsletter covers | `/baoyu-cover-image article.md --palette corporate-tech` |
+| `baoyu-slide-deck` | Presentation decks with consistent visual direction | `/baoyu-slide-deck talk.md --aspect 16:9` |
+| `baoyu-comic` | Multi-panel comics with character sheets and dialogue | `/baoyu-comic story.md` |
+| `baoyu-article-illustrator` | Header images, section visuals, diagrams, and editorial illustrations | `/baoyu-article-illustrator article.md` |
 
 ---
 
 ## Core Features
 
-### AI Generation Engine
+### AI generation pipeline
 
-Input a topic or article, select visual parameters, and let the AI plan, outline, and generate every image. The pipeline produces:
+HappyImage turns source material into a reproducible project folder:
 
-- **analysis.md** — content analysis and style recommendations
-- **outline.md** — page-by-page storyboard plan
-- **prompts/*.md** — detailed image generation prompts with frontmatter
-- **copy.md** — ready-to-edit publishing copy
-- **NN-image.png** — final rendered images
+- `analysis.md` - content analysis and style recommendations
+- `outline.md` - page-by-page storyboard or structure
+- `prompts/*.md` - complete image prompts with frontmatter
+- `copy.md` - editable publishing copy
+- `NN-image.png` - rendered image outputs
 
-Supports **batch generation** with dependency-aware ordering, parallel backend calls, and retry logic.
+The pipeline supports batch generation, dependency-aware ordering, parallel backend calls, retries, and persistent project state.
 
-### Multi-Platform Publishing
+### Multi-platform publishing
 
 | Platform | Images | Title | Body | Hashtags | Method |
 |----------|--------|-------|------|----------|--------|
-| Xiaohongshu | Up to 18 | 20 chars | 1000 chars | Max 10, separate | Chrome CDP |
+| Xiaohongshu | Up to 18 | 20 chars | 1000 chars | Up to 10, separate lines | Chrome CDP |
 | WeChat | Unlimited | 64 chars | 20000 chars | None | API or Chrome |
-| Weibo | Up to 18 | Inline 【】 | 2000 chars | Inline `#双#号#` | Chrome CDP |
-| X (Twitter) | Up to 4 | Inline | 280 chars | Inline `#tag` | Chrome CDP |
+| Weibo | Up to 18 | Inline `【】` | 2000 chars | Inline `#topic#` | Chrome CDP |
+| X | Up to 4 | Inline | 280 chars | Inline `#tag` | Chrome CDP |
 
-**Safety-first publishing:** the browser fills in everything but never clicks "Publish." You review and confirm manually — no bot-like behavior to trigger platform anti-spam.
+Publishing skills automate draft creation and form filling only. You always review and confirm manually.
 
-### Session Chat
+### Session chat
 
-Persistent chat sessions with SSE streaming. Every generation creates a session that tracks artifacts (images, files, projects), supports plan confirmation, and allows iterative refinement. Close the browser mid-generation and pick up where you left off.
+Generations are tied to persistent chat sessions with SSE streaming. A session tracks messages, plans, artifacts, images, output files, and project history so you can close the browser and continue later.
 
-### Watermark & Brand Protection
+### Watermark and brand protection
 
-Configure per-skill watermarks via EXTEND.md preferences. Customize text, position, and opacity to protect your original content across all generated images.
+Configure per-skill watermarks through `EXTEND.md`. You can customize text, position, and opacity for generated images.
 
 ---
 
-## Available Skills (21)
-
-### Content Generation
-
-| Skill | Description | Quick Start |
-|-------|-------------|-------------|
-| **baoyu-image-cards** | Xiaohongshu infographic cards. 12 styles × 8 layouts × 3 palettes. | `/baoyu-image-cards article.md --style fresh --layout balanced` |
-| **baoyu-infographic** | Professional infographics with 18 layouts and 17 visual styles. | `/baoyu-infographic content.md --layout pyramid --style technical-schematic` |
-| **baoyu-diagram** | Technical diagrams — flowcharts, sequence, ER, architecture, Gantt. | `/baoyu-diagram architecture.md --type flowchart` |
-| **baoyu-cover-image** | Article/blog cover images with customizable palettes. | `/baoyu-cover-image article.md --palette corporate-tech` |
-| **baoyu-slide-deck** | Presentation slide decks with consistent theming. | `/baoyu-slide-deck talk.md --aspect 16:9` |
-| **baoyu-comic** | Multi-panel comics with character sheet support and dialog. | `/baoyu-comic story.md` |
-| **baoyu-article-illustrator** | Article illustrations — header, diagrams, section visuals. | `/baoyu-article-illustrator article.md` |
-
-### AI Backends
+## AI Backends
 
 | Skill | Description |
 |-------|-------------|
-| **baoyu-imagine** | Primary image generation backend. Supports OpenAI (DALL-E / GPT Image), Azure OpenAI, Google Gemini, OpenRouter, DashScope, Replicate, Z.AI, MiniMax, Jimeng, Seedream. Auto-detects available providers. |
-| **baoyu-danger-gemini-web** | Gemini Web API via browser cookies. Free-tier image generation through Google's web interface. Use at your own risk. |
+| `baoyu-imagine` | Primary image generation backend. Supports OpenAI, Azure OpenAI, Google Gemini, OpenRouter, DashScope, Replicate, Z.AI, MiniMax, Jimeng, and Seedream. |
+| `baoyu-danger-gemini-web` | Gemini Web image generation through browser cookies. Useful for experimentation, but web-interface behavior can change. |
 
-### Publishing
+At least one image backend API key is required for normal image generation.
 
-| Skill | Description | Quick Start |
-|-------|-------------|-------------|
-| **baoyu-post-to-xiaohongshu** | Post to Xiaohongshu Creator Platform via Chrome CDP. | `/baoyu-post-to-xiaohongshu` |
-| **baoyu-post-to-wechat** | Post to WeChat Official Account (图文 + 文章). API or browser. Multi-account. | `/baoyu-post-to-wechat article.md --theme default` |
-| **baoyu-post-to-weibo** | Post to Weibo (regular posts + 头条文章). | `/baoyu-post-to-weibo article.md` |
-| **baoyu-post-to-x** | Post to X/Twitter (tweets, quote tweets, X Articles). | `/baoyu-post-to-x article.md` |
+---
 
-### Utilities
+## Utility Skills
 
 | Skill | Description |
 |-------|-------------|
-| **baoyu-youtube-transcript** | Download YouTube transcripts/subtitles and cover images. |
-| **baoyu-url-to-markdown** | Convert any URL to clean Markdown via Chrome CDP. |
-| **baoyu-danger-x-to-markdown** | Convert X/Twitter threads to Markdown. Reverse-engineered API. |
-| **baoyu-compress-image** | Compress and optimize images for web publishing. |
-| **baoyu-format-markdown** | Format and beautify Markdown with CJK typography. |
-| **baoyu-markdown-to-html** | Convert Markdown to WeChat-compatible HTML. |
-| **baoyu-translate** | Translate articles with three modes: quick, normal, refined. |
-| **baoyu-wechat-summary** | Summarize WeChat group chats into structured digests. |
+| `baoyu-youtube-transcript` | Download YouTube transcripts/subtitles and cover images. |
+| `baoyu-url-to-markdown` | Convert URLs to clean Markdown via Chrome CDP. |
+| `baoyu-danger-x-to-markdown` | Convert X/Twitter threads to Markdown through a reverse-engineered API. |
+| `baoyu-compress-image` | Compress and optimize images for publishing. |
+| `baoyu-format-markdown` | Format Markdown with CJK typography support. |
+| `baoyu-markdown-to-html` | Convert Markdown to WeChat-compatible HTML. |
+| `baoyu-translate` | Translate articles in quick, normal, or refined modes. |
+| `baoyu-wechat-summary` | Summarize WeChat group chats into structured digests. |
 
-> **Deprecated:** `baoyu-image-gen` (use baoyu-imagine) and `baoyu-xhs-images` (use baoyu-image-cards) are kept functional but not in marketplace registration.
+Deprecated but still functional: `baoyu-image-gen` (use `baoyu-imagine`) and `baoyu-xhs-images` (use `baoyu-image-cards`).
 
 ---
 
 ## Getting Started
 
-### Prerequisites
+### 1. Install requirements
 
-- [Bun](https://bun.sh) runtime (`brew install oven-sh/bun/bun` or `npm install -g bun`)
+- [Bun](https://bun.sh) runtime: `brew install oven-sh/bun/bun` or `npm install -g bun`
 - Node.js 18+
-- Google Chrome (for CDP-based publishing skills)
-- An Anthropic API key (for AI caption generation)
+- Google Chrome for CDP-based publishing and browser automation
+- An Anthropic-compatible key for planning, captions, and iterative chat
+- At least one image generation backend key
 
-### Install Skills in Your Agent
-
-```bash
-# Register the marketplace
-/plugin marketplace add happy-token/HappyImage
-
-# Install the plugin
-/plugin install baoyu-skills@happyimage-skills
-```
-
-Or tell your agent: *"Please install Skills from github.com/happy-token/HappyImage"*
-
-### Run the Web UI
+### 2. Clone and build
 
 ```bash
 git clone https://github.com/happy-token/HappyImage.git
 cd HappyImage
 bun install
 bun run build
-bun run dev:web
-# → Open http://localhost:3200
 ```
 
-### Run the CLI
+### 3. Start an interface
 
 ```bash
-# Start Web UI from CLI
-bun packages/cli/src/bin.ts web --port 3200
-
-# Diagnostics
-bun packages/cli/src/bin.ts doctor
-
-# List projects
-bun packages/cli/src/bin.ts projects
-```
-
-### Run the Desktop App
-
-```bash
+# Desktop app
 bun run dev:desktop
+
+# Web UI
+bun run dev:web
+# open http://localhost:3200
+
+# CLI diagnostics
+bun packages/cli/src/bin.ts doctor
 ```
+
+### 4. Install as an agent plugin
+
+```bash
+/plugin marketplace add happy-token/HappyImage
+/plugin install baoyu-skills@happyimage-skills
+```
+
+You can also tell your agent: "Please install Skills from github.com/happy-token/HappyImage".
 
 ---
 
 ## Environment Configuration
 
-At least one image generation API key is required. Add to `.env` (project) or `~/.baoyu-skills/.env` (global):
+Add keys to `.env` in the project or to `~/.baoyu-skills/.env` globally:
 
 ```bash
-# Anthropic (required for AI captions and planning)
+# Planning, captions, and chat
 ANTHROPIC_API_KEY=sk-ant-...
 
-# Image generation — pick at least one:
-OPENAI_API_KEY=sk-...                    # OpenAI DALL-E / GPT Image
-GOOGLE_API_KEY=...                       # Google Gemini
-DASHSCOPE_API_KEY=sk-...                 # Aliyun Tongyi Wanxiang
-ARK_API_KEY=...                          # ByteDance Seedream (豆包)
+# Image generation - choose at least one
+OPENAI_API_KEY=sk-...
+GOOGLE_API_KEY=...
+DASHSCOPE_API_KEY=sk-...
+ARK_API_KEY=...
 
-# Publishing (WeChat API only — others use Chrome login)
+# WeChat API publishing only. Other platforms use Chrome login.
 WECHAT_APP_ID=wx...
 WECHAT_APP_SECRET=...
 ```
 
-Supported image backends: OpenAI, Azure OpenAI, Google Gemini, OpenRouter, DashScope, Replicate, Z.AI, MiniMax, Jimeng, Seedream.
+Supported image backends include OpenAI, Azure OpenAI, Google Gemini, OpenRouter, DashScope, Replicate, Z.AI, MiniMax, Jimeng, and Seedream.
 
 ---
 
-## Customization (EXTEND.md)
+## Customization
 
-All skills support per-project and per-user customization via `EXTEND.md`:
+All skills support project-level and user-level customization through `EXTEND.md`:
 
+```text
+.baoyu-skills/<skill-name>/EXTEND.md
+~/.baoyu-skills/<skill-name>/EXTEND.md
 ```
-.baoyu-skills/<skill-name>/EXTEND.md     # Project-level
-~/.baoyu-skills/<skill-name>/EXTEND.md   # User-level
-```
 
-Configure default styles, custom palettes, watermark settings, Chrome profiles, and publishing preferences. Each skill's SKILL.md documents its supported EXTEND.md keys.
+Use it for default styles, palettes, watermarks, Chrome profiles, publishing preferences, and other skill-specific settings. Each skill documents its supported options in its own `SKILL.md`.
 
 ---
 
 ## Repository Structure
 
-```
+```text
 HappyImage/
-├── skills/          # 21 baoyu-* skill directories (self-contained)
+├── skills/          # Self-contained baoyu-* skills
 ├── packages/
-│   ├── core/        # @happytokenai/happyimage-core — shared runtime & AI pipeline
-│   ├── web-ui/      # React + Vite + Hono — Web workspace
+│   ├── core/        # Shared runtime, settings, orchestration, AI pipeline
+│   ├── web-ui/      # React + Vite frontend and Hono API server
 │   ├── cli/         # happyimage CLI
 │   └── desktop/     # Electron desktop wrapper
 ├── docs/            # Author-facing reference documentation
-├── scripts/         # Repo maintenance (sync, hooks, publish)
-└── screenshots/     # Style/layout preview assets
+├── scripts/         # Repo maintenance, packaging, publishing
+└── screenshots/     # Preview assets used by the gallery and docs
 ```
 
 ---
 
-## Disclaimer
+## Notes
 
-- **baoyu-danger-gemini-web** and **baoyu-danger-x-to-markdown** use reverse-engineered APIs. Use at your own risk — no guarantees on stability or availability.
-- Publishing skills automate form-filling only. They do not click "Publish" — you always retain final control.
+- `baoyu-danger-gemini-web` and `baoyu-danger-x-to-markdown` depend on unofficial web/API behavior and may break when upstream platforms change.
+- Publishing skills automate form filling only. They do not click "Publish"; you retain final control.
+- Chrome-based skills share a local browser profile. See [docs/chrome-profile.md](./docs/chrome-profile.md) for platform paths and overrides.
 
 ---
 
 ## Credits
 
-HappyImage is built on top of [baoyu-skills](https://github.com/JimLiu/baoyu-skills) by [JimLiu](https://github.com/JimLiu). The core AI pipeline, skill definitions, and multi-platform publishing engine are adapted from the baoyu-skills ecosystem. We are grateful for the foundation and community that made this project possible.
+HappyImage is built on top of [baoyu-skills](https://github.com/JimLiu/baoyu-skills) by [JimLiu](https://github.com/JimLiu). The core AI pipeline, skill definitions, and multi-platform publishing engine are adapted from the baoyu-skills ecosystem.
 
 Maintained by [happy-token](https://github.com/happy-token) and contributors.
 

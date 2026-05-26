@@ -1,7 +1,7 @@
 import { spawn } from 'child_process'
-import { resolve } from 'path'
+import { delimiter, join, resolve } from 'path'
 import { existsSync } from 'fs'
-import { PROJECT_ROOT } from './settings.js'
+import { PROJECT_ROOT, readSettings } from './settings.js'
 
 export interface ClaudeSession {
   id: string
@@ -40,6 +40,30 @@ function findImagesInOutput(output: string): string[] {
   return [...found]
 }
 
+function augmentedPath(): string {
+  const home = process.env.HOME || ''
+  return [
+    process.env.PATH || '',
+    home ? join(home, '.local', 'bin') : '',
+    home ? join(home, '.bun', 'bin') : '',
+    '/opt/homebrew/bin',
+    '/usr/local/bin',
+  ].filter(Boolean).join(delimiter)
+}
+
+function resolveClaudeCommand(): string {
+  const configured = readSettings().CLAUDE_CODE_COMMAND || process.env.CLAUDE_CODE_COMMAND || ''
+  if (configured) return configured
+  const home = process.env.HOME || ''
+  const candidates = [
+    home ? join(home, '.local', 'bin', 'claude') : '',
+    home ? join(home, '.bun', 'bin', 'claude') : '',
+    '/opt/homebrew/bin/claude',
+    '/usr/local/bin/claude',
+  ].filter(Boolean)
+  return candidates.find(candidate => existsSync(candidate)) || 'claude'
+}
+
 export function runSkill(
   session: ClaudeSession,
   skillId: string,
@@ -55,10 +79,10 @@ export function runSkill(
     '不要交互确认，直接分析内容、写prompt、生成图片。',
   ].filter(Boolean).join('\n')
 
-  const proc = spawn('claude', ['-p', prompt], {
+  const proc = spawn(resolveClaudeCommand(), ['-p', prompt], {
     cwd: PROJECT_ROOT,
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, NO_COLOR: '1' },
+    env: { ...process.env, PATH: augmentedPath(), NO_COLOR: '1' },
   })
 
   proc.stdout?.on('data', (d: Buffer) => { session.output += d.toString() })

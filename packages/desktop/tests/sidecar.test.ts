@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test'
-import { calculateBackoff, findAvailablePort } from '../src/sidecar.js'
+import { calculateBackoff, findAvailablePort, getPackagedResourcesPath } from '../src/sidecar.js'
 
 describe('calculateBackoff', () => {
   test('returns 1000ms for attempt 0', () => {
@@ -22,5 +22,21 @@ describe('calculateBackoff', () => {
 describe('findAvailablePort', () => {
   test('returns first port in array', () => {
     expect(findAvailablePort([3100])).toBe(3100)
+  })
+})
+
+describe('getPackagedResourcesPath', () => {
+  test('ignores Electron resources path when running through default app', () => {
+    expect(getPackagedResourcesPath({
+      defaultApp: true,
+      resourcesPath: '/Electron.app/Contents/Resources',
+    } as NodeJS.Process & { defaultApp?: boolean; resourcesPath?: string })).toBe('')
+  })
+
+  test('uses resources path in packaged app runtime', () => {
+    expect(getPackagedResourcesPath({
+      defaultApp: false,
+      resourcesPath: '/Applications/HappyImage.app/Contents/Resources',
+    } as NodeJS.Process & { defaultApp?: boolean; resourcesPath?: string })).toBe('/Applications/HappyImage.app/Contents/Resources')
   })
 })

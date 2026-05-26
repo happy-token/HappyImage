@@ -10,13 +10,30 @@ DEST="$SCRIPT_DIR/../deps/node_modules"
 rm -rf "$DEST"
 mkdir -p "$DEST"
 
-# Core runtime deps (used by @happytokenai/happyimage-core)
-cp -a "$ROOT/node_modules/@anthropic-ai" "$DEST/"
+copy_pkg() {
+  local pkg="$1"
+  local src="$ROOT/node_modules/$pkg"
+  local dst="$DEST/$pkg"
+  if [[ ! -e "$src" ]]; then
+    echo "Missing runtime dependency: $pkg" >&2
+    exit 1
+  fi
+  mkdir -p "$(dirname "$dst")"
+  cp -a "$src" "$dst"
+}
+
+# Core runtime deps and their transitive packages.
+copy_pkg "@anthropic-ai/sdk"
+copy_pkg "standardwebhooks"
+copy_pkg "json-schema-to-ts"
+copy_pkg "@babel/runtime"
+copy_pkg "ts-algebra"
+copy_pkg "@stablelib/base64"
+copy_pkg "fast-sha256"
 
 # Web server deps (used by @happytokenai/happyimage-web/server)
-# hono, marked, dompurify are small standalone packages
-cp -a "$ROOT/node_modules/hono" "$DEST/"
-cp -a "$ROOT/node_modules/marked" "$DEST/"
-cp -a "$ROOT/node_modules/dompurify" "$DEST/"
+copy_pkg "hono"
+copy_pkg "marked"
+copy_pkg "dompurify"
 
 echo "Bundled deps: $(du -sh "$DEST" | cut -f1)"

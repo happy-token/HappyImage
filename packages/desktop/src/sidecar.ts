@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url'
 
 const MAX_RETRIES = 5
 const HEALTH_TIMEOUT_MS = 30_000
+type ElectronProcess = NodeJS.Process & { defaultApp?: boolean; resourcesPath?: string }
 
 export function calculateBackoff(attempt: number): number {
   return Math.min(1000 * Math.pow(2, attempt), 32000)
@@ -56,8 +57,12 @@ export function resolveBunCommand(): string | null {
   return null
 }
 
+export function getPackagedResourcesPath(proc: ElectronProcess = process as ElectronProcess): string {
+  return proc.defaultApp ? '' : proc.resourcesPath || ''
+}
+
 export function resolveCliEntry(): string {
-  const resourcesPath = process.resourcesPath || ''
+  const resourcesPath = getPackagedResourcesPath()
   if (resourcesPath) {
     return join(resourcesPath, 'cli', 'dist', 'bin.js')
   }
@@ -97,7 +102,7 @@ export function createSidecar(config: SidecarConfig): SidecarInstance {
     if (!bun) {
       throw new Error('Bun runtime not found. Install Bun or set BUN_PATH.')
     }
-    const resourcesPath = process.resourcesPath || ''
+    const resourcesPath = getPackagedResourcesPath()
     return spawn(bun, [cliEntry, 'web', '--port', String(activePort)], {
       stdio: 'inherit',
       cwd: resourcesPath || dirname(cliEntry),

@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { existsSync, readdirSync, statSync, readFileSync } from 'fs'
-import { dirname, join, resolve } from 'path'
+import { dirname, join, delimiter, resolve } from 'path'
 import { spawnSync } from 'child_process'
 import { fileURLToPath } from 'url'
 import { skills, getSkill, readSettings, resolveSkillsRoot, discoverSkillsRoots, CORE_COMMANDS, parseSlashCommand, PROJECT_ROOT } from '@happytokenai/happyimage-core'
@@ -12,9 +12,24 @@ function encodeProjectId(id: string) {
   return Buffer.from(id, 'utf-8').toString('base64url')
 }
 
+function augmentedPath() {
+  const home = process.env.HOME || ''
+  return [
+    process.env.PATH || '',
+    home ? join(home, '.local', 'bin') : '',
+    home ? join(home, '.bun', 'bin') : '',
+    '/opt/homebrew/bin',
+    '/usr/local/bin',
+  ].filter(Boolean).join(delimiter)
+}
+
 function commandExists(command: string) {
+  if (command.includes('/') && existsSync(command)) return true
   const lookup = process.platform === 'win32' ? 'where' : 'which'
-  return spawnSync(lookup, [command], { stdio: 'ignore' }).status === 0
+  return spawnSync(lookup, [command], {
+    stdio: 'ignore',
+    env: { ...process.env, PATH: augmentedPath() },
+  }).status === 0
 }
 
 function canRunBunScripts() {

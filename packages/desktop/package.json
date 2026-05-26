@@ -20,7 +20,11 @@
   "scripts": {
     "dev": "sh -c 'tsc && (tsc -w --preserveWatchOutput & TSC_PID=$!; electron .; STATUS=$?; kill $TSC_PID 2>/dev/null || true; exit $STATUS)'",
     "build": "tsc && bash scripts/bundle-deps.sh && electron-builder build --mac",
+    "build:signed:local": "tsc && bash scripts/bundle-deps.sh && electron-builder build --mac --config.mac.timestamp=none",
+    "build:unsigned": "sh -c 'export CSC_IDENTITY_AUTO_DISCOVERY=false; tsc && bash scripts/bundle-deps.sh && electron-builder build --mac'",
     "build:dir": "tsc && bash scripts/bundle-deps.sh && electron-builder build --mac --dir",
+    "build:dir:signed:local": "tsc && bash scripts/bundle-deps.sh && electron-builder build --mac --dir --config.mac.timestamp=none",
+    "build:dir:unsigned": "sh -c 'export CSC_IDENTITY_AUTO_DISCOVERY=false; tsc && bash scripts/bundle-deps.sh && electron-builder build --mac --dir'",
     "release": "tsc && bash scripts/bundle-deps.sh && electron-builder build --mac --publish always",
     "sign:check": "sh scripts/sign-check.sh",
     "start": "tsc && electron .",
