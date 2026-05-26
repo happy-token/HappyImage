@@ -80,34 +80,23 @@ jobs:
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           CSC_NAME: ${{ secrets.CSC_NAME }}
 
-      - name: Notarize app
+      - name: Notarize
         run: |
-          APP_PATH=$(find packages/desktop/release -name "HappyImage.app" -type d | head -1)
-          if [ -z "$APP_PATH" ]; then
-            echo "ERROR: HappyImage.app not found"
+          DMG=$(find packages/desktop/release -name "*.dmg" | head -1)
+          if [ -z "$DMG" ]; then
+            echo "ERROR: DMG not found"
             exit 1
           fi
-          echo "Notarizing: $APP_PATH"
+          echo "Notarizing: $DMG"
 
-          xcrun notarytool submit "$APP_PATH" \
+          xcrun notarytool submit "$DMG" \
             --apple-id "${{ secrets.APPLE_ID }}" \
             --password "${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}" \
             --team-id "${{ secrets.APPLE_TEAM_ID }}" \
             --wait --timeout 600
 
-          xcrun stapler staple "$APP_PATH" || echo "Stapling warning (non-critical)"
-
-          # Also notarize DMG if built
-          DMG=$(find packages/desktop/release -name "*.dmg" | head -1)
-          if [ -n "$DMG" ]; then
-            echo "Notarizing DMG: $DMG"
-            xcrun notarytool submit "$DMG" \
-              --apple-id "${{ secrets.APPLE_ID }}" \
-              --password "${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}" \
-              --team-id "${{ secrets.APPLE_TEAM_ID }}" \
-              --wait --timeout 600
-            xcrun stapler staple "$DMG" || echo "Stapling DMG warning (non-critical)"
-          fi
+          echo "Stapling DMG..."
+          xcrun stapler staple "$DMG" || echo "Stapling warning (non-critical)"
 
       - name: Create GitHub Release
         env:
