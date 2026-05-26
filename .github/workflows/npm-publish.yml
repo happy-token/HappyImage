@@ -60,11 +60,11 @@ jobs:
         working-directory: packages/cli
         run: |
           # Replace workspace protocol with semver for npm publish
-          sed -i 's/"workspace:\^[0-9.]*"/"^${{ github.event.inputs.version }}"/g' package.json
+          sed -i "s/\"workspace:\\^[0-9.]*\"/\"^${{ github.event.inputs.version }}\"/g" package.json
           bun run build
           npm publish --access public --tag ${{ github.event.inputs.npm-tag }}
           # Restore workspace protocol for repo
-          sed -i 's/"^${{ github.event.inputs.version }}"/"workspace:^${{ github.event.inputs.version }}"/g' package.json
+          sed -i "s/\"^${{ github.event.inputs.version }}\"/\"workspace:^${{ github.event.inputs.version }}\"/g" package.json
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

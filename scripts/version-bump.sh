@@ -11,6 +11,13 @@ VERSION="${1:?用法: $0 <version>}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
+# 跨平台 sed -i 兼容（macOS 需要 '' 备份后缀，Linux 不需要）
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  SED_I=("sed" "-i" "")
+else
+  SED_I=("sed" "-i")
+fi
+
 PACKAGES=("packages/core" "packages/cli" "packages/web-ui" "packages/desktop")
 
 echo -e "${BOLD}Bumping @happyimage packages to ${CYAN}v${VERSION}${RESET}"
@@ -23,8 +30,8 @@ for pkg in "${PACKAGES[@]}"; do
   name=$(node -e "console.log(require('${pjson}').name)")
   old=$(node -e "console.log(require('${pjson}').version)")
 
-  # 更新版本号（macOS sed 兼容）
-  sed -i '' "s/\"version\": \"${old}\"/\"version\": \"${VERSION}\"/" "$pjson"
+  # 更新版本号
+  "${SED_I[@]}" "s/\"version\": \"${old}\"/\"version\": \"${VERSION}\"/" "$pjson"
   echo -e "  ${CYAN}${name}${RESET}: ${old} → ${GREEN}${VERSION}${RESET}"
 done
 
@@ -33,7 +40,7 @@ echo ""
 echo "Updating workspace:^ references..."
 for pkg in "${PACKAGES[@]}"; do
   pjson="${PROJECT_DIR}/${pkg}/package.json"
-  sed -i '' "s/\"workspace:\^[0-9.]*\"/\"workspace:^${VERSION}\"/g" "$pjson"
+  "${SED_I[@]}" "s/\"workspace:\^[0-9.]*\"/\"workspace:^${VERSION}\"/g" "$pjson"
 done
 echo -e "  ${GREEN}✔${RESET} All workspace:^ updated to workspace:^${VERSION}"
 
