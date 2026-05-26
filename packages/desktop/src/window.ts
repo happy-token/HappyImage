@@ -1,5 +1,5 @@
 import { BrowserWindow } from 'electron'
-import { getPreloadPath } from './paths.js'
+import { getIconPath, getPreloadPath } from './paths.js'
 
 export function createMainWindow(preloadPath?: string): BrowserWindow {
   const win = new BrowserWindow({
@@ -9,6 +9,7 @@ export function createMainWindow(preloadPath?: string): BrowserWindow {
     minHeight: 600,
     backgroundColor: '#09090b',
     title: 'HappyImage',
+    icon: getIconPath('icon.png'),
     show: false,
     webPreferences: {
       nodeIntegration: false,

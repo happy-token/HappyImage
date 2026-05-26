@@ -21,7 +21,7 @@ function addRecentProject(projectPath: string): void {
   writeFileSync(RECENT_PROJECTS_PATH, JSON.stringify(recent.slice(0, 20)), 'utf-8')
 }
 
-export function registerIpcHandlers(mainWindow: BrowserWindow, port: number): void {
+export function registerIpcHandlers(mainWindow: BrowserWindow, port: number | (() => number)): void {
   ipcMain.handle('dialog:openProject', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
       properties: ['openDirectory'],
@@ -45,7 +45,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow, port: number): vo
   ipcMain.handle('app:getInfo', () => ({
     version: app.getVersion(),
     platform: process.platform,
-    port,
+    port: typeof port === 'function' ? port() : port,
   }))
 
   ipcMain.on('notify:show', (_event, { title, body }: { title: string; body: string }) => {

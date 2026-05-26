@@ -1,5 +1,7 @@
-import { spawn, type ChildProcess } from 'child_process'
-import { resolve } from 'path'
+import { spawn, spawnSync, type ChildProcess } from 'child_process'
+import { existsSync } from 'fs'
+import { createServer } from 'net'
+import { dirname, join, resolve } from 'path'
 import { fileURLToPath } from 'url'
 
 const MAX_RETRIES = 5
@@ -9,8 +11,63 @@ export function calculateBackoff(attempt: number): number {
   return Math.min(1000 * Math.pow(2, attempt), 32000)
 }
 
+export async function isPortAvailable(port: number): Promise<boolean> {
+  return new Promise(resolve => {
+    const server = createServer()
+    server.once('error', () => resolve(false))
+    server.once('listening', () => {
+      server.close(() => resolve(true))
+    })
+    server.listen(port)
+  })
+}
+
 export function findAvailablePort(ports: number[]): number {
-  return ports[0]
+  return ports.find(port => port > 0 && port < 65536) ?? 3100
+}
+
+async function resolveAvailablePort(preferredPort: number): Promise<number> {
+  const candidates = [preferredPort]
+  for (let offset = 1; offset <= 20; offset++) {
+    candidates.push(preferredPort + offset)
+  }
+  for (const candidate of candidates) {
+    if (await isPortAvailable(candidate)) return candidate
+  }
+  return preferredPort
+}
+
+export function resolveBunCommand(): string | null {
+  const candidates = [
+    process.env.BUN_PATH,
+    'bun',
+    '/opt/homebrew/bin/bun',
+    '/usr/local/bin/bun',
+    join(process.env.HOME || '', '.bun', 'bin', 'bun'),
+  ].filter(Boolean) as string[]
+  for (const candidate of candidates) {
+    if (candidate.includes('/')) {
+      if (existsSync(candidate)) return candidate
+      continue
+    }
+    const result = spawnSync(candidate, ['--version'], { stdio: 'ignore' })
+    if (result.status === 0) return candidate
+  }
+  return null
+}
+
+export function resolveCliEntry(): string {
+  try {
+    const entry = import.meta.resolve('@happyimage/cli')
+    return entry.startsWith('file:') ? fileURLToPath(entry) : resolve(entry)
+  } catch {
+    const devEntry = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'cli', 'dist', 'bin.js')
+    if (existsSync(devEntry)) return devEntry
+    const resourcesPath = process.resourcesPath || ''
+    const unpacked = join(resourcesPath, 'app.asar.unpacked', 'node_modules', '@happyimage', 'cli', 'dist', 'bin.js')
+    if (existsSync(unpacked)) return unpacked
+    return join(resourcesPath, 'cli', 'dist', 'bin.js')
+  }
 }
 
 export interface SidecarConfig {
@@ -21,8 +78,8 @@ export interface SidecarConfig {
 }
 
 export interface SidecarInstance {
-  process: ChildProcess | null
   url: string
+  port: number
   start(): Promise<boolean>
   stop(): void
 }
@@ -31,22 +88,62 @@ export function createSidecar(config: SidecarConfig): SidecarInstance {
   let serverProcess: ChildProcess | null = null
   let restartAttempt = 0
   let intentionallyStopped = false
-  const url = `http://localhost:${config.port}`
+  let restartTimer: ReturnType<typeof setTimeout> | null = null
+  let activePort = config.port
+
+  function getUrl(): string {
+    return `http://localhost:${activePort}`
+  }
 
   function startProcess(): ChildProcess {
-    const cliEntry = fileURLToPath(import.meta.resolve('@happyimage/cli'))
-    return spawn('bun', [cliEntry, 'web', '--port', String(config.port)], {
+    const cliEntry = resolveCliEntry()
+    const bun = resolveBunCommand()
+    if (!bun) {
+      throw new Error('Bun runtime not found. Install Bun or set BUN_PATH.')
+    }
+    return spawn(bun, [cliEntry, 'web', '--port', String(activePort)], {
       stdio: 'inherit',
+      cwd: dirname(cliEntry),
       env: {
         ...process.env,
         NODE_ENV: 'production',
+        ELECTRON_RUN_AS_NODE: undefined,
       },
+    })
+  }
+
+  function attachHandlers(proc: ChildProcess): void {
+    proc.on('exit', (code) => {
+      if (intentionallyStopped) return
+      if (restartAttempt < MAX_RETRIES) {
+        const delay = calculateBackoff(restartAttempt)
+        restartAttempt++
+        config.onCrash?.(restartAttempt)
+        restartTimer = setTimeout(async () => {
+          const newProc = startProcess()
+          attachHandlers(newProc)
+          serverProcess = newProc
+          try {
+            const ready = await waitForReady()
+            if (ready) restartAttempt = 0
+            else config.onError?.('Server restart failed health check')
+          } catch (err) {
+            config.onError?.(`Restart wait failed: ${err}`)
+          }
+        }, delay)
+      } else {
+        config.onRestartExhausted?.()
+      }
+    })
+
+    proc.on('error', () => {
+      config.onError?.('Failed to start server sidecar')
     })
   }
 
   async function checkHealth(): Promise<boolean> {
     try {
-      const res = await fetch(`${url}/api/health`)
+      const res = await fetch(`${getUrl()}/api/health`)
       if (res.ok) {
         const json = await res.json() as { status: string }
         return json.status === 'ok'
@@ -69,36 +166,25 @@ export function createSidecar(config: SidecarConfig): SidecarInstance {
   async function start(): Promise<boolean> {
     intentionallyStopped = false
     restartAttempt = 0
-    serverProcess = startProcess()
-
-    serverProcess.on('exit', (code) => {
-      if (intentionallyStopped) return
-      if (restartAttempt < MAX_RETRIES) {
-        const delay = calculateBackoff(restartAttempt)
-        restartAttempt++
-        config.onCrash?.(restartAttempt)
-        setTimeout(async () => {
-          serverProcess = startProcess()
-          try {
-            const ready = await waitForReady()
-            if (ready) restartAttempt = 0
-          } catch (err) {
-            config.onError?.(`Restart wait failed: ${err}`)
-          }
-        }, delay)
-      } else {
-        config.onRestartExhausted?.()
+    try {
+      activePort = await resolveAvailablePort(config.port)
+      if (activePort !== config.port) {
+        config.onError?.(`Port ${config.port} is in use, using ${activePort}`)
       }
-    })
-
-    serverProcess.on('error', () => {
-      config.onError?.('Failed to start server sidecar')
-    })
-
-    return waitForReady()
+      serverProcess = startProcess()
+      attachHandlers(serverProcess)
+      return waitForReady()
+    } catch (err) {
+      config.onError?.(err instanceof Error ? err.message : String(err))
+      return false
+    }
   }
 
   function stop(): void {
+    if (restartTimer) {
+      clearTimeout(restartTimer)
+      restartTimer = null
+    }
     if (serverProcess) {
       intentionallyStopped = true
       serverProcess.kill('SIGTERM')
@@ -106,5 +192,10 @@ export function createSidecar(config: SidecarConfig): SidecarInstance {
     }
   }
 
-  return { process: serverProcess, url, start, stop }
+  return {
+    get url() { return getUrl() },
+    get port() { return activePort },
+    start,
+    stop,
+  }
 }

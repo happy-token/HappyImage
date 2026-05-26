@@ -1,4 +1,5 @@
 import { app } from 'electron'
+import { existsSync } from 'fs'
 import { join, resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
 
@@ -9,11 +10,11 @@ export function isDev(): boolean {
 }
 
 export function getAppDir(): string {
-  return app.isPackaged ? dirname(app.getPath('exe')) : resolve(__dirname, '..')
+  return app.isPackaged ? process.resourcesPath : resolve(__dirname, '..')
 }
 
 export function getStaticDir(): string {
-  return app.isPackaged ? join(getAppDir(), 'static') : join(getAppDir(), 'build')
+  return app.isPackaged ? getAppDir() : join(getAppDir(), 'build')
 }
 
 export function getIconPath(name: string): string {
@@ -21,7 +22,8 @@ export function getIconPath(name: string): string {
 }
 
 export function getPreloadPath(): string {
-  return app.isPackaged
-    ? join(getAppDir(), 'dist', 'preload.js')
-    : join(__dirname, 'preload.js')
+  if (!app.isPackaged) return join(__dirname, 'preload.js')
+  const unpacked = join(process.resourcesPath, 'app.asar.unpacked', 'dist', 'preload.js')
+  if (existsSync(unpacked)) return unpacked
+  return join(process.resourcesPath, 'app.asar', 'dist', 'preload.js')
 }

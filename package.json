@@ -6,6 +6,10 @@
     "packages/*"
   ],
   "scripts": {
+    "dev": "bun run --cwd packages/desktop dev",
+    "dev:desktop": "bun run --cwd packages/desktop dev",
+    "icons": "node scripts/generate-icons.mjs",
+    "icons:desktop": "node scripts/generate-icons.mjs",
     "build": "bun run --cwd packages/core build && bun run --cwd packages/web-ui build && bun run --cwd packages/cli build && bun run --cwd packages/desktop build",
     "build:core": "bun run --cwd packages/core build",
     "build:web": "bun run --cwd packages/web-ui build",

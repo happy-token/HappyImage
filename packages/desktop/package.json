@@ -5,7 +5,7 @@
   "main": "./dist/main.js",
   "type": "module",
   "scripts": {
-    "dev": "tsc -w & electron .",
+    "dev": "sh -c 'tsc && (tsc -w --preserveWatchOutput & TSC_PID=$!; electron .; STATUS=$?; kill $TSC_PID 2>/dev/null || true; exit $STATUS)'",
     "build": "tsc && electron-builder build --mac",
     "build:dir": "tsc && electron-builder build --mac --dir",
     "release": "tsc && electron-builder build --mac --publish always",
