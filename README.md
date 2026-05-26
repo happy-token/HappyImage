@@ -14,40 +14,40 @@ AI-powered visual content creation and multi-platform publishing toolkit. Genera
 <tr>
 <td width="50%">
 
-### Visual Preview — WYSIWYG
+<h3>Visual Preview — WYSIWYG</h3>
 
 Every post gets a **live platform mockup** before you publish. See exactly how your images, title, body, and hashtags will look on Xiaohongshu, WeChat, Weibo, or X — with real-time character counts, image grid layouts, and platform rule validation.
 
 </td>
 <td width="50%">
 
-### Style Controls — Your Look, Your Rules
+<h3>Style Controls — Your Look, Your Rules</h3>
 
 **12 visual styles** × **8 layout densities** × **3 color palettes** — mix and match to match your brand. Every style is previewed visually so you pick what you see, not guess from a name.
 
-| Style | Palette | Layout |
-|-------|---------|--------|
-| cute · fresh · warm | macaron · warm · neon | sparse → flow |
-| bold · minimal · retro | | |
-| pop · notion · chalkboard | | |
-| study-notes · screen-print · sketch-notes | | |
+<table>
+<tr><th>Style</th><th>Palette</th><th>Layout</th></tr>
+<tr><td>cute · fresh · warm</td><td>macaron · warm · neon</td><td>sparse → flow</td></tr>
+<tr><td>bold · minimal · retro</td><td></td><td></td></tr>
+<tr><td>pop · notion · chalkboard</td><td></td><td></td></tr>
+<tr><td>study-notes · screen-print · sketch-notes</td><td></td><td></td></tr>
+</table>
 
 </td>
 </tr>
 <tr>
 <td width="50%">
 
-### AI Caption + One-Click Publish
+<h3>AI Caption + One-Click Publish</h3>
 
-Generate platform-optimized copy with one click. Each platform gets its own format template — Xiaohongshu hashtags at the bottom, Weibo `#双#号#` inline, WeChat no hashtags, X inline `#tags` under 280 chars. Chrome automation fills in the draft while you review and click publish.
+Generate platform-optimized copy with one click. Each platform gets its own format template — Xiaohongshu hashtags at the bottom, Weibo <code>#双#号#</code> inline, WeChat no hashtags, X inline <code>#tags</code> under 280 chars. Chrome automation fills in the draft while you review and click publish.
 
 </td>
 <td width="50%">
 
-### CLI · Web UI · GUI
+<h3>CLI · Web UI · GUI</h3>
 
-```bash
-# CLI — script it
+<pre><code># CLI — script it
 bun packages/cli/src/bin.ts web --port 3200
 
 # Web UI — visual workspace
@@ -56,7 +56,7 @@ bun run dev:web
 
 # GUI — double-click app
 bun run dev:desktop
-```
+</code></pre>
 
 Same skills, same output — pick the interface that fits your workflow.
 
