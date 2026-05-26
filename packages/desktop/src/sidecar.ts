@@ -57,17 +57,13 @@ export function resolveBunCommand(): string | null {
 }
 
 export function resolveCliEntry(): string {
-  try {
-    const entry = import.meta.resolve('@happytokenai/happyimage-cli')
-    return entry.startsWith('file:') ? fileURLToPath(entry) : resolve(entry)
-  } catch {
-    const devEntry = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'cli', 'dist', 'bin.js')
-    if (existsSync(devEntry)) return devEntry
-    const resourcesPath = process.resourcesPath || ''
-    const unpacked = join(resourcesPath, 'app.asar.unpacked', 'node_modules', '@happytokenai', 'happyimage-cli', 'dist', 'bin.js')
-    if (existsSync(unpacked)) return unpacked
+  const resourcesPath = process.resourcesPath || ''
+  if (resourcesPath) {
     return join(resourcesPath, 'cli', 'dist', 'bin.js')
   }
+  const devEntry = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'cli', 'dist', 'bin.js')
+  if (existsSync(devEntry)) return devEntry
+  throw new Error('Cannot resolve CLI entry path')
 }
 
 export interface SidecarConfig {
@@ -101,9 +97,10 @@ export function createSidecar(config: SidecarConfig): SidecarInstance {
     if (!bun) {
       throw new Error('Bun runtime not found. Install Bun or set BUN_PATH.')
     }
+    const resourcesPath = process.resourcesPath || ''
     return spawn(bun, [cliEntry, 'web', '--port', String(activePort)], {
       stdio: 'inherit',
-      cwd: dirname(cliEntry),
+      cwd: resourcesPath || dirname(cliEntry),
       env: {
         ...process.env,
         NODE_ENV: 'production',

@@ -13,21 +13,27 @@ files:
   - package.json
 
 extraResources:
+  # Core as node_modules entry so Bun can resolve @happytokenai/happyimage-core
+  - from: ../core/dist
+    to: node_modules/@happytokenai/happyimage-core/dist
+  - from: ../core/package.json
+    to: node_modules/@happytokenai/happyimage-core/package.json
+  # Web as node_modules entry so Bun can resolve @happytokenai/happyimage-web
+  - from: ../web-ui/server
+    to: node_modules/@happytokenai/happyimage-web/server
   - from: ../web-ui/dist
-    to: web-ui
+    to: node_modules/@happytokenai/happyimage-web/dist
     filter:
       - '**/*'
       - '!screenshots/**'
-  - from: ../web-ui/server
-    to: web-server
-  - from: ../core/dist
-    to: core/dist
-  - from: ../core/package.json
-    to: core/package.json
+  - from: ../web-ui/package.json
+    to: node_modules/@happytokenai/happyimage-web/package.json
+  # CLI scripts (called directly by sidecar)
   - from: ../cli/dist
     to: cli/dist
   - from: ../cli/package.json
     to: cli/package.json
+  # Docs
   - from: ../../docs
     to: docs
     filter:
@@ -45,6 +51,7 @@ mac:
   notarize: false
   icon: build/icon.icns
   category: public.app-category.graphics-design
+  timestamp: false
 
 dmg:
   window:
