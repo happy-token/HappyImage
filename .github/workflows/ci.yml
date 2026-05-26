@@ -37,9 +37,9 @@ jobs:
       - name: Build CLI
         run: bun run build:cli
 
-      - name: Build Desktop (typecheck only)
+      - name: Typecheck Desktop
         working-directory: packages/desktop
-        run: bun run build
+        run: npx tsc
 
       - name: Run tests
         run: bun test
