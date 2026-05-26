@@ -13,9 +13,11 @@ files:
   - package.json
 
 extraResources:
-  # App icon for dock
+  # App icon for dock / tray
   - from: build/icon.png
     to: icon.png
+  - from: build/iconTemplate.png
+    to: iconTemplate.png
   # Runtime npm dependencies for the sidecar server
   - from: deps/node_modules
     to: node_modules
