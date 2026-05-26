@@ -30,6 +30,7 @@ export interface SidecarInstance {
 export function createSidecar(config: SidecarConfig): SidecarInstance {
   let serverProcess: ChildProcess | null = null
   let restartAttempt = 0
+  let intentionallyStopped = false
   const url = `http://localhost:${config.port}`
 
   function startProcess(): ChildProcess {
@@ -66,16 +67,24 @@ export function createSidecar(config: SidecarConfig): SidecarInstance {
   }
 
   async function start(): Promise<boolean> {
+    intentionallyStopped = false
+    restartAttempt = 0
     serverProcess = startProcess()
 
     serverProcess.on('exit', (code) => {
+      if (intentionallyStopped) return
       if (restartAttempt < MAX_RETRIES) {
         const delay = calculateBackoff(restartAttempt)
         restartAttempt++
         config.onCrash?.(restartAttempt)
         setTimeout(async () => {
           serverProcess = startProcess()
-          await waitForReady()
+          try {
+            const ready = await waitForReady()
+            if (ready) restartAttempt = 0
+          } catch (err) {
+            config.onError?.(`Restart wait failed: ${err}`)
+          }
         }, delay)
       } else {
         config.onRestartExhausted?.()
@@ -91,6 +100,7 @@ export function createSidecar(config: SidecarConfig): SidecarInstance {
 
   function stop(): void {
     if (serverProcess) {
+      intentionallyStopped = true
       serverProcess.kill('SIGTERM')
       serverProcess = null
     }
