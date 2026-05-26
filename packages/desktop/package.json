@@ -1,6 +1,6 @@
 {
   "name": "@happyimage/desktop",
-  "version": "0.2.0",
+  "version": "0.2.2",
   "description": "Electron desktop application wrapping HappyImage with native macOS integration.",
   "author": "HappyImage",
   "publishConfig": {
@@ -29,7 +29,7 @@
     "test:modules": "bun test tests/lifecycle.test.ts tests/sidecar.test.ts tests/paths.test.ts"
   },
   "dependencies": {
-    "@happyimage/cli": "workspace:^0.2.0",
+    "@happytokenai/happyimage-cli": "workspace:^0.2.2",
     "electron-updater": "^6.3.0"
   },
   "devDependencies": {
