@@ -57,6 +57,7 @@ export interface SkillDefinition {
   outputType: 'images' | 'svg' | 'pptx'
   defaultAspectRatio: string
   screenshotDirs: { dimension: string; path: string }[]
+  defaultImageCount?: number
 }
 
 export interface WizardState {

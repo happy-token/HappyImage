@@ -2,6 +2,19 @@
   "name": "@happyimage/desktop",
   "version": "0.2.0",
   "description": "Electron desktop application wrapping HappyImage with native macOS integration.",
+  "author": "HappyImage",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/happy-token/HappyImage.git",
+    "directory": "packages/desktop"
+  },
+  "bugs": {
+    "url": "https://github.com/happy-token/HappyImage/issues"
+  },
+  "homepage": "https://github.com/happy-token/HappyImage/tree/main/packages/desktop#readme",
   "main": "./dist/main.js",
   "type": "module",
   "scripts": {
@@ -20,7 +33,7 @@
     "electron-updater": "^6.3.0"
   },
   "devDependencies": {
-    "electron": "^34.0.0",
+    "electron": "34.5.0",
     "electron-builder": "^25.1.0",
     "@types/node": "^25.9.1",
     "typescript": "^5.8.0"
