@@ -1,12 +1,12 @@
-import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'fs'
-import { dirname, join, resolve } from 'path'
+import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'fs'
+import { join, resolve } from 'path'
+import { getSettingsDb, readAllSettings, writeSettingToDb } from './settings-db.js'
 
 // In dev:  packages/core/dist → 3 levels up = project root
 // In app:  Resources/node_modules/@happytokenai/happyimage-core/dist → 4 levels up = Resources
 let PROJECT_ROOT = resolve(import.meta.dirname, '..', '..', '..')
 const IS_DEV = existsSync(join(PROJECT_ROOT, '.git'))
 if (!IS_DEV) {
-  // Try 4 levels up for the packaged app layout
   const alt = resolve(import.meta.dirname, '..', '..', '..', '..')
   if (existsSync(join(alt, 'skills')) || existsSync(join(alt, 'cli'))) {
     PROJECT_ROOT = alt
@@ -29,7 +29,6 @@ export function resolveConfigRoot(): string {
 }
 
 // Always resolves to the user's home-based config directory, ignoring IS_DEV.
-// Used for user-facing preferences that must live in user-space even in dev environments.
 export function resolveUserConfigRoot(): string {
   const home = process.env.HOME || process.env.USERPROFILE || '/tmp'
   switch (process.platform) {
@@ -43,12 +42,6 @@ export function resolveUserConfigRoot(): string {
       return join(process.env.XDG_CONFIG_HOME || join(home, '.config'), 'happyimage')
   }
 }
-
-function resolveEnvPath(): string {
-  return join(resolveConfigRoot(), '.env')
-}
-
-const ENV_PATH = resolveEnvPath()
 
 interface EnvMap {
   ANTHROPIC_API_KEY: string
@@ -80,24 +73,8 @@ interface EnvMap {
   [key: string]: string
 }
 
-function parseEnv(content: string): Record<string, string> {
-  const vars: Record<string, string> = {}
-  for (const line of content.split('\n')) {
-    const trimmed = line.trim()
-    if (!trimmed || trimmed.startsWith('#')) continue
-    const eq = trimmed.indexOf('=')
-    if (eq === -1) continue
-    const key = trimmed.slice(0, eq).trim()
-    let value = trimmed.slice(eq + 1).trim()
-    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-      value = value.slice(1, -1)
-    }
-    vars[key] = value
-  }
-  return vars
-}
-
 export function readSettings(): EnvMap {
+  const configRoot = resolveConfigRoot()
   const defaults: EnvMap = {
     ANTHROPIC_API_KEY: '',
     ANTHROPIC_BASE_URL: '',
@@ -129,8 +106,19 @@ export function readSettings(): EnvMap {
     THEME_COLOR: 'indigo',
   }
 
-  if (existsSync(ENV_PATH)) {
-    const fileVars = parseEnv(readFileSync(ENV_PATH, 'utf-8'))
+  // Production: read from SQLite
+  if (!IS_DEV) {
+    try {
+      const db = getSettingsDb(configRoot, PROJECT_ROOT)
+      const dbSettings = readAllSettings(db)
+      return { ...defaults, ...dbSettings }
+    } catch {}
+  }
+
+  // Dev fallback: read from .env in config root or project root
+  const envPath = join(configRoot, '.env')
+  if (existsSync(envPath)) {
+    const fileVars = parseEnv(readFileSync(envPath, 'utf-8'))
     return { ...defaults, ...fileVars }
   }
 
@@ -141,6 +129,23 @@ export function readSettings(): EnvMap {
   }
 
   return defaults
+}
+
+function parseEnv(content: string): Record<string, string> {
+  const vars: Record<string, string> = {}
+  for (const line of content.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) continue
+    const eq = trimmed.indexOf('=')
+    if (eq === -1) continue
+    const key = trimmed.slice(0, eq).trim()
+    let value = trimmed.slice(eq + 1).trim()
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1)
+    }
+    vars[key] = value
+  }
+  return vars
 }
 
 export function readApiKey(): string {
@@ -186,6 +191,14 @@ export function readSettingsSanitized(): EnvMap {
 
 export function writeSetting(key: string, value: string): void {
   const configRoot = resolveConfigRoot()
+
+  if (!IS_DEV) {
+    const db = getSettingsDb(configRoot, PROJECT_ROOT)
+    writeSettingToDb(db, key, value)
+    return
+  }
+
+  // Dev: write to .env file
   const envPath = join(configRoot, '.env')
   mkdirSync(configRoot, { recursive: true })
 
