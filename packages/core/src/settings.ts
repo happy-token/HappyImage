@@ -136,12 +136,7 @@ export function readSettings(): EnvMap {
 
   const projectEnv = join(PROJECT_ROOT, '.env')
   if (existsSync(projectEnv)) {
-    // Migrate project .env to config root on first launch
-    try {
-      mkdirSync(dirname(ENV_PATH), { recursive: true })
-      writeFileSync(ENV_PATH, readFileSync(projectEnv))
-    } catch {}
-    const fileVars = parseEnv(readFileSync(ENV_PATH, 'utf-8'))
+    const fileVars = parseEnv(readFileSync(projectEnv, 'utf-8'))
     return { ...defaults, ...fileVars }
   }
 
