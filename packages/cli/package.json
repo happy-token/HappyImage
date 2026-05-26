@@ -26,8 +26,8 @@
     "dev": "tsc -w"
   },
   "dependencies": {
-    "@happytokenai/happyimage-core": "workspace:^0.2.2",
-    "@happytokenai/happyimage-web": "workspace:^0.2.2"
+    "@happytokenai/happyimage-core": "workspace:^0.2.3",
+    "@happytokenai/happyimage-web": "workspace:^0.2.3"
   },
   "devDependencies": {
     "@types/node": "^25.9.1",

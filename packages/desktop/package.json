@@ -33,7 +33,7 @@
     "test:modules": "bun test tests/lifecycle.test.ts tests/sidecar.test.ts tests/paths.test.ts"
   },
   "dependencies": {
-    "@happytokenai/happyimage-cli": "workspace:^0.2.2",
+    "@happytokenai/happyimage-cli": "workspace:^0.2.3",
     "electron-updater": "^6.3.0"
   },
   "devDependencies": {
