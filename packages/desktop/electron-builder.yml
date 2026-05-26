@@ -9,14 +9,16 @@ directories:
 files:
   - dist/**/*
   - package.json
-  - "!node_modules/@happyimage/cli/**"
-  - "!node_modules/@happyimage/web/**"
 
 extraResources:
   - from: ../web-ui/dist
     to: web-ui
+  - from: ../web-ui/server
+    to: web-server
   - from: ../core
     to: core
+  - from: ../cli
+    to: cli
 
 mac:
   target:

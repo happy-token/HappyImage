@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from 'child_process'
-import { resolve } from 'path'
+import { join } from 'path'
 import { fileURLToPath } from 'url'
 
 const MAX_RETRIES = 5
@@ -13,6 +13,14 @@ export function findAvailablePort(ports: number[]): number {
   return ports[0]
 }
 
+function resolveCliEntry(): string {
+  try {
+    return fileURLToPath(import.meta.resolve('@happyimage/cli'))
+  } catch {
+    return join(process.resourcesPath, 'cli', 'dist', 'bin.js')
+  }
+}
+
 export interface SidecarConfig {
   port: number
   onError?: (msg: string) => void
@@ -21,7 +29,6 @@ export interface SidecarConfig {
 }
 
 export interface SidecarInstance {
-  process: ChildProcess | null
   url: string
   start(): Promise<boolean>
   stop(): void
@@ -31,16 +38,46 @@ export function createSidecar(config: SidecarConfig): SidecarInstance {
   let serverProcess: ChildProcess | null = null
   let restartAttempt = 0
   let intentionallyStopped = false
+  let restartTimer: ReturnType<typeof setTimeout> | null = null
   const url = `http://localhost:${config.port}`
 
   function startProcess(): ChildProcess {
-    const cliEntry = fileURLToPath(import.meta.resolve('@happyimage/cli'))
+    const cliEntry = resolveCliEntry()
     return spawn('bun', [cliEntry, 'web', '--port', String(config.port)], {
       stdio: 'inherit',
       env: {
         ...process.env,
         NODE_ENV: 'production',
       },
+    })
+  }
+
+  function attachHandlers(proc: ChildProcess): void {
+    proc.on('exit', () => {
+      if (intentionallyStopped) return
+      if (restartAttempt < MAX_RETRIES) {
+        const delay = calculateBackoff(restartAttempt)
+        restartAttempt++
+        config.onCrash?.(restartAttempt)
+        restartTimer = setTimeout(async () => {
+          const newProc = startProcess()
+          attachHandlers(newProc)
+          serverProcess = newProc
+          try {
+            const ready = await waitForReady()
+            if (ready) restartAttempt = 0
+            else config.onError?.('Server restart failed health check')
+          } catch (err) {
+            config.onError?.(`Restart wait failed: ${err}`)
+          }
+        }, delay)
+      } else {
+        config.onRestartExhausted?.()
+      }
+    })
+
+    proc.on('error', () => {
+      config.onError?.('Failed to start server sidecar')
     })
   }
 
@@ -70,35 +107,15 @@ export function createSidecar(config: SidecarConfig): SidecarInstance {
     intentionallyStopped = false
     restartAttempt = 0
     serverProcess = startProcess()
-
-    serverProcess.on('exit', (code) => {
-      if (intentionallyStopped) return
-      if (restartAttempt < MAX_RETRIES) {
-        const delay = calculateBackoff(restartAttempt)
-        restartAttempt++
-        config.onCrash?.(restartAttempt)
-        setTimeout(async () => {
-          serverProcess = startProcess()
-          try {
-            const ready = await waitForReady()
-            if (ready) restartAttempt = 0
-          } catch (err) {
-            config.onError?.(`Restart wait failed: ${err}`)
-          }
-        }, delay)
-      } else {
-        config.onRestartExhausted?.()
-      }
-    })
-
-    serverProcess.on('error', () => {
-      config.onError?.('Failed to start server sidecar')
-    })
-
+    attachHandlers(serverProcess)
     return waitForReady()
   }
 
   function stop(): void {
+    if (restartTimer) {
+      clearTimeout(restartTimer)
+      restartTimer = null
+    }
     if (serverProcess) {
       intentionallyStopped = true
       serverProcess.kill('SIGTERM')
@@ -106,5 +123,5 @@ export function createSidecar(config: SidecarConfig): SidecarInstance {
     }
   }
 
-  return { process: serverProcess, url, start, stop }
+  return { url, start, stop }
 }
