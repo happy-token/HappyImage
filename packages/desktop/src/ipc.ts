@@ -2,6 +2,7 @@ import { ipcMain, dialog, shell, app, Notification } from 'electron'
 import type { BrowserWindow } from 'electron'
 import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { join, resolve } from 'path'
+import { checkForUpdates, downloadUpdate, installUpdate } from './native/updater.js'
 
 const RECENT_PROJECTS_PATH = join(app.getPath('userData'), 'recent-projects.json')
 
@@ -52,5 +53,18 @@ export function registerIpcHandlers(mainWindow: BrowserWindow, port: number): vo
       const n = new Notification({ title, body })
       n.show()
     }
+  })
+
+  ipcMain.handle('update:check', async () => {
+    checkForUpdates()
+    return null
+  })
+
+  ipcMain.handle('update:download', async () => {
+    downloadUpdate()
+  })
+
+  ipcMain.on('update:install', () => {
+    installUpdate()
   })
 }
