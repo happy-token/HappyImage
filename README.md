@@ -2,7 +2,7 @@
 
 English | [中文](./README.zh.md)
 
-AI-powered visual content creation and multi-platform publishing toolkit. Generate stunning image cards, infographics, comics, and slide decks — then publish them to Xiaohongshu, WeChat, Weibo, and X with one click.
+AI-powered visual content creation and multi-platform publishing toolkit. Generate stunning image cards, infographics, comics, and slide decks — then publish to Xiaohongshu, WeChat, Weibo, and X with one click.
 
 **Three interfaces, zero friction:** CLI for automation · Web UI for visual workflow · Desktop app for double-click simplicity.
 
@@ -16,9 +16,7 @@ AI-powered visual content creation and multi-platform publishing toolkit. Genera
 
 ### Visual Preview — WYSIWYG
 
-Stop guessing. Every post gets a **live platform mockup** before you publish. See exactly how your images, title, body, and hashtags will look on Xiaohongshu, WeChat, Weibo, or X — with real-time character counts, image grid layouts, and platform rule validation.
-
-![Platform Preview](screenshots/platform-preview.png)
+Every post gets a **live platform mockup** before you publish. See exactly how your images, title, body, and hashtags will look on Xiaohongshu, WeChat, Weibo, or X — with real-time character counts, image grid layouts, and platform rule validation.
 
 </td>
 <td width="50%">
@@ -41,7 +39,7 @@ Stop guessing. Every post gets a **live platform mockup** before you publish. Se
 
 ### AI Caption + One-Click Publish
 
-Generate platform-optimized copy with one click. Each platform gets its own format template — Xiaohongshu hashtags at the bottom, Weibo `#双#号#` inline, WeChat no hashtags, X inline `#tags` under 280 chars. Then let Chrome automation fill in the draft while you review and click publish.
+Generate platform-optimized copy with one click. Each platform gets its own format template — Xiaohongshu hashtags at the bottom, Weibo `#双#号#` inline, WeChat no hashtags, X inline `#tags` under 280 chars. Chrome automation fills in the draft while you review and click publish.
 
 </td>
 <td width="50%">
@@ -86,9 +84,9 @@ Supports **batch generation** with dependency-aware ordering, parallel backend c
 
 | Platform | Images | Title | Body | Hashtags | Method |
 |----------|--------|-------|------|----------|--------|
-| 小红书 | Up to 18 | 20 chars | 1000 chars | Max 10, separate | Chrome CDP |
-| 微信公众号 | Unlimited | 64 chars | 20000 chars | None | API or Chrome |
-| 微博 | Up to 18 | Inline 【】 | 2000 chars | Inline `#双#号#` | Chrome CDP |
+| Xiaohongshu | Up to 18 | 20 chars | 1000 chars | Max 10, separate | Chrome CDP |
+| WeChat | Unlimited | 64 chars | 20000 chars | None | API or Chrome |
+| Weibo | Up to 18 | Inline 【】 | 2000 chars | Inline `#双#号#` | Chrome CDP |
 | X (Twitter) | Up to 4 | Inline | 280 chars | Inline `#tag` | Chrome CDP |
 
 **Safety-first publishing:** the browser fills in everything but never clicks "Publish." You review and confirm manually — no bot-like behavior to trigger platform anti-spam.
@@ -100,10 +98,6 @@ Persistent chat sessions with SSE streaming. Every generation creates a session 
 ### Watermark & Brand Protection
 
 Configure per-skill watermarks via EXTEND.md preferences. Customize text, position, and opacity to protect your original content across all generated images.
-
-### Skills Root Management
-
-Install external baoyu-skills collections from GitHub or local paths. The Web UI settings page lets you browse, select, and switch between skill roots — keeping your workspace flexible and up to date.
 
 ---
 
@@ -125,7 +119,7 @@ Install external baoyu-skills collections from GitHub or local paths. The Web UI
 
 | Skill | Description |
 |-------|-------------|
-| **baoyu-imagine** | Primary image generation backend. Supports OpenAI (DALL-E / GPT Image), Azure OpenAI, Google Gemini, OpenRouter, DashScope, Replicate, Z.AI, MiniMax, Jimeng, and Seedream. Auto-detects available providers. |
+| **baoyu-imagine** | Primary image generation backend. Supports OpenAI (DALL-E / GPT Image), Azure OpenAI, Google Gemini, OpenRouter, DashScope, Replicate, Z.AI, MiniMax, Jimeng, Seedream. Auto-detects available providers. |
 | **baoyu-danger-gemini-web** | Gemini Web API via browser cookies. Free-tier image generation through Google's web interface. Use at your own risk. |
 
 ### Publishing
@@ -167,19 +161,19 @@ Install external baoyu-skills collections from GitHub or local paths. The Web UI
 
 ```bash
 # Register the marketplace
-/plugin marketplace add JimLiu/baoyu-skills
+/plugin marketplace add happy-token/HappyImage
 
 # Install the plugin
-/plugin install baoyu-skills@baoyu-skills
+/plugin install baoyu-skills@happyimage-skills
 ```
 
-Or tell your agent: *"Please install Skills from github.com/JimLiu/baoyu-skills"*
+Or tell your agent: *"Please install Skills from github.com/happy-token/HappyImage"*
 
 ### Run the Web UI
 
 ```bash
-git clone https://github.com/JimLiu/baoyu-skills.git
-cd baoyu-skills
+git clone https://github.com/happy-token/HappyImage.git
+cd HappyImage
 bun install
 bun run build
 bun run dev:web
@@ -249,7 +243,7 @@ Configure default styles, custom palettes, watermark settings, Chrome profiles, 
 HappyImage/
 ├── skills/          # 21 baoyu-* skill directories (self-contained)
 ├── packages/
-│   ├── core/        # @happyimage/core — shared runtime & AI pipeline
+│   ├── core/        # @happytokenai/happyimage-core — shared runtime & AI pipeline
 │   ├── web-ui/      # React + Vite + Hono — Web workspace
 │   ├── cli/         # happyimage CLI
 │   └── desktop/     # Electron desktop wrapper
@@ -269,7 +263,9 @@ HappyImage/
 
 ## Credits
 
-Created and maintained by [JimLiu](https://github.com/JimLiu) and contributors. Skills built by the baoyu-skills community.
+HappyImage is built on top of [baoyu-skills](https://github.com/JimLiu/baoyu-skills) by [JimLiu](https://github.com/JimLiu). The core AI pipeline, skill definitions, and multi-platform publishing engine are adapted from the baoyu-skills ecosystem. We are grateful for the foundation and community that made this project possible.
+
+Maintained by [happy-token](https://github.com/happy-token) and contributors.
 
 ## License
 
@@ -277,4 +273,4 @@ MIT
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=JimLiu/baoyu-skills&type=Date)](https://star-history.com/#JimLiu/baoyu-skills&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=happy-token/HappyImage&type=Date)](https://star-history.com/#happy-token/HappyImage&Date)
