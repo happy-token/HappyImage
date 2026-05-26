@@ -1,19 +1,28 @@
 {
   "name": "@happyimage/desktop",
-  "version": "0.1.0",
-  "description": "Electron desktop application wrapping HappyImage.",
+  "version": "0.2.0",
+  "description": "Electron desktop application wrapping HappyImage with native macOS integration.",
   "main": "./dist/main.js",
   "type": "module",
   "scripts": {
-    "build": "tsc",
-    "dev": "tsc -w",
-    "start": "tsc && electron ."
+    "dev": "tsc -w & electron .",
+    "build": "tsc && electron-builder build --mac",
+    "build:dir": "tsc && electron-builder build --mac --dir",
+    "release": "tsc && electron-builder build --mac --publish always",
+    "sign:check": "sh scripts/sign-check.sh",
+    "start": "tsc && electron .",
+    "test": "bun test tests/",
+    "test:preload": "bun test tests/preload.test.ts",
+    "test:modules": "bun test tests/lifecycle.test.ts tests/sidecar.test.ts tests/paths.test.ts"
   },
   "dependencies": {
-    "@happyimage/cli": "workspace:^0.1.0"
+    "@happyimage/cli": "workspace:^0.1.0",
+    "electron-updater": "^6.3.0"
   },
   "devDependencies": {
     "electron": "^34.0.0",
+    "electron-builder": "^25.1.0",
+    "@types/node": "^25.9.1",
     "typescript": "^5.8.0"
   }
 }

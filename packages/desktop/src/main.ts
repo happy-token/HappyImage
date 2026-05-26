@@ -1,119 +1,69 @@
 import { app, BrowserWindow } from 'electron'
-import { spawn, type ChildProcess } from 'child_process'
-import { join, resolve, dirname } from 'path'
-import { fileURLToPath } from 'url'
-
-const __dirname = dirname(fileURLToPath(import.meta.url))
+import { createLifecycle } from './lifecycle.js'
+import { createSidecar } from './sidecar.js'
+import { createMainWindow, loadApp } from './window.js'
+import { registerIpcHandlers } from './ipc.js'
+import { initNotifications, destroyNotifications } from './native/notifications.js'
+import { initShortcuts, destroyShortcuts } from './native/shortcuts.js'
+import { initUpdater, destroyUpdater } from './native/updater.js'
+import { createTray, destroyTray, setServerHealth } from './native/tray.js'
+import { createAppMenu } from './native/menu.js'
 
 let mainWindow: BrowserWindow | null = null
-let serverProcess: ChildProcess | null = null
-const port = process.env.PORT || '3100'
-const serverUrl = `http://localhost:${port}`
-const healthUrl = `${serverUrl}/api/health`
+let sidecar: ReturnType<typeof createSidecar> | null = null
+const port = Number(process.env.PORT) || 3100
 
-async function checkServerReady(url: string): Promise<boolean> {
-  for (let i = 0; i < 50; i++) {
-    try {
-      const res = await fetch(url)
-      if (res.ok) {
-        const json = await res.json()
-        if (json.status === 'ok') {
-          return true
-        }
-      }
-    } catch {
-      // Server not ready yet
-    }
-    await new Promise((resolve) => setTimeout(resolve, 100))
-  }
-  return false
+function getMainWindow(): BrowserWindow | null {
+  return mainWindow
 }
 
-function startServer() {
-  try {
-    const cliEntry = fileURLToPath(import.meta.resolve('@happyimage/cli'))
-    console.log(`[Desktop] Spawning server sidecar via CLI: ${cliEntry}`)
-    
-    serverProcess = spawn('bun', [cliEntry, 'web', '--port', port], {
-      stdio: 'inherit',
-      env: {
-        ...process.env,
-        NODE_ENV: 'production',
+createLifecycle(app, {
+  onReady: async () => {
+    initNotifications()
+
+    mainWindow = createMainWindow()
+    createAppMenu(mainWindow)
+    registerIpcHandlers(mainWindow, port)
+    initShortcuts(mainWindow)
+    initUpdater(mainWindow)
+    createTray(mainWindow)
+
+    sidecar = createSidecar({
+      port,
+      onCrash: (attempt) => {
+        console.error(`[Desktop] Server crashed, restart attempt ${attempt}`)
+        setServerHealth(false)
+      },
+      onRestartExhausted: () => {
+        const errorHtml = `<html><body style="background:#09090b;color:#ef4444;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;"><div style="text-align:center;"><h1 style="font-size:24px;font-weight:600;">服务异常</h1><p style="color:#a1a1aa;margin-top:8px;">HappyImage 服务多次重启失败，请重启应用。</p></div></body></html>`
+        mainWindow?.loadURL(`data:text/html,${encodeURIComponent(errorHtml)}`)
       },
     })
 
-    serverProcess.on('error', (err) => {
-      console.error('[Desktop] Failed to start server sidecar:', err)
-    })
-
-    serverProcess.on('exit', (code) => {
-      console.log(`[Desktop] Server sidecar exited with code ${code}`)
-    })
-  } catch (err) {
-    console.error('[Desktop] Error resolving CLI package:', err)
-  }
-}
-
-async function createWindow() {
-  mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
-    backgroundColor: '#09090b', // match zinc-950
-    title: 'HappyImage Workspace',
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-    },
-  })
-
-  // Start checking server health
-  const ready = await checkServerReady(healthUrl)
-  if (ready) {
-    console.log(`[Desktop] Server is ready, loading page: ${serverUrl}`)
-    mainWindow.loadURL(serverUrl)
-  } else {
-    console.error('[Desktop] Server failed to start or respond in time.')
-    mainWindow.loadURL(`data:text/html,<html><body style="background:#09090b;color:#ef4444;font-family:sans-serif;padding:40px;"><h1>Server Error</h1><p>The HappyImage backend server failed to start. Review console logs for details.</p></body></html>`)
-  }
-
-  mainWindow.on('closed', () => {
-    mainWindow = null
-  })
-}
-
-// Ensure single instance lock
-const doubleInstanceLock = app.requestSingleInstanceLock()
-if (!doubleInstanceLock) {
-  app.quit()
-} else {
-  app.on('second-instance', () => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore()
-      mainWindow.focus()
+    const ready = await sidecar.start()
+    if (ready) {
+      setServerHealth(true)
+      loadApp(mainWindow!, sidecar.url)
+    } else {
+      const errorHtml = `<html><body style="background:#09090b;color:#ef4444;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;"><div style="text-align:center;"><h1 style="font-size:24px;font-weight:600;">无法启动服务</h1><p style="color:#a1a1aa;margin-top:8px;">后端服务无法在端口 ${port} 启动，请检查端口是否被占用。</p></div></body></html>`
+      mainWindow!.loadURL(`data:text/html,${encodeURIComponent(errorHtml)}`)
     }
-  })
+  },
 
-  app.on('ready', () => {
-    startServer()
-    createWindow()
-  })
-
-  app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') {
-      app.quit()
+  onActivate: () => {
+    if (!mainWindow) {
+      mainWindow = createMainWindow()
+      mainWindow.on('closed', () => { mainWindow = null })
     }
-  })
+  },
 
-  app.on('activate', () => {
-    if (mainWindow === null) {
-      createWindow()
-    }
-  })
+  onWillQuit: () => {
+    destroyShortcuts()
+    destroyTray()
+    destroyUpdater()
+    destroyNotifications()
+    sidecar?.stop()
+  },
 
-  app.on('will-quit', () => {
-    if (serverProcess) {
-      console.log('[Desktop] Stopping server sidecar process...')
-      serverProcess.kill('SIGTERM')
-    }
-  })
-}
+  getMainWindow,
+})

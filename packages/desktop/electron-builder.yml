@@ -1,0 +1,50 @@
+appId: com.happyimage.desktop
+productName: HappyImage
+copyright: Copyright © 2026 HappyImage
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - dist/**/*
+  - package.json
+  - "!node_modules/@happyimage/cli/**"
+  - "!node_modules/@happyimage/web/**"
+
+extraResources:
+  - from: ../web-ui/dist
+    to: web-ui
+  - from: ../core
+    to: core
+
+mac:
+  target:
+    - dmg
+    - zip
+  artifactName: HappyImage-${version}-mac.${ext}
+  entitlements: entitlements.mac.plist
+  entitlementsInherit: entitlements.mac.plist
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  notarize: false
+  icon: build/icon.icns
+  category: public.app-category.graphics-design
+
+dmg:
+  background: build/background.png
+  window:
+    width: 480
+    height: 400
+  iconSize: 100
+  contents:
+    - x: 140
+      y: 180
+    - x: 340
+      y: 180
+      type: link
+      path: /Applications
+
+publish:
+  provider: generic
+  url: https://releases.happyimage.app
