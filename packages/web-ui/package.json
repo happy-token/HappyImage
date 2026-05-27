@@ -1,6 +1,6 @@
 {
   "name": "@happytokenai/happyimage-web",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Visual workspace for running baoyu-skills content generation workflows.",
   "license": "MIT",
   "type": "module",
