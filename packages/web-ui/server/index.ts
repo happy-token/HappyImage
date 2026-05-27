@@ -62,7 +62,7 @@ app.use('/api/images/*', serveStatic({
   root: resolve(import.meta.dirname, '..', '..'),
   rewriteRequestPath: (p) => p.replace('/api/images', ''),
 }))
-app.use('/screenshots/*', serveStatic({ root: '.' }))
+app.use('/screenshots/*', serveStatic({ root: webUiRoot }))
 
 const isDev = process.env.NODE_ENV !== 'production'
 if (!isDev) {

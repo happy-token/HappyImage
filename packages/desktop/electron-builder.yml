@@ -31,9 +31,6 @@ extraResources:
     to: node_modules/@happytokenai/happyimage-web/server
   - from: ../web-ui/dist
     to: node_modules/@happytokenai/happyimage-web/dist
-    filter:
-      - '**/*'
-      - '!screenshots/**'
   - from: ../web-ui/package.json
     to: node_modules/@happytokenai/happyimage-web/package.json
   # CLI scripts (called directly by sidecar)
