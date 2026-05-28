@@ -57,13 +57,27 @@ if [[ -d "$NOTARIZE_PATH" && "$NOTARIZE_PATH" == *.app ]]; then
   fi
 fi
 
+NOTARIZE_FILE="$NOTARIZE_PATH"
+TEMP_ZIP=""
+
+if [[ -d "$NOTARIZE_PATH" && "$NOTARIZE_PATH" == *.app ]]; then
+  TEMP_ZIP=$(mktemp /tmp/notarize-XXXXXX.zip)
+  info "正在压缩 .app 到临时文件 $TEMP_ZIP 以便公证..."
+  ditto -c -k --keepParent "$NOTARIZE_PATH" "$TEMP_ZIP"
+  NOTARIZE_FILE="$TEMP_ZIP"
+fi
+
 info "提交 Apple 公证（约 1-5 分钟）..."
-xcrun notarytool submit "$NOTARIZE_PATH" \
+xcrun notarytool submit "$NOTARIZE_FILE" \
   --apple-id "$APPLE_ID" \
   --password "$APPLE_APP_SPECIFIC_PASSWORD" \
   --team-id "$APPLE_TEAM_ID" \
   --wait \
   --timeout 600
+
+if [[ -n "$TEMP_ZIP" ]]; then
+  rm -f "$TEMP_ZIP"
+fi
 
 success "公证完成"
 
