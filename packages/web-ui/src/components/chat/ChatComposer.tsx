@@ -1,5 +1,6 @@
 import { useRef, forwardRef, useImperativeHandle, useState, useEffect } from 'react'
 import { Settings, ArrowUp, Square, Plus, FolderOpen, FileText, Link2, Check, X } from 'lucide-react'
+import { t, useAppLanguage } from '../../i18n/settings'
 
 interface ChatComposerProps {
   chatInput: string
@@ -29,12 +30,6 @@ export interface ChatComposerHandle {
   focus: () => void
 }
 
-const sourceOptions = [
-  { mode: 'local', label: '项目文件夹', icon: FolderOpen, hint: '浏览项目目录，传递路径作为生成参考' },
-  { mode: 'file', label: '文件', icon: FileText, hint: '上传 .md 文件，基于内容生成图片' },
-  { mode: 'github', label: 'GitHub', icon: Link2, hint: '输入仓库链接，解析内容生成图片' },
-] as const
-
 const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function ChatComposer({
   chatInput, onInputChange, onSend, canSubmit, isStreaming, isPlanning, onStop, projectData,
   selectedImage, onClearTarget,
@@ -43,6 +38,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
   uploadedSourceName, uploadStatus, onSourceUpload,
   onGithubVerify,
 }, ref) {
+  const lang = useAppLanguage()
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const dirInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -59,6 +55,11 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
   }, [sourceMode, sourceRef])
 
   const hasSource = sourceMode !== 'text'
+  const sourceOptions = [
+    { mode: 'local', label: t(lang, 'composer.source_local'), icon: FolderOpen, hint: t(lang, 'composer.source_local_hint') },
+    { mode: 'file', label: t(lang, 'composer.source_file'), icon: FileText, hint: t(lang, 'composer.source_file_hint') },
+    { mode: 'github', label: t(lang, 'composer.source_github'), icon: Link2, hint: t(lang, 'composer.source_github_hint') },
+  ] as const
 
   const selectMode = (mode: string) => {
     if (sourceMode === mode) {
@@ -100,7 +101,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
 
         {selectedImage !== null && (
           <div className="flex items-center justify-between bg-indigo-950/40 border-b border-indigo-900/40 text-indigo-400 px-4 py-2 rounded-t-3xl text-xs">
-            <span className="font-medium">针对图片 #{selectedImage + 1} 进行修改</span>
+            <span className="font-medium">{t(lang, 'composer.target', { index: String(selectedImage + 1) })}</span>
             <button onClick={onClearTarget} className="text-indigo-400 hover:text-indigo-300 p-0.5">
               ✕
             </button>
@@ -121,9 +122,9 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
           placeholder={
             projectData
               ? selectedImage !== null
-                ? `描述对图片 #${selectedImage + 1} 的修改要求…`
-                : '要求后续变更…'
-              : '描述你想设计的内容、人物、文案和布局…'
+                ? t(lang, 'composer.placeholder_edit_image', { index: String(selectedImage + 1) })
+                : t(lang, 'composer.placeholder_edit')
+              : t(lang, 'composer.placeholder_new')
           }
           className="w-full bg-transparent border-0 text-zinc-100 placeholder-zinc-500 font-sans text-sm focus:outline-none focus-visible:outline-none focus:ring-0 outline-none resize-none min-h-[72px] px-4 pt-4 pb-2"
           aria-label="Chat message input"
@@ -147,7 +148,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
                   type="text"
                   value={sourceRef}
                   onChange={e => onSourceRefChange(e.target.value)}
-                  placeholder="输入项目文件夹路径，或通过 + → 项目文件夹 浏览选择…"
+                  placeholder={t(lang, 'composer.local_placeholder')}
                   className="bg-zinc-900/60 border border-zinc-700/60 text-zinc-150 p-2 px-3 rounded-xl text-xs outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors flex-1"
                 />
               </div>
@@ -204,7 +205,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
                         : 'bg-zinc-700/50 hover:bg-zinc-600/50 text-zinc-300 hover:text-zinc-100'
                   }`}
                 >
-                  {verifyStatus === 'checking' ? '检测中…' : verifyStatus === 'ok' ? <Check className="h-3 w-3" /> : verifyStatus === 'fail' ? <X className="h-3 w-3" /> : '检测'}
+                  {verifyStatus === 'checking' ? t(lang, 'composer.checking') : verifyStatus === 'ok' ? <Check className="h-3 w-3" /> : verifyStatus === 'fail' ? <X className="h-3 w-3" /> : t(lang, 'composer.check')}
                 </button>
               </div>
             )}
@@ -222,7 +223,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
                     ? 'bg-indigo-600/30 text-indigo-300 border border-indigo-500/30'
                     : 'bg-zinc-700/50 hover:bg-zinc-600/50 text-zinc-400 hover:text-zinc-200 border border-zinc-700/40'
                 }`}
-                title="添加内容源"
+                title={t(lang, 'composer.add_source')}
               >
                 <Plus className="h-3.5 w-3.5" />
               </button>
@@ -262,7 +263,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
             <button
               onClick={onToggleSidebar}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl hover:bg-zinc-700/60 text-zinc-400 hover:text-zinc-200 text-xs transition-colors cursor-pointer"
-              title="调整生成参数"
+              title={t(lang, 'composer.adjust')}
             >
               <Settings className="h-3.5 w-3.5" />
               <span>{configSummary}</span>
@@ -274,7 +275,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
             <button
               onClick={onStop}
               className="w-8 h-8 rounded-lg flex items-center justify-center transition-all bg-red-500 hover:bg-red-400 text-white shadow-sm cursor-pointer"
-              aria-label="停止生成"
+              aria-label={t(lang, 'composer.stop')}
             >
               <Square className="h-3.5 w-3.5" strokeWidth={3} />
             </button>
@@ -287,7 +288,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
                   ? 'bg-zinc-100 hover:bg-white text-zinc-900 shadow-sm cursor-pointer'
                   : 'bg-zinc-700 text-zinc-500 cursor-not-allowed'
               }`}
-              aria-label="发送"
+              aria-label={t(lang, 'composer.send')}
             >
               <ArrowUp className="h-4 w-4" strokeWidth={2.5} />
             </button>

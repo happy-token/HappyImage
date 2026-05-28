@@ -64,7 +64,6 @@ interface EnvMap {
   CUSTOM_IMAGE_PROVIDER_NAME: string
   CUSTOM_EXECUTION_PROVIDER_NAME: string
   CLAUDE_CODE_COMMAND: string
-  BAOYU_SKILLS_ROOT: string
   OUTPUT_DIR: string
   DEFAULT_LANGUAGE: string
   DEFAULT_ASPECT_RATIO: string
@@ -97,7 +96,6 @@ export function readSettings(): EnvMap {
     CUSTOM_IMAGE_PROVIDER_NAME: '',
     CUSTOM_EXECUTION_PROVIDER_NAME: '',
     CLAUDE_CODE_COMMAND: '',
-    BAOYU_SKILLS_ROOT: '',
     OUTPUT_DIR: '~/output/happyimage',
     DEFAULT_LANGUAGE: 'zh',
     DEFAULT_ASPECT_RATIO: '1:1',

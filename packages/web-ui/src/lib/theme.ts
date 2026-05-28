@@ -67,20 +67,20 @@ const lightCSS = `
   --color-zinc-800: #f5f0e8;
   --color-zinc-700: #ebe4d8;
   --color-zinc-600: #dcd3c4;
-  --color-zinc-500: #94a3b8;
-  --color-zinc-400: #64748b;
-  --color-zinc-300: #475569;
-  --color-zinc-200: #334155;
-  --color-zinc-100: #1e293b;
-  --color-zinc-5: #0f172a; /* Note: originally zinc-50 was mapped here, let's keep zinc-50 */
-  --color-zinc-50: #0f172a;
+  --color-zinc-500: #4b5563; /* Darker grey text for high readability */
+  --color-zinc-400: #374151; /* Dark grey text */
+  --color-zinc-300: #1f2937; /* Very dark slate-grey text */
+  --color-zinc-200: #111827; /* Almost black text */
+  --color-zinc-100: #030712; /* Black text */
+  --color-zinc-5: #030712;
+  --color-zinc-50: #030712;
 
   /* Custom/non-standard shades */
-  --color-zinc-150: #1e293b;
-  --color-zinc-250: #334155;
-  --color-zinc-350: #475569;
-  --color-zinc-550: #94a3b8;
-  --color-zinc-650: #475569;
+  --color-zinc-150: #0f172a;
+  --color-zinc-250: #111827;
+  --color-zinc-350: #1f2937;
+  --color-zinc-550: #4b5563;
+  --color-zinc-650: #374151;
   --color-zinc-750: #dcd3c4;
   --color-zinc-850: #f5f0e8;
 

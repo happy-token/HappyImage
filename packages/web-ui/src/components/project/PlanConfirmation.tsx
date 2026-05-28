@@ -1,6 +1,7 @@
 import Button from '../ui/Button'
 import Markdown from '../chat/Markdown'
 import type { ProjectPlan } from '@happytokenai/happyimage-core'
+import { t, useAppLanguage } from '../../i18n/settings'
 
 interface PlanConfirmationProps {
   plan: ProjectPlan
@@ -13,6 +14,7 @@ interface PlanConfirmationProps {
 }
 
 export default function PlanConfirmation({ plan, imageCount, onConfirm, onCancel, onTogglePrompt, disabledPrompts, confirmed }: PlanConfirmationProps) {
+  const lang = useAppLanguage()
   const firstPrompt = plan.prompts[0]?.prompt || ''
   const previewText = firstPrompt.length > 200 ? firstPrompt.slice(0, 200) + '...' : firstPrompt
   const activeCount = plan.prompts.length - disabledPrompts.size
@@ -21,29 +23,29 @@ export default function PlanConfirmation({ plan, imageCount, onConfirm, onCancel
     <div className="plan-confirm">
       <div className="plan-confirm-header">
         <div>
-          <p className="studio-eyebrow">confirmation</p>
-          <h2>确认生成计划</h2>
+          <p className="studio-eyebrow">{t(lang, 'plan.eyebrow')}</p>
+          <h2>{t(lang, 'plan.title')}</h2>
         </div>
-        <span>{plan.prompts.length}/{imageCount} cards</span>
+        <span>{plan.prompts.length}/{imageCount} {t(lang, 'plan.cards')}</span>
       </div>
 
       <div className="plan-confirm-body">
         <div className="plan-confirm-field">
-          <strong>Title</strong>
+          <strong>{t(lang, 'plan.field_title')}</strong>
           <span>{plan.title}</span>
         </div>
         <div className="plan-confirm-field">
-          <strong>Slug</strong>
+          <strong>{t(lang, 'plan.slug')}</strong>
           <code>{plan.slug}</code>
         </div>
 
         <div className="plan-confirm-outline">
-          <strong>Outline</strong>
+          <strong>{t(lang, 'plan.outline')}</strong>
           <Markdown text={plan.outlineMarkdown} />
         </div>
 
         <div className="plan-confirm-prompts">
-          <strong>Cards ({plan.prompts.length})</strong>
+          <strong>{t(lang, 'plan.card_list')} ({plan.prompts.length})</strong>
           <div className="plan-confirm-prompt-list">
             {plan.prompts.map((p, i) => (
               <label key={i} className={`plan-confirm-prompt-item ${disabledPrompts.has(i) ? 'plan-confirm-disabled' : ''}`}>
@@ -61,7 +63,7 @@ export default function PlanConfirmation({ plan, imageCount, onConfirm, onCancel
         </div>
 
         <div className="plan-confirm-preview">
-          <strong>Style Preview</strong>
+          <strong>{t(lang, 'plan.preview')}</strong>
           <Markdown text={firstPrompt.slice(0, 400)} />
         </div>
       </div>
@@ -70,15 +72,15 @@ export default function PlanConfirmation({ plan, imageCount, onConfirm, onCancel
         {confirmed ? (
           <div className="flex items-center justify-between w-full">
             <span className="text-xs text-emerald-400 font-semibold flex items-center gap-1.5 select-none">
-              ✓ 计划已确认并完成生成
+              ✓ {t(lang, 'plan.confirmed')}
             </span>
-            <Button variant="ghost" disabled>已生成</Button>
+            <Button variant="ghost" disabled>{t(lang, 'plan.generated')}</Button>
           </div>
         ) : (
           <>
-            <Button variant="ghost" onClick={onCancel}>取消</Button>
+            <Button variant="ghost" onClick={onCancel}>{t(lang, 'plan.cancel')}</Button>
             <Button onClick={() => onConfirm(plan)}>
-              确认生成 {activeCount} 张
+              {t(lang, 'plan.confirm', { count: String(activeCount) })}
             </Button>
           </>
         )}

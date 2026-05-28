@@ -1,68 +1,25 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { join, resolve } from 'path'
 import { tmpdir } from 'os'
 
 const BASE = 'http://localhost:3199'
 
 let serverPid: number | null = null
-let skillsRoot = ''
 let sessionDb = ''
 const envPath = resolve(import.meta.dir, '..', '.env')
 let originalEnv: string | null = null
-
-const coreSkills = [
-  'baoyu-image-cards',
-  'baoyu-cover-image',
-  'baoyu-infographic',
-  'baoyu-article-illustrator',
-  'baoyu-comic',
-  'baoyu-slide-deck',
-  'baoyu-diagram',
-  'baoyu-imagine',
-  'baoyu-post-to-wechat',
-  'baoyu-post-to-weibo',
-  'baoyu-post-to-x',
-  'baoyu-post-to-xiaohongshu',
-]
+const bundledSkillsRoot = resolve(import.meta.dir, '..', '..', '..', 'skills')
 
 const logFilePath = join(tmpdir(), 'happyimage-test-server.log')
 
 beforeAll(async () => {
   originalEnv = existsSync(envPath) ? readFileSync(envPath, 'utf-8') : null
-  skillsRoot = mkdtempSync(join(tmpdir(), 'happyimage-skills-'))
-  for (const skill of coreSkills) {
-    const dir = join(skillsRoot, skill)
-    mkdirSync(dir, { recursive: true })
-    writeFileSync(join(dir, 'SKILL.md'), `---\nname: ${skill}\n---\n\n# ${skill}\n`, 'utf-8')
-
-    // Mock the browser scripts for post skills so that the probe check resolves to available: true
-    if (skill === 'baoyu-post-to-xiaohongshu') {
-      const scriptsDir = join(dir, 'scripts')
-      mkdirSync(scriptsDir, { recursive: true })
-      writeFileSync(join(scriptsDir, 'xhs-browser.ts'), 'console.log("mock xhs script")', 'utf-8')
-    }
-    if (skill === 'baoyu-post-to-wechat') {
-      const scriptsDir = join(dir, 'scripts')
-      mkdirSync(scriptsDir, { recursive: true })
-      writeFileSync(join(scriptsDir, 'wechat-browser.ts'), 'console.log("mock wechat script")', 'utf-8')
-    }
-    if (skill === 'baoyu-post-to-weibo') {
-      const scriptsDir = join(dir, 'scripts')
-      mkdirSync(scriptsDir, { recursive: true })
-      writeFileSync(join(scriptsDir, 'weibo-post.ts'), 'console.log("mock weibo script")', 'utf-8')
-    }
-    if (skill === 'baoyu-post-to-x') {
-      const scriptsDir = join(dir, 'scripts')
-      mkdirSync(scriptsDir, { recursive: true })
-      writeFileSync(join(scriptsDir, 'x-browser.ts'), 'console.log("mock x script")', 'utf-8')
-    }
-  }
   sessionDb = join(mkdtempSync(join(tmpdir(), 'happyimage-session-')), 'sessions.sqlite')
   if (existsSync(logFilePath)) rmSync(logFilePath, { force: true })
   const logFile = Bun.file(logFilePath)
   const proc = Bun.spawn(['bun', 'run', 'server/index.ts'], {
-    env: { ...process.env, PORT: '3199', NODE_ENV: 'development', BAOYU_SKILLS_ROOT: skillsRoot, HAPPYIMAGE_SESSION_DB: sessionDb },
+    env: { ...process.env, PORT: '3199', NODE_ENV: 'development', HAPPYIMAGE_SESSION_DB: sessionDb },
     stdout: logFile,
     stderr: logFile,
   })
@@ -93,7 +50,7 @@ describe('API Health', () => {
     const data = await res.json()
     expect(data).toHaveProperty('ok')
     expect(data.skillsRoot.ready).toBe(true)
-    expect(data.skillsRoot.root).toBe(skillsRoot)
+    expect(data.skillsRoot.root).toBe(bundledSkillsRoot)
     expect(Array.isArray(data.checks)).toBe(true)
     expect(data.checks.some((check: any) => check.id === 'baoyu-skills')).toBe(true)
     expect(data.checks.some((check: any) => check.id === 'skill-runner')).toBe(true)
@@ -143,37 +100,6 @@ describe('Commands API', () => {
     })
     expect(res.status).toBe(404)
   })
-})
-
-describe('Skills Root API', () => {
-  test('POST /api/skills-root/use saves an existing skills root', async () => {
-    const res = await fetch(`${BASE}/api/skills-root/use`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ root: skillsRoot }),
-    })
-    expect(res.status).toBe(200)
-    const data = await res.json()
-    expect(data.success).toBe(true)
-    expect(data.skillsRoot.root).toBe(skillsRoot)
-    expect(data.skillsRoot.ready).toBe(true)
-  })
-
-  test('POST /api/skills-root/install installs skills root', async () => {
-    const tempTargetRoot = join(tmpdir(), `happyimage-test-install-${Date.now()}`)
-    const res = await fetch(`${BASE}/api/skills-root/install`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ root: tempTargetRoot }),
-    })
-    expect(res.status).toBe(200)
-    const data = await res.json()
-    expect(data.success).toBe(true)
-    expect(data.root).toBe(tempTargetRoot)
-    expect(existsSync(join(tempTargetRoot, 'baoyu-image-cards', 'SKILL.md'))).toBe(true)
-    expect(existsSync(join(tempTargetRoot, 'baoyu-post-to-xiaohongshu', 'scripts', 'xhs-browser.ts'))).toBe(true)
-    rmSync(tempTargetRoot, { recursive: true, force: true })
-  }, 120_000)
 })
 
 describe('Sessions API', () => {
@@ -606,4 +532,3 @@ describe('Docs API', () => {
     expect(data.content).toContain('HappyImage 用户与多平台发布配置指南')
   })
 })
-

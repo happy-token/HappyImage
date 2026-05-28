@@ -122,7 +122,7 @@ function doctor() {
   checks.push(['Git', commandExists('git'), 'Required for GitHub URL project context'])
   checks.push(['Chrome', Boolean(chromeCommand()), 'Required for desktop mode and WeChat/Weibo/X publishing'])
   checks.push(['Built Web UI', existsSync(resolve(webUiRoot, 'dist', 'index.html')), 'Run happyimage build'])
-  checks.push(['baoyu-skills root', skillsRoot.ready, skillsRoot.exists ? `Missing core skills: ${skillsRoot.missing.join(', ')}` : `No skills found. Expected at project skills/ or set BAOYU_SKILLS_ROOT`])
+  checks.push(['Built-in baoyu skills', skillsRoot.ready, skillsRoot.exists ? `Missing core skills: ${skillsRoot.missing.join(', ')}` : 'No bundled skills found in project skills/'])
   checks.push(['ANTHROPIC key/token', Boolean(settings.ANTHROPIC_API_KEY || settings.ANTHROPIC_AUTH_TOKEN || process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN), 'Can also be configured in Settings UI'])
   checks.push(['Image backend key', Boolean(
     settings.OPENAI_API_KEY || settings.GOOGLE_API_KEY || settings.DASHSCOPE_API_KEY ||
@@ -194,10 +194,6 @@ function init() {
       '',
       '# Publishing (Chrome profile for CDP)',
       '# BAOYU_CHROME_PROFILE_DIR=',
-      '',
-      '# Skills lookup (optional)',
-      '# Set to override project-bundled skills',
-      '# BAOYU_SKILLS_ROOT=',
     ].join('\n')
     writeFileSync(envPath, template, 'utf-8')
     console.log(`\n.env template written to ${envPath}`)
@@ -225,7 +221,7 @@ function config() {
   console.log(`    ${join(configRoot, '.env')}${existsSync(join(configRoot, '.env')) ? '' : ' (not created yet)'}`)
   console.log(`  project .env (fallback)`)
   console.log(`    ${join(PROJECT_ROOT, '.env')}${existsSync(join(PROJECT_ROOT, '.env')) ? '' : ' (not created yet)'}`)
-  console.log(`  skills root`)
+  console.log(`  built-in skills`)
   console.log(`    ${skillsRoot.root} (source: ${skillsRoot.source}${skillsRoot.ready ? ', ready' : `, missing: ${skillsRoot.missing.join(', ')}`})`)
   console.log(`  output dir`)
   console.log(`    ${outputRoot}${existsSync(outputRoot) ? '' : ' (not created yet)'}`)

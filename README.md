@@ -8,9 +8,9 @@ It brings the full `baoyu-skills` content workflow into three interfaces:
 
 | Interface | Best for | Start with |
 |-----------|----------|------------|
-| Desktop App | A focused local workspace with native app behavior | `bun run dev:desktop` |
+| Desktop App | A focused local workspace with native app behavior | `bun run dev:gui` |
 | Web UI | Visual generation, previews, settings, and project history | `bun run dev:web` |
-| CLI | Automation, scripting, diagnostics, and repeatable jobs | `bun packages/cli/src/bin.ts doctor` |
+| CLI | Automation, scripting, diagnostics, and repeatable jobs | `bun run cli -- doctor` |
 
 ![HappyImage gallery preview](./screenshots/gallery-types/image-cards.png)
 
@@ -163,15 +163,17 @@ bun run build
 
 ```bash
 # Desktop app
-bun run dev:desktop
+bun run dev:gui
 
 # Web UI
 bun run dev:web
 # open http://localhost:3200
 
 # CLI diagnostics
-bun packages/cli/src/bin.ts doctor
+bun run cli -- doctor
 ```
+
+For the full root-level command matrix for CLI, Web UI, and GUI/Desktop development, builds, packaging, and release, see [Development, Build, and Release](docs/development-release.md).
 
 ### 4. Install as an agent plugin
 

@@ -17,7 +17,7 @@ function normalizeGenerationRequest(body: GenerateBody): GenerateBody {
   if (!parsed) return body
   if (!parsed.command) throw new Error(`Unknown slash command: ${parsed.commandId}`)
   if (!isVendorAvailable() && !resolveSkillDir(parsed.command.requiredSkill)) {
-    throw new Error(`Required skill not found: ${parsed.command.requiredSkill}. Configure BAOYU_SKILLS_ROOT or install baoyu-skills to the skills/ directory under the HappyImage config path.`)
+    throw new Error(`Required built-in skill not found: ${parsed.command.requiredSkill}. Please check the HappyImage installation or rebuild the project.`)
   }
   if (parsed.command.category !== 'content' || !parsed.command.skillId) {
     throw new Error(`${parsed.commandId} is registered, but this chat flow currently supports content generation commands only.`)

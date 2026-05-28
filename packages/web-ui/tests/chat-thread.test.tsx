@@ -44,25 +44,25 @@ describe('ChatThread', () => {
 
   test('renders thinking indicator', () => {
     const { container } = render(<Wrapper><ChatThread {...defaultProps()} /></Wrapper>)
-    expect(container.textContent).toContain('Thinking')
+    expect(container.textContent).toContain('思考中')
   })
 
   test('renders error retry button', () => {
     const { container } = render(<Wrapper><ChatThread {...defaultProps()} /></Wrapper>)
     expect(container.textContent).toContain('Failed: timeout')
-    expect(container.textContent).toContain('Retry')
+    expect(container.textContent).toContain('重试')
   })
 
   test('renders welcome cards when no project', () => {
     const { container } = render(<Wrapper><ChatThread {...defaultProps()} /></Wrapper>)
-    expect(container.textContent).toContain('Gallery Guide')
-    expect(container.textContent).toContain('Project History')
+    expect(container.textContent).toContain('风格画廊')
+    expect(container.textContent).toContain('项目历史')
   })
 
   test('renders speaker labels', () => {
     const { container } = render(<Wrapper><ChatThread {...defaultProps()} /></Wrapper>)
-    expect(container.textContent).toContain('You')
-    expect(container.textContent).toContain('Assistant')
+    expect(container.textContent).toContain('你')
+    expect(container.textContent).toContain('助手')
   })
 
 
@@ -75,11 +75,11 @@ describe('ChatThread', () => {
   test('renders debug log for runner messages', () => {
     const msgs = [makeMessage('assistant', '', 'runner')]
     const { container } = render(<Wrapper><ChatThread {...defaultProps()} messages={msgs} debugLog={['log line 1', 'log line 2']} /></Wrapper>)
-    expect(container.textContent).toContain('Debug log')
+    expect(container.textContent).toContain('调试日志')
   })
 
   test('renders empty state with Gallery Guide', () => {
     const { container } = render(<Wrapper><ChatThread {...defaultProps()} messages={[]} /></Wrapper>)
-    expect(container.textContent).toContain('Gallery Guide')
+    expect(container.textContent).toContain('风格画廊')
   })
 })

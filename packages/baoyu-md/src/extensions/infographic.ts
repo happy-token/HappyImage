@@ -52,8 +52,8 @@ async function renderInfographic(containerId: string, code: string, options?: In
           },
         })
 
-        instance.on('loaded', ({ node }) => {
-          exportToSVG(node, { removeIds: true }).then((svg) => {
+        instance.on('loaded', ({ node }: { node: any }) => {
+          exportToSVG(node, { removeIds: true }).then((svg: any) => {
             container.replaceChildren(svg)
           })
         })

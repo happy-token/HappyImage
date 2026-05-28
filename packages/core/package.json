@@ -28,7 +28,8 @@
     }
   },
   "scripts": {
-    "build": "tsc"
+    "build": "tsc",
+    "check": "tsc --noEmit"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.96.0"

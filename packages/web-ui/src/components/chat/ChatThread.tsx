@@ -4,6 +4,7 @@ import PlanConfirmation from '../project/PlanConfirmation'
 import Markdown from './Markdown'
 import ToolCard from './ToolCard'
 import type { ChatMessage } from '../../lib/chat-reducer'
+import { t, useAppLanguage } from '../../i18n/settings'
 
 interface ChatThreadProps {
   messages: ChatMessage[]
@@ -24,6 +25,7 @@ export default function ChatThread({
   imageCount, disabledPlanPrompts, debugLog,
   onConfirmPlan, onCancelPlan, onTogglePrompt,
 }: ChatThreadProps) {
+  const lang = useAppLanguage()
   const ref = useRef<HTMLDivElement>(null)
   const nearBottomRef = useRef(true)
 
@@ -50,19 +52,19 @@ export default function ChatThread({
       {!projectData && !urlProjectId && (
         <div className="grid gap-3 sm:grid-cols-3">
           <Link to="/gallery" className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4 no-underline shadow-lg transition hover:border-indigo-500/60 hover:bg-zinc-900">
-            <div className="text-xs font-semibold uppercase tracking-wider text-indigo-400">Start here</div>
-            <div className="mt-2 text-sm font-bold text-zinc-100">Gallery Guide</div>
-            <p className="mt-1 text-xs leading-relaxed text-zinc-500">Choose image type, styles, palettes, layout, aspect, text, and language before chatting.</p>
+            <div className="text-xs font-semibold uppercase tracking-wider text-indigo-400">{t(lang, 'chat.start_eyebrow')}</div>
+            <div className="mt-2 text-sm font-bold text-zinc-100">{t(lang, 'chat.gallery_title')}</div>
+            <p className="mt-1 text-xs leading-relaxed text-zinc-500">{t(lang, 'chat.gallery_desc')}</p>
           </Link>
           <Link to="/history" className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4 no-underline shadow-lg transition hover:border-indigo-500/60 hover:bg-zinc-900">
-            <div className="text-xs font-semibold uppercase tracking-wider text-emerald-400">Continue</div>
-            <div className="mt-2 text-sm font-bold text-zinc-100">Project History</div>
-            <p className="mt-1 text-xs leading-relaxed text-zinc-500">Open previous projects, review generated files, and keep iterating in chat.</p>
+            <div className="text-xs font-semibold uppercase tracking-wider text-emerald-400">{t(lang, 'chat.continue_eyebrow')}</div>
+            <div className="mt-2 text-sm font-bold text-zinc-100">{t(lang, 'chat.history_title')}</div>
+            <p className="mt-1 text-xs leading-relaxed text-zinc-500">{t(lang, 'chat.history_desc')}</p>
           </Link>
           <Link to="/settings" className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4 no-underline shadow-lg transition hover:border-indigo-500/60 hover:bg-zinc-900">
-            <div className="text-xs font-semibold uppercase tracking-wider text-amber-400">Setup</div>
-            <div className="mt-2 text-sm font-bold text-zinc-100">Settings</div>
-            <p className="mt-1 text-xs leading-relaxed text-zinc-500">Manage API keys, preferences, and publishing account settings.</p>
+            <div className="text-xs font-semibold uppercase tracking-wider text-amber-400">{t(lang, 'chat.setup_eyebrow')}</div>
+            <div className="mt-2 text-sm font-bold text-zinc-100">{t(lang, 'chat.settings_title')}</div>
+            <p className="mt-1 text-xs leading-relaxed text-zinc-500">{t(lang, 'chat.settings_desc')}</p>
           </Link>
         </div>
       )}
@@ -73,7 +75,7 @@ export default function ChatThread({
         } animate-fade-in`}>
 
           <span className="text-zinc-500 text-xxs font-bold uppercase tracking-wider">
-            {msg.role === 'user' ? 'You' : msg.role === 'system' ? 'System' : 'Assistant'}
+            {msg.role === 'user' ? t(lang, 'chat.you') : msg.role === 'system' ? t(lang, 'chat.system') : t(lang, 'chat.assistant')}
           </span>
 
           <div className={`px-4 py-3.5 rounded-2xl text-sm leading-relaxed border transition-all ${
@@ -90,7 +92,7 @@ export default function ChatThread({
               />
             ) : msg.type === 'thinking' ? (
               <span className="inline-flex items-center gap-1">
-                Thinking
+                {t(lang, 'chat.thinking')}
                 <span className="inline-flex gap-0.5 ml-0.5">
                   <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                   <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
@@ -102,7 +104,7 @@ export default function ChatThread({
                 <div>{msg.text}</div>
                 {typeof msg.targetImageIndex === 'number' && (
                   <div className="mt-1.5 pt-1.5 border-t border-white/20 text-xxs tracking-wide text-indigo-100/90 flex items-center gap-1 select-none">
-                    <span>🎯 修改图片 #{msg.targetImageIndex + 1} ({msg.targetImageName || '无名称'})</span>
+                    <span>{t(lang, 'chat.target_image', { index: String(msg.targetImageIndex + 1), name: msg.targetImageName || '-' })}</span>
                   </div>
                 )}
               </div>
@@ -131,17 +133,17 @@ export default function ChatThread({
 
           {msg.type === 'error' && msg.retryFn && (
             <button onClick={msg.retryFn} className="text-xs text-amber-400 hover:text-amber-300 font-semibold bg-amber-950/30 px-2.5 py-1 rounded-lg border border-amber-900/50 transition-colors mt-1">
-              Retry
+              {t(lang, 'chat.retry')}
             </button>
           )}
 
           {msg.type === 'runner' && (
             <details className="mt-2 w-full max-w-md self-start border border-zinc-850 rounded-xl bg-zinc-950/50 overflow-hidden animate-scale-up">
               <summary className="px-3 py-1.5 text-xs text-zinc-500 cursor-pointer hover:text-zinc-300 transition-colors select-none">
-                Debug log ({debugLog.length} lines)
+                {t(lang, 'chat.debug_log')} ({debugLog.length} lines)
               </summary>
               <div className="px-3 pb-2 font-mono text-xxs text-emerald-400/70 max-h-[160px] overflow-auto select-text whitespace-pre-wrap border-t border-zinc-900 pt-1.5">
-                {debugLog.join('') || 'No log entries yet.'}
+                {debugLog.join('') || t(lang, 'chat.no_log')}
               </div>
             </details>
           )}

@@ -158,7 +158,7 @@ function executeImagineExternal(input: ImagineInput): Promise<string> {
 
     const imagineDir = resolveSkillDir('imagine')
     if (!imagineDir) {
-      promiseReject(new Error('baoyu-imagine 未找到。请安装 baoyu-skills 或检查 BAOYU_SKILLS_ROOT 配置。'))
+      promiseReject(new Error('baoyu-imagine 未找到。请检查 HappyImage 安装包或重新构建项目。'))
       return
     }
     const scriptPath = join(imagineDir, 'scripts', 'main.ts')
