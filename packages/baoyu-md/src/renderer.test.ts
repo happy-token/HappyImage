@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { initRenderer, renderMarkdown } from "./renderer.ts";
+import { initRenderer, renderMarkdown } from "./renderer.js";
 
 const render = (md: string) => {
   const r = initRenderer();

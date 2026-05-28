@@ -35,6 +35,7 @@
   "scripts": {
     "dev": "concurrently -n api,ui -c blue,green \"bun run server/index.ts\" \"vite\"",
     "build": "tsc -b && vite build",
+    "check": "tsc",
     "preview": "vite preview",
     "server": "bun run server/index.ts",
     "test": "bun test tests/ --path-ignore-patterns \"**/e2e.spec.cjs\" && echo '---' && echo 'Run API tests separately: bun test tests/api.test.ts'",
@@ -42,7 +43,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.96.0",
-    "@happytokenai/happyimage-core": "^0.2.0",
+    "@happytokenai/happyimage-core": "workspace:^0.2.3",
     "dompurify": "^3.4.5",
     "hono": "^4.7.0",
     "lucide-react": "^1.16.0",

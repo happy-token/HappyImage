@@ -16,7 +16,7 @@ import {
   openPageSession,
   resolveSharedChromeProfileDir,
   waitForChromeDebugPort,
-} from "./index.ts";
+} from "./index.js";
 
 function useEnv(
   t: TestContext,

@@ -4,7 +4,7 @@ Codex marketplace plugin providing AI-powered content generation skills. Version
 
 ## Architecture
 
-Skills are exposed through the single `baoyu-skills` plugin in `.Codex-plugin/marketplace.json` (which defines plugin metadata, version, and skill paths). The repo docs still group them into three logical areas:
+Skills are exposed through the single `baoyu-skills` plugin in `.claude-plugin/marketplace.json` (which defines plugin metadata, version, and skill paths). The repo docs still group them into three logical areas:
 
 | Group | Description |
 |-------|-------------|
@@ -70,8 +70,8 @@ Skills that render images MUST declare the backend-selection convention **inline
 
 | Skill | Note |
 |-------|------|
-| `baoyu-image-gen` | Superseded by `baoyu-imagine`. Not in `.Codex-plugin/marketplace.json`. Kept functional — sync any cross-cutting changes with `baoyu-imagine`. |
-| `baoyu-xhs-images` | Superseded by `baoyu-image-cards`. Not in `.Codex-plugin/marketplace.json`. Kept functional — sync any cross-cutting changes with `baoyu-image-cards`. Do NOT update README for this skill. |
+| `baoyu-image-gen` | Superseded by `baoyu-imagine`. Not in `.claude-plugin/marketplace.json`. Kept functional — sync any cross-cutting changes with `baoyu-imagine`. |
+| `baoyu-xhs-images` | Superseded by `baoyu-image-cards`. Not in `.claude-plugin/marketplace.json`. Kept functional — sync any cross-cutting changes with `baoyu-image-cards`. Do NOT update README for this skill. |
 
 ## Release Process
 

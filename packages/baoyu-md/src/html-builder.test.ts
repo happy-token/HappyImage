@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { DEFAULT_STYLE } from "./constants.ts";
+import { DEFAULT_STYLE } from "./constants.js";
 import {
   buildCss,
   buildHtmlDocument,
@@ -9,7 +9,7 @@ import {
   normalizeCssText,
   normalizeInlineCss,
   removeFirstHeading,
-} from "./html-builder.ts";
+} from "./html-builder.js";
 
 test("buildCss injects style variables and concatenates base and theme CSS", () => {
   const css = buildCss("body { color: red; }", ".theme { color: blue; }");

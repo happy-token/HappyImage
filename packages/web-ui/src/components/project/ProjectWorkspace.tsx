@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Share2, MoreHorizontal, Folder, Terminal, X, ChevronLeft, ChevronRight, ZoomIn } from 'lucide-react'
 import Button from '../ui/Button'
 import PlatformPreview from './PlatformPreview'
+import { useAppLanguage, type AppLanguage } from '../../i18n/settings'
 
 interface ProjectFile {
   name: string
@@ -51,7 +52,10 @@ interface ProjectWorkspaceProps {
   publishingAccount: string
   onPublishingAccountChange: (account: string) => void
   aspectRatio?: string
-  onInstallXhsSuccess?: () => void
+}
+
+function L(lang: AppLanguage, zh: string, en: string) {
+  return lang === 'en' ? en : zh
 }
 
 export default function ProjectWorkspace({
@@ -85,33 +89,11 @@ export default function ProjectWorkspace({
   publishingAccount,
   onPublishingAccountChange,
   aspectRatio = '1:1',
-  onInstallXhsSuccess,
 }: ProjectWorkspaceProps) {
+  const lang = useAppLanguage()
   const [activeTab, setActiveTab] = useState<'gallery' | 'publish'>('gallery')
   const [selectedFile, setSelectedFile] = useState<ProjectFile | null>(null)
 
-  const [isInstalling, setIsInstalling] = useState(false)
-  const [installError, setInstallError] = useState<string | null>(null)
-
-  const handleInstallXhs = async () => {
-    setIsInstalling(true)
-    setInstallError(null)
-    try {
-      const res = await fetch('/api/skills-root/install', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || '安装失败')
-
-      onInstallXhsSuccess?.()
-    } catch (err: any) {
-      setInstallError(err.message || '安装失败')
-    } finally {
-      setIsInstalling(false)
-    }
-  }
   const [showMoreMenu, setShowMoreMenu] = useState(false)
   const [moreView, setMoreView] = useState<'off' | 'files' | 'logs'>('off')
   const moreMenuRef = useRef<HTMLDivElement>(null)
@@ -176,7 +158,7 @@ export default function ProjectWorkspace({
               }`}
             >
               <Share2 className="w-3.5 h-3.5" />
-              发布
+              {L(lang, '发布', 'Publish')}
             </button>
             <div className="relative" ref={moreMenuRef}>
               <button
@@ -197,14 +179,14 @@ export default function ProjectWorkspace({
                     className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs font-semibold text-zinc-400 hover:text-zinc-150 hover:bg-zinc-800 transition-colors"
                   >
                     <Folder className="w-3.5 h-3.5" />
-                    文件
+                    {L(lang, '文件', 'Files')}
                   </button>
                   <button
                     onClick={() => { setMoreView('logs'); setShowMoreMenu(false) }}
                     className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs font-semibold text-zinc-400 hover:text-zinc-150 hover:bg-zinc-800 transition-colors border-t border-zinc-800/60"
                   >
                     <Terminal className="w-3.5 h-3.5" />
-                    日志
+                    {L(lang, '日志', 'Logs')}
                   </button>
                 </div>
               )}
@@ -218,8 +200,8 @@ export default function ProjectWorkspace({
                 <svg className="w-12 h-12 mb-3 text-zinc-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
-                <p className="text-sm">生成的图片将显示在这里</p>
-                <p className="text-xs text-zinc-600 mt-1">发送提示词开始生成</p>
+                <p className="text-sm">{L(lang, '生成的图片将显示在这里', 'Generated images will appear here')}</p>
+                <p className="text-xs text-zinc-600 mt-1">{L(lang, '发送提示词开始生成', 'Send a prompt to start generating')}</p>
               </div>
             )}
 
@@ -257,7 +239,7 @@ export default function ProjectWorkspace({
                             type="button"
                             onClick={() => onSelectImage(i)}
                             className="p-1 rounded-lg text-zinc-400 hover:text-zinc-150 hover:bg-zinc-800 border border-transparent hover:border-zinc-700 transition-colors"
-                            title="修改"
+                            title={L(lang, '修改', 'Edit')}
                           >
                             <svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor">
                               <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
@@ -280,7 +262,7 @@ export default function ProjectWorkspace({
                             href={displayPath}
                             download
                             className="p-1 rounded-lg text-indigo-400 hover:text-indigo-300 hover:bg-zinc-800 border border-transparent hover:border-zinc-700 transition-colors"
-                            title="下载"
+                            title={L(lang, '下载', 'Download')}
                           >
                             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -297,12 +279,12 @@ export default function ProjectWorkspace({
                     <div className="bg-zinc-950 flex items-center justify-center relative">
                       <img src={src} alt="New Generation" className="w-full h-auto block" />
                       <div className="absolute top-3 left-3 bg-indigo-600 text-white text-xxs font-bold px-2 py-0.5 rounded-full">
-                        新生成
+                        {L(lang, '新生成', 'New')}
                       </div>
                     </div>
                     <div className="px-2.5 py-2 text-xs bg-zinc-950/40">
                       <span className={`text-indigo-400 font-semibold ${isStreaming ? 'animate-pulse' : ''}`}>
-                        {isStreaming ? '生成中...' : `图片 #${idx + 1}`}
+                        {isStreaming ? L(lang, '生成中...', 'Generating...') : L(lang, `图片 #${idx + 1}`, `Image #${idx + 1}`)}
                       </span>
                     </div>
                   </div>
@@ -320,7 +302,7 @@ export default function ProjectWorkspace({
             <div className="flex items-center justify-between">
               <span className="text-zinc-400 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
                 <Folder className="w-3.5 h-3.5" />
-                项目文件
+                {L(lang, '项目文件', 'Project Files')}
               </span>
               <button
                 onClick={() => setMoreView('off')}
@@ -338,7 +320,7 @@ export default function ProjectWorkspace({
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-start flex-1 min-h-[300px]">
               <div className="md:col-span-1 border border-zinc-850 rounded-2xl bg-zinc-950/40 p-3 flex flex-col gap-1 max-h-[350px] overflow-auto backdrop-blur-sm">
-                <span className="text-zinc-500 text-xxs font-bold uppercase px-2.5 py-1.5 tracking-wider">全部输出文件</span>
+                <span className="text-zinc-500 text-xxs font-bold uppercase px-2.5 py-1.5 tracking-wider">{L(lang, '全部输出文件', 'All Output Files')}</span>
                 {files.map(f => (
                   <button
                     key={f.path}
@@ -355,7 +337,7 @@ export default function ProjectWorkspace({
                   </button>
                 ))}
                 {files.length === 0 && (
-                  <span className="text-zinc-600 text-xs px-2.5">暂无文件</span>
+                  <span className="text-zinc-600 text-xs px-2.5">{L(lang, '暂无文件', 'No files yet')}</span>
                 )}
               </div>
 
@@ -373,7 +355,7 @@ export default function ProjectWorkspace({
                     </pre>
                   </>
                 ) : (
-                  <div className="flex-grow flex items-center justify-center text-zinc-500 text-sm">选择左侧文件查看内容</div>
+                  <div className="flex-grow flex items-center justify-center text-zinc-500 text-sm">{L(lang, '选择左侧文件查看内容', 'Select a file on the left to preview it')}</div>
                 )}
               </div>
             </div>
@@ -388,13 +370,13 @@ export default function ProjectWorkspace({
             <div className="flex items-center justify-between">
               <span className="text-zinc-400 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
                 <Terminal className="w-3.5 h-3.5" />
-                运行日志
+                {L(lang, '运行日志', 'Run Logs')}
               </span>
               <div className="flex items-center gap-2">
                 {isStreaming && (
                   <span className="flex items-center gap-1.5 text-xs text-indigo-400 animate-pulse font-semibold">
                     <span className="w-2 h-2 rounded-full bg-indigo-500 shadow shadow-indigo-500/50"></span>
-                    运行中...
+                    {L(lang, '运行中...', 'Running...')}
                   </span>
                 )}
                 <button
@@ -408,7 +390,7 @@ export default function ProjectWorkspace({
 
             <div className="bg-zinc-950/85 border border-zinc-850 rounded-2xl p-4 font-mono text-xs text-zinc-300 leading-relaxed overflow-auto min-h-[300px] max-h-[450px] shadow-inner select-text backdrop-blur-sm">
               {logs.length === 0 ? (
-                <span className="text-zinc-650 italic">暂无日志，运行生成后这里会显示终端输出</span>
+                <span className="text-zinc-650 italic">{L(lang, '暂无日志，运行生成后这里会显示终端输出', 'No logs yet. Terminal output will appear here after generation starts.')}</span>
               ) : (
                 <div className="whitespace-pre-wrap">{logs.join('')}</div>
               )}
@@ -423,9 +405,9 @@ export default function ProjectWorkspace({
           {/* Platform pills header */}
           <div className="flex items-center gap-2 px-3 py-2 flex-shrink-0 border-b border-zinc-850/50 overflow-x-auto">
             {([
-              { id: 'xiaohongshu', label: '小红书' },
-              { id: 'wechat', label: '微信' },
-              { id: 'weibo', label: '微博' },
+              { id: 'xiaohongshu', label: L(lang, '小红书', 'Xiaohongshu') },
+              { id: 'wechat', label: L(lang, '微信', 'WeChat') },
+              { id: 'weibo', label: L(lang, '微博', 'Weibo') },
               { id: 'x', label: 'X' },
             ] as const).map(p => (
               <button
@@ -446,7 +428,7 @@ export default function ProjectWorkspace({
               className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 border border-transparent hover:border-zinc-700 transition-colors whitespace-nowrap cursor-pointer flex-shrink-0"
             >
               <ChevronLeft className="w-3.5 h-3.5" />
-              返回
+              {L(lang, '返回', 'Back')}
             </button>
           </div>
 
@@ -467,7 +449,7 @@ export default function ProjectWorkspace({
 
             {packageResult && (
               <div className="bg-zinc-950 border border-zinc-850 p-2.5 rounded-xl text-xs">
-                <span className="text-zinc-500 font-bold uppercase block">素材包已就绪</span>
+                <span className="text-zinc-500 font-bold uppercase block">{L(lang, '素材包已就绪', 'Asset Package Ready')}</span>
                 <code className="text-emerald-400 truncate block mt-0.5">{packageResult.packagePath}</code>
                 <span className="text-zinc-400">{packageResult.images.length} images · {packageResult.files.length} texts</span>
               </div>
@@ -475,7 +457,7 @@ export default function ProjectWorkspace({
 
             {publishResult && (
               <div className="bg-emerald-950/20 border border-emerald-900/50 p-2.5 rounded-xl text-xs text-emerald-400">
-                <span className="font-bold uppercase block">浏览器已启动</span>
+                <span className="font-bold uppercase block">{L(lang, '浏览器已启动', 'Browser Started')}</span>
                 <code className="truncate block">{publishResult.logPath}</code>
                 <span>PID: {publishResult.pid}</span>
               </div>
@@ -489,22 +471,9 @@ export default function ProjectWorkspace({
                 <div className="bg-amber-950/20 border border-amber-900/60 p-3 rounded-xl text-amber-500 text-xs flex items-center justify-between gap-4">
                   <div className="flex gap-2 items-center">
                     <span>⚠️</span>
-                    <span>未安装小红书发布技能，仍可打包素材后手动上传</span>
+                    <span>{L(lang, '未安装小红书发布技能，仍可打包素材后手动上传', 'Xiaohongshu publishing skill is not installed. You can still package assets and upload manually.')}</span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleInstallXhs}
-                    disabled={isInstalling}
-                    className="px-2.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold text-xxs transition-all shadow-md shadow-amber-600/10 cursor-pointer disabled:opacity-50 disabled:cursor-wait shrink-0"
-                  >
-                    {isInstalling ? '安装中...' : '立即安装'}
-                  </button>
                 </div>
-                {installError && (
-                  <div className="text-red-400 text-xs px-1">
-                    安装失败: {installError}
-                  </div>
-                )}
               </div>
             )}
           </div>
@@ -521,18 +490,18 @@ export default function ProjectWorkspace({
                   >
                     {publishingAccounts.map(account => (
                       <option key={account.alias} value={account.alias}>
-                        {account.name}{account.isDefault ? ' (默认)' : ''} {account.method ? `· ${account.method}` : ''}
+                        {account.name}{account.isDefault ? L(lang, ' (默认)', ' (Default)') : ''} {account.method ? `· ${account.method}` : ''}
                       </option>
                     ))}
                   </select>
                 ) : (
                   <div className="text-amber-500 text-xs border border-amber-950 bg-amber-950/20 p-2 rounded-lg flex items-center justify-between gap-3">
-                    <span>未配置微信账号，请前往设置页面添加</span>
+                    <span>{L(lang, '未配置微信账号，请前往设置页面添加', 'No WeChat account configured. Add one in Settings.')}</span>
                     <Link
                       to="/settings"
                       className="px-2.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold text-xxs transition-all shadow-md shadow-amber-600/10 whitespace-nowrap cursor-pointer shrink-0"
                     >
-                      立即配置
+                      {L(lang, '立即配置', 'Configure')}
                     </Link>
                   </div>
                 )}
@@ -547,9 +516,9 @@ export default function ProjectWorkspace({
                 {isPackaging ? (
                   <span className="flex items-center gap-1.5">
                     <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                    打包中...
+                    {L(lang, '打包中...', 'Packaging...')}
                   </span>
-                ) : '📦 打包素材'}
+                ) : L(lang, '打包素材', 'Package Assets')}
               </Button>
               <Button
                 onClick={onOpenPublisher}
@@ -559,9 +528,9 @@ export default function ProjectWorkspace({
                 {isPublishing ? (
                   <span className="flex items-center gap-1.5">
                     <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                    启动中...
+                    {L(lang, '启动中...', 'Starting...')}
                   </span>
-                ) : platform === 'xiaohongshu' && xhsAvailable === false ? '❌ 仅打包' : '🌐 自动填写发布'}
+                ) : platform === 'xiaohongshu' && xhsAvailable === false ? L(lang, '仅打包', 'Package Only') : L(lang, '自动填写发布', 'Auto-fill Publisher')}
               </Button>
             </div>
           </div>
@@ -620,7 +589,7 @@ export default function ProjectWorkspace({
                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
-                下载
+                {L(lang, '下载', 'Download')}
               </a>
             </div>
           </div>

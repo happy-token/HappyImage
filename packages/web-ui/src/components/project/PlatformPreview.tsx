@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import Badge from '../ui/Badge'
+import { useAppLanguage, type AppLanguage } from '../../i18n/settings'
 
 interface PlatformViolation {
   field: string
@@ -30,11 +31,18 @@ interface PlatformPreviewProps {
   aspectRatio?: string
 }
 
-const platformNames: Record<string, string> = {
-  xiaohongshu: '小红书 (Little Red Book)',
-  wechat: '微信公众号 (WeChat Article)',
-  weibo: '新浪微博 (Sina Weibo)',
-  x: 'X (Twitter)',
+function L(lang: AppLanguage, zh: string, en: string) {
+  return lang === 'en' ? en : zh
+}
+
+function platformName(platform: string, lang: AppLanguage) {
+  const platformNames: Record<string, string> = {
+    xiaohongshu: L(lang, '小红书', 'Xiaohongshu'),
+    wechat: L(lang, '微信公众号', 'WeChat Official Account'),
+    weibo: L(lang, '新浪微博', 'Sina Weibo'),
+    x: 'X (Twitter)',
+  }
+  return platformNames[platform] || platform
 }
 
 const xiaohongshuAspectStyle = (aspectRatio: string = '1:1'): React.CSSProperties => {
@@ -52,6 +60,7 @@ const getWeiboSingleAspectRatio = (aspectRatio: string = '1:1') => {
 }
 
 export default function PlatformPreview({ platform, projectPath, images, caption, imageCount, onCaptionChange, showHeader = true, aspectRatio = '1:1' }: PlatformPreviewProps) {
+  const lang = useAppLanguage()
   const [check, setCheck] = useState<PlatformCheck | null>(null)
   const [loading, setLoading] = useState(false)
   const [activeImageIndex, setActiveImageIndex] = useState(0)
@@ -109,7 +118,7 @@ export default function PlatformPreview({ platform, projectPath, images, caption
         <div className="flex items-center justify-between p-4 border-b border-zinc-800 bg-zinc-950/40">
           <div>
             <p className="text-indigo-400 text-xxs font-bold uppercase tracking-wider">Publish Preview</p>
-            <h3 className="text-zinc-150 font-bold text-sm">{platformNames[platform] || platform}</h3>
+            <h3 className="text-zinc-150 font-bold text-sm">{platformName(platform, lang)}</h3>
           </div>
           <div className="flex items-center gap-1.5">
             {loading && <Badge variant="outline">checking...</Badge>}
@@ -209,13 +218,13 @@ export default function PlatformPreview({ platform, projectPath, images, caption
             <div className="p-3 flex flex-col gap-1.5 overflow-auto max-h-[140px] shrink-0">
               <EditableText
                 text={title}
-                placeholder="添加标题..."
+                placeholder={L(lang, '添加标题...', 'Add a title...')}
                 onCommit={t => onCaptionChange?.(reconstructCaption(t, bodyText, hashtags))}
                 className="text-zinc-150 font-bold text-sm leading-snug"
               />
               <EditableText
                 text={bodyText}
-                placeholder="添加正文内容..."
+                placeholder={L(lang, '添加正文内容...', 'Add body content...')}
                 onCommit={b => onCaptionChange?.(reconstructCaption(title, b, hashtags))}
                 className="text-zinc-300 text-xs leading-relaxed whitespace-pre-wrap mt-1"
               />
@@ -257,7 +266,7 @@ export default function PlatformPreview({ platform, projectPath, images, caption
             {wechatView === 'feed' && (
               <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-2xl p-4 flex flex-col gap-2 shrink-0">
                 <div className="flex items-center gap-2 mb-2">
-                  <div className="w-6 h-6 rounded-full bg-emerald-600 flex items-center justify-center text-white text-[10px] font-bold">公众号</div>
+                  <div className="w-6 h-6 rounded-full bg-emerald-600 flex items-center justify-center text-white text-[10px] font-bold">{L(lang, '公众号', 'OA')}</div>
                   <span className="text-zinc-300 text-xs font-semibold">Happy Official Account</span>
                 </div>
                 
@@ -268,7 +277,7 @@ export default function PlatformPreview({ platform, projectPath, images, caption
                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-3 w-full">
                         <EditableText
                           text={title}
-                          placeholder="添加微信标题..."
+                          placeholder={L(lang, '添加微信标题...', 'Add WeChat title...')}
                           onCommit={t => onCaptionChange?.(reconstructCaption(t, bodyText, hashtags))}
                           className="text-white font-bold text-sm leading-snug line-clamp-2 drop-shadow-md w-full text-left"
                         />
@@ -279,7 +288,7 @@ export default function PlatformPreview({ platform, projectPath, images, caption
                       <span className="text-xl">📰</span>
                       <EditableText
                         text={title}
-                        placeholder="添加微信标题..."
+                        placeholder={L(lang, '添加微信标题...', 'Add WeChat title...')}
                         onCommit={t => onCaptionChange?.(reconstructCaption(t, bodyText, hashtags))}
                         className="text-zinc-300 font-bold text-xs text-center w-full"
                       />
@@ -289,7 +298,7 @@ export default function PlatformPreview({ platform, projectPath, images, caption
                   <div className="p-3 border-t border-zinc-850 bg-zinc-900/30">
                     <EditableText
                       text={bodyText}
-                      placeholder="添加摘要/正文内容..."
+                      placeholder={L(lang, '添加摘要/正文内容...', 'Add summary or body content...')}
                       onCommit={b => onCaptionChange?.(reconstructCaption(title, b, hashtags))}
                       className="text-zinc-400 text-xs leading-relaxed line-clamp-2 w-full text-left"
                     />
@@ -314,7 +323,7 @@ export default function PlatformPreview({ platform, projectPath, images, caption
 
                 <EditableText
                   text={bodyText}
-                  placeholder="添加正文内容..."
+                  placeholder={L(lang, '添加正文内容...', 'Add body content...')}
                   onCommit={b => onCaptionChange?.(reconstructCaption(title, b, hashtags))}
                   className="text-zinc-300 text-xs leading-relaxed whitespace-pre-wrap font-sans mt-1"
                 />
@@ -357,7 +366,7 @@ export default function PlatformPreview({ platform, projectPath, images, caption
             <div className="flex flex-col gap-1.5">
               <EditableText
                 text={title ? `【${title}】` : ''}
-                placeholder="【添加标题（可选）】"
+                placeholder={L(lang, '【添加标题（可选）】', '[Add title, optional]')}
                 onCommit={t => {
                   const stripped = t.replace(/^【|】$/g, '')
                   onCaptionChange?.(reconstructCaption(stripped, extractBodyText(caption, true), []))
@@ -366,12 +375,12 @@ export default function PlatformPreview({ platform, projectPath, images, caption
               />
               <EditableText
                 text={extractBodyText(caption, true)}
-                placeholder="分享新鲜事..."
+                placeholder={L(lang, '分享新鲜事...', "What's new?")}
                 onCommit={b => onCaptionChange?.(reconstructCaption(title, b, []))}
                 className="text-zinc-300 text-xs leading-relaxed whitespace-pre-wrap mt-1"
               />
               {extractBodyText(caption, true).length > 140 && (
-                <span className="text-indigo-400 text-xxs font-bold cursor-pointer hover:underline">...展开全文</span>
+                <span className="text-indigo-400 text-xxs font-bold cursor-pointer hover:underline">{L(lang, '...展开全文', '...expand')}</span>
               )}
             </div>
 

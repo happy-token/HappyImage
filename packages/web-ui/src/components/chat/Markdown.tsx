@@ -2,11 +2,6 @@ import { useMemo } from 'react'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 
-marked.use({
-  gfm: true,
-  breaks: true,
-})
-
 const renderer = new marked.Renderer()
 renderer.link = function ({ href, title, text }) {
   const titleAttr = title ? ` title="${title}"` : ''
@@ -28,7 +23,11 @@ renderer.heading = function ({ text, depth }: { text: string; depth: number }) {
   return `<h${depth} id="${id}">${text}</h${depth}>`
 }
 
-marked.setOptions({ renderer })
+marked.use({
+  gfm: true,
+  breaks: true,
+  renderer,
+})
 
 export default function Markdown({ text, className }: { text: string; className?: string }) {
   const html = useMemo(() => {

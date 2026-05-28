@@ -9,7 +9,7 @@ import {
   replaceMarkdownImagesWithPlaceholders,
   resolveContentImages,
   resolveImagePath,
-} from "./images.ts";
+} from "./images.js";
 
 async function makeTempDir(prefix: string): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), prefix));

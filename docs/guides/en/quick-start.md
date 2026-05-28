@@ -36,8 +36,8 @@ Supported launch and management commands:
 | Desktop-style window | `npx @happyimage/cli desktop` | `happyimage desktop` | Open HappyImage in a Chrome app window; requires local Chrome |
 | Init config | `npx @happyimage/cli init` | `happyimage init` | Check environment and generate an `.env` template |
 | Build Web UI | `npx @happyimage/cli build` | `happyimage build` | Manually build Web UI assets; `web` auto-builds when assets are missing |
-| Doctor | `npx @happyimage/cli doctor` | `happyimage doctor` | Check Bun, Chrome, API keys, skills root, and output directory |
-| Config paths | `npx @happyimage/cli config` | `happyimage config` | Show config, skills root, and output paths |
+| Doctor | `npx @happyimage/cli doctor` | `happyimage doctor` | Check Bun, Chrome, API keys, built-in skills, and output directory |
+| Config paths | `npx @happyimage/cli config` | `happyimage config` | Show config, built-in skills, and output paths |
 | Projects | `npx @happyimage/cli projects` | `happyimage projects` | List generated projects |
 
 Shortest startup flow:
@@ -58,6 +58,8 @@ bun run dev:web
 ```
 
 Open `http://localhost:3200` in your browser.
+
+For root-level CLI, Web UI, and GUI/Desktop dev/build/release commands, see [Development, Build, and Release](../development-release.md).
 
 ## 2. Configure API Keys
 

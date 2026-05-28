@@ -40,7 +40,7 @@ React + Vite frontend with a Hono API server. Pages: StudioPage (generation work
 - **Platform preview**: `PlatformPreview.tsx` renders accurate per-platform post mockups with inline hashtag handling (Weibo `#双#号#`, X inline `#tag`, WeChat no hashtags)
 - **Caption generation**: `/api/caption` — AI-powered per-platform caption generation with format templates
 - **Watermark**: Configurable image watermark via EXTEND.md preferences
-- **Skills root management**: Install/select external baoyu-skills roots via `/api/skills-root`
+- **Built-in skills**: Uses the project-bundled `skills/` directory; no external skills root configuration is exposed.
 
 **Running the Web UI:**
 ```bash
@@ -61,7 +61,6 @@ bun run dev:web        # → http://localhost:3200
 | `POST /api/publish` | Launch browser-based publishing |
 | `GET /api/skills` | List available skills |
 | `GET/POST /api/preferences/:skillId` | Read/write EXTEND.md preferences |
-| `GET/POST /api/skills-root/*` | Skills root management |
 
 ## Running Skills
 
@@ -105,10 +104,10 @@ Caption format convention: `Title: <title>\n\n<body text>\n\n#tag1 #tag2`. The p
 
 | Rule | Description |
 |------|-------------|
-| **Bundled skills first** | Project-bundled skills in `skills/` directory are the default. Override via `BAOYU_SKILLS_ROOT` env var or `<configRoot>/.env` setting. |
+| **Bundled skills first** | Project-bundled skills in `skills/` directory are the default. |
 | **Default image generation** | Use whatever image backend is available; if multiple are available, ask the user which to use. |
 
-Priority: `BAOYU_SKILLS_ROOT` → `<configRoot>/skills/` → project `skills/` (bundled) → `~/.baoyu-skills/` (legacy).
+Priority: project `skills/` (bundled) → `<configRoot>/skills/` fallback.
 
 Config root per platform:
 - macOS: `~/Library/Application Support/HappyImage/`

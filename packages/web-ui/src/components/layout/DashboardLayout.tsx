@@ -1,6 +1,7 @@
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 import { MessageSquare, Compass, History, Settings, PanelLeftClose, PanelLeftOpen, Plus, Trash2, PenLine, HelpCircle } from 'lucide-react'
+import { t, useAppLanguage } from '../../i18n/settings'
 
 interface SessionPreview {
   id: string
@@ -63,6 +64,7 @@ function encodeProjectId(path: string) {
 export default function DashboardLayout() {
   const location = useLocation()
   const navigate = useNavigate()
+  const lang = useAppLanguage()
   const [isCollapsed, setIsCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false
     return window.localStorage.getItem('happyimage-sidebar-collapsed') === 'true'
@@ -165,18 +167,18 @@ export default function DashboardLayout() {
             <img src="/logo.svg" className="w-8 h-8 object-contain group-hover:scale-105 transition-transform" alt="HappyImage Logo" />
             {!isCollapsed && <div className="flex flex-col">
               <span className="text-zinc-100 font-extrabold text-sm tracking-wide leading-none">HappyImage</span>
-              <span className="text-zinc-400 text-[9px] font-extrabold uppercase tracking-widest mt-1">Workspace</span>
+              <span className="text-zinc-400 text-[9px] font-extrabold uppercase tracking-widest mt-1">{t(lang, 'nav.workspace')}</span>
             </div>}
           </Link>
           {!isCollapsed && (
-            <button type="button" onClick={() => setIsCollapsed(true)} title="折叠侧边栏" className="rounded-lg border border-zinc-800 bg-zinc-900 p-1.5 text-zinc-400 transition hover:border-zinc-700 hover:text-zinc-100">
+            <button type="button" onClick={() => setIsCollapsed(true)} title={t(lang, 'nav.collapse')} className="rounded-lg border border-zinc-800 bg-zinc-900 p-1.5 text-zinc-400 transition hover:border-zinc-700 hover:text-zinc-100">
               <PanelLeftClose className="h-3.5 w-3.5" />
             </button>
           )}
         </div>
 
         {isCollapsed && (
-          <button type="button" onClick={() => setIsCollapsed(false)} title="展开侧边栏" className="w-8 h-8 flex items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-400 transition hover:border-zinc-700 hover:text-zinc-100">
+          <button type="button" onClick={() => setIsCollapsed(false)} title={t(lang, 'nav.expand')} className="w-8 h-8 flex items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-400 transition hover:border-zinc-700 hover:text-zinc-100">
             <PanelLeftOpen className="h-4 w-4" />
           </button>
         )}
@@ -185,19 +187,19 @@ export default function DashboardLayout() {
         <button
           onClick={handleNewChat}
           className={`flex items-center gap-2 rounded-lg text-sm font-semibold transition-all duration-200 border border-zinc-700/50 bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/20 ${isCollapsed ? 'w-8 h-8 justify-center p-0' : 'px-3 py-2'}`}
-          title="+ New Chat"
+          title={t(lang, 'nav.new_chat')}
         >
           <Plus className="w-4 h-4 shrink-0" />
-          {!isCollapsed && <span>New Chat</span>}
+          {!isCollapsed && <span>{t(lang, 'nav.new_chat')}</span>}
         </button>
 
         {/* Nav items */}
         <nav className="flex flex-col gap-1">
           {[
-            { to: '/gallery', label: 'Styles Gallery', icon: Compass },
-            { to: '/history', label: 'Projects History', icon: History },
-            { to: '/settings', label: 'Settings', icon: Settings },
-            { to: '/guide', label: 'User Guide', icon: HelpCircle },
+            { to: '/gallery', label: t(lang, 'nav.gallery'), icon: Compass },
+            { to: '/history', label: t(lang, 'nav.history'), icon: History },
+            { to: '/settings', label: t(lang, 'nav.settings'), icon: Settings },
+            { to: '/guide', label: t(lang, 'nav.guide'), icon: HelpCircle },
           ].map(item => {
             const Icon = item.icon
             return (
@@ -224,11 +226,11 @@ export default function DashboardLayout() {
         {!isCollapsed && (
           <div className="flex-1 flex flex-col min-h-0">
             <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 px-2 mb-1.5 shrink-0">
-              All Projects
+              {t(lang, 'nav.all_projects')}
             </div>
             <div className="flex-1 overflow-y-auto session-sidebar-scroll space-y-0.5">
               {sorted.length === 0 && (
-                <p className="text-xs text-zinc-600 px-2 py-4 text-center">No chats yet</p>
+                <p className="text-xs text-zinc-600 px-2 py-4 text-center">{t(lang, 'nav.no_chats')}</p>
               )}
               {sorted.map(s => (
                 <Link
@@ -257,13 +259,13 @@ export default function DashboardLayout() {
                       />
                     ) : (
                       <span className={`text-xs font-medium truncate flex-1 ${activeSessionId === s.id ? 'text-zinc-100' : 'text-zinc-300'}`}>
-                        {s.title || 'New Chat'}
+                        {s.title || t(lang, 'nav.new_chat')}
                       </span>
                     )}
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
                     <span className="text-[10px] text-zinc-500 truncate flex-1">
-                      {s.lastMessage || (s.title ? '' : 'New Chat')}
+                      {s.lastMessage || (s.title ? '' : t(lang, 'nav.new_chat'))}
                     </span>
                     {s.status === 'generating' && <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse shrink-0" />}
                     {s.imageCount > 0 && <span className="text-[9px] text-zinc-600 shrink-0">{s.imageCount} img</span>}
@@ -273,14 +275,14 @@ export default function DashboardLayout() {
                     <button
                       onClick={(e) => startRename(s.id, s.title, e)}
                       className="p-0.5 rounded hover:bg-zinc-700 text-zinc-500 hover:text-zinc-300 transition-colors"
-                      title="Rename"
+                      title={t(lang, 'nav.rename')}
                     >
                       <PenLine className="h-2.5 w-2.5" />
                     </button>
                     <button
                       onClick={(e) => handleDelete(s.id, e)}
                       className="p-0.5 rounded hover:bg-red-950/50 text-zinc-500 hover:text-red-400 transition-colors"
-                      title="Delete"
+                      title={t(lang, 'nav.delete')}
                     >
                       <Trash2 className="h-2.5 w-2.5" />
                     </button>

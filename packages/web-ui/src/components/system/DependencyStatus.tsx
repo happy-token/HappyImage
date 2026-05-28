@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
+import { useAppLanguage, type AppLanguage } from '../../i18n/settings'
 
 interface DependencyCheck {
   id: string
@@ -16,10 +17,14 @@ interface DependencyResponse {
   checks: DependencyCheck[]
 }
 
-function ActionLink({ check }: { check: DependencyCheck }) {
+function L(lang: AppLanguage, zh: string, en: string) {
+  return lang === 'en' ? en : zh
+}
+
+function ActionLink({ check, lang }: { check: DependencyCheck; lang: AppLanguage }) {
   const className = 'inline-flex items-center justify-center rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1.5 text-xs font-semibold text-zinc-200 no-underline transition hover:border-indigo-500 hover:text-white'
   if (check.id === 'baoyu-skills') {
-    return <Link to="/settings" className={className}>安装或指定目录</Link>
+    return <Link to="/settings" className={className}>{L(lang, '查看环境状态', 'View Environment Status')}</Link>
   }
   if (check.installUrl.startsWith('/')) {
     return <Link to={check.installUrl} className={className}>{check.installLabel}</Link>
@@ -28,6 +33,7 @@ function ActionLink({ check }: { check: DependencyCheck }) {
 }
 
 export default function DependencyStatus() {
+  const lang = useAppLanguage()
   const location = useLocation()
   const [data, setData] = useState<DependencyResponse | null>(null)
   const [collapsed, setCollapsed] = useState(false)
@@ -51,11 +57,11 @@ export default function DependencyStatus() {
           <div className="flex items-center gap-2">
             <span className={`h-2.5 w-2.5 rounded-full ${missingRequired.length > 0 ? 'bg-red-400' : 'bg-amber-400'}`} />
             <p className="text-sm font-bold">
-              {missingRequired.length > 0 ? '运行环境未完成，部分功能不可用' : '建议补全运行环境'}
+              {missingRequired.length > 0 ? L(lang, '运行环境未完成，部分功能不可用', 'Runtime setup is incomplete. Some features may be unavailable.') : L(lang, '建议补全运行环境', 'Complete the runtime setup')}
             </p>
           </div>
           <p className="mt-1 text-xs leading-relaxed text-zinc-400">
-            HappyImage Web UI 主要依赖 baoyu-skills。缺少必需项时，请先安装 baoyu-skills 或补齐它需要的 Node.js 运行能力。
+            {L(lang, 'HappyImage Web UI 使用项目内置技能。缺少必需项时，请补齐对应运行能力。', 'HappyImage Web UI uses project-bundled skills. Please install any missing required runtime capabilities.')}
           </p>
           <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
             {missing.map(check => (
@@ -68,7 +74,7 @@ export default function DependencyStatus() {
                 </div>
                 <p className="mt-1 text-xs leading-relaxed text-zinc-500">{check.description}</p>
                 <div className="mt-2">
-                  <ActionLink check={check} />
+                  <ActionLink check={check} lang={lang} />
                 </div>
               </div>
             ))}
@@ -79,7 +85,7 @@ export default function DependencyStatus() {
           onClick={() => setCollapsed(true)}
           className="shrink-0 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-zinc-400 transition hover:border-zinc-700 hover:text-zinc-200"
         >
-          暂时隐藏
+          {L(lang, '暂时隐藏', 'Hide for now')}
         </button>
       </div>
     </div>

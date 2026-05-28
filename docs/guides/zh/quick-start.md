@@ -36,8 +36,8 @@ happyimage web --open
 | 桌面式窗口 | `npx @happyimage/cli desktop` | `happyimage desktop` | 用 Chrome 应用窗口打开 HappyImage，需要本机 Chrome |
 | 初始化配置 | `npx @happyimage/cli init` | `happyimage init` | 检查环境并生成 `.env` 模板 |
 | 构建网页界面 | `npx @happyimage/cli build` | `happyimage build` | 手动构建网页界面；`web` 启动时缺少构建产物会自动构建 |
-| 诊断检查 | `npx @happyimage/cli doctor` | `happyimage doctor` | 检查 Bun、Chrome、密钥、技能目录、输出目录 |
-| 查看配置路径 | `npx @happyimage/cli config` | `happyimage config` | 查看配置文件、技能目录、输出目录 |
+| 诊断检查 | `npx @happyimage/cli doctor` | `happyimage doctor` | 检查 Bun、Chrome、密钥、内置技能、输出目录 |
+| 查看配置路径 | `npx @happyimage/cli config` | `happyimage config` | 查看配置文件、内置技能、输出目录 |
 | 查看项目 | `npx @happyimage/cli projects` | `happyimage projects` | 列出已生成项目 |
 
 最短启动流程：
@@ -65,6 +65,8 @@ bun run dev:web
 ```
 
 浏览器打开 `http://localhost:3200`。
+
+CLI、Web UI、GUI/Desktop 的根目录开发、构建和发布命令见 [Development, Build, and Release](../development-release.md)。
 
 ## 2. 配置密钥
 

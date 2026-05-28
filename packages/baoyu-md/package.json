@@ -23,6 +23,7 @@
   },
   "scripts": {
     "build": "node ../../scripts/build-shared-package.mjs --external mermaid --external @antv/infographic --asset src/themes:themes --asset src/code-themes:code-themes",
+    "check": "tsc --noEmit",
     "prepack": "bun run build"
   },
   "dependencies": {

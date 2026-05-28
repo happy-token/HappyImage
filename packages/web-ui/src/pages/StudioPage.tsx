@@ -14,6 +14,7 @@ import { parseSSEStream } from '../lib/sse'
 import type { ChatMessage } from '../lib/chat-reducer'
 import { previewForItem, previewForSkill, getStyleGradient, getPaletteGradient } from '../lib/screenshots'
 import { encodeProjectId } from '../lib/project'
+import { t, useAppLanguage, type AppLanguage } from '../i18n/settings'
 
 interface PreferenceInfo {
   found: boolean
@@ -50,6 +51,14 @@ interface PublishingAccount {
   isDefault: boolean
   method: string
   author: string
+}
+
+function L(lang: AppLanguage, zh: string, en: string) {
+  return lang === 'en' ? en : zh
+}
+
+function displaySkillName(skill: SkillDefinition, lang: AppLanguage) {
+  return lang === 'en' ? skill.name : skill.nameZh
 }
 
 function CompactStyleCard({
@@ -192,9 +201,9 @@ function commandIdForSkill(skillId: string) {
   return map[skillId] || `baoyu-${skillId}`
 }
 
-const welcomeMsg = makeMessage('assistant', 'Describe what you would like to design, or point to a local directory or GitHub repository. Choose a skill and styles below to begin.')
-
 export default function StudioPage() {
+  const appLang = useAppLanguage()
+  const welcomeMsg = useMemo(() => makeMessage('assistant', t(appLang, 'studio.welcome')), [appLang])
   const { id: urlProjectId } = useParams<{ id?: string }>()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -216,7 +225,7 @@ export default function StudioPage() {
   const skill = getSkill(skillId) || defaultSkill
   const [selections, setSelections] = useState<Record<string, string>>(() => initialSelections(defaultSkill))
   const [aspectRatio, setAspectRatio] = useState(defaultSkill.defaultAspectRatio)
-  const [language, setLanguage] = useState('zh')
+  const [language, setLanguage] = useState<string>(appLang)
   const [imageCount, setImageCount] = useState(defaultImageCount(defaultSkill))
 
   const [extraParams, setExtraParams] = useState<Record<string, string>>(() => {
@@ -256,10 +265,10 @@ export default function StudioPage() {
   }
 
   const configSummary = useMemo(() => {
-    const parts: string[] = [skill.nameZh]
-    if (imageCount > 1) parts.push(`${imageCount} 张`)
+    const parts: string[] = [displaySkillName(skill, appLang)]
+    if (imageCount > 1) parts.push(`${imageCount} ${t(appLang, 'studio.image_unit')}`)
     return parts.join(' · ')
-  }, [skill, imageCount])
+  }, [skill, imageCount, appLang])
 
   const [sourceMode, setSourceMode] = useState('text')
   const [sourceRef, setSourceRef] = useState('')
@@ -375,7 +384,7 @@ export default function StudioPage() {
       setAspectRatio(defaultSkill.defaultAspectRatio)
       setImageCount(defaultImageCount(defaultSkill))
       setExtraParams({})
-      setLanguage('zh')
+      setLanguage(appLang)
       setSourceMode('text')
       setSourceRef('')
       setUploadedSourceName('')
@@ -510,7 +519,7 @@ export default function StudioPage() {
       .finally(() => { if (!cancelled) setLoadingProject(false) })
 
     return () => { cancelled = true; projectLoading.current = false }
-  }, [urlProjectId])
+  }, [urlProjectId, appLang, welcomeMsg])
 
   // Handle gallery/skill query params
   useEffect(() => {
@@ -531,7 +540,7 @@ export default function StudioPage() {
     setSkillId(requestedSkill.id)
     setSelections(nextSelections)
     setAspectRatio(searchParams.get('aspectRatio') || requestedSkill.defaultAspectRatio)
-    setLanguage(searchParams.get('language') || 'zh')
+    setLanguage(searchParams.get('language') || appLang)
     setImageCount(Number(searchParams.get('imageCount') || searchParams.get('pageCount') || searchParams.get('slides')) || defaultImageCount(requestedSkill))
     
     // Set extraParams from query params
@@ -548,9 +557,9 @@ export default function StudioPage() {
     const requestedSessionId = searchParams.get('session')
     if (requestedSessionId) setActiveSessionId(requestedSessionId)
     dispatch({ type: 'RESET_MESSAGES', messages: [
-      makeMessage('assistant', `Gallery selections are loaded for ${requestedSkill.nameZh}${requestedSessionId ? ` in session ${requestedSessionId.slice(0, 8)}` : ''}. Describe the topic, paste a GitHub repository, or tell me what you want to generate.`),
+      makeMessage('assistant', t(appLang, 'studio.gallery_loaded', { skill: displaySkillName(requestedSkill, appLang) })),
     ]})
-  }, [searchParams, urlProjectId])
+  }, [searchParams, urlProjectId, appLang])
 
   // Load session history when switching sessions
   useEffect(() => {
@@ -689,9 +698,9 @@ export default function StudioPage() {
     
     const langParam = nextSkill.parameters.find(p => p.name === 'language')
     if (langParam) {
-      setLanguage(String(langParam.defaultValue ?? 'zh'))
+      setLanguage(String(langParam.defaultValue ?? appLang))
     } else {
-      setLanguage('zh')
+      setLanguage(appLang)
     }
     
     const aspectParam = nextSkill.parameters.find(p => p.name === 'aspectRatio')
@@ -788,7 +797,7 @@ export default function StudioPage() {
       }).catch(() => {})
     }
 
-    appendMessage('user', query || `使用${uploadedSourceName ? `上传文件 ${uploadedSourceName}` : '已选择的内容源'}生成图片`)
+    appendMessage('user', query || L(appLang, `使用${uploadedSourceName ? `上传文件 ${uploadedSourceName}` : '已选择的内容源'}生成图片`, `Generate images from ${uploadedSourceName ? `uploaded file ${uploadedSourceName}` : 'the selected content source'}`))
 
     if (skipPlanConfirmation) {
       const streamId = appendMessage('assistant', '', 'runner')
@@ -1150,9 +1159,9 @@ export default function StudioPage() {
       {/* Active Skill Selector with Previews */}
       <div className="flex flex-col gap-2">
         <div className="flex justify-between items-center px-1">
-          <span className="text-zinc-400 text-[10px] font-bold uppercase tracking-wider">生成类型 Active Skill</span>
+          <span className="text-zinc-400 text-[10px] font-bold uppercase tracking-wider">{L(appLang, '生成类型', 'Active Skill')}</span>
           <span className="text-[9px] text-indigo-400 font-bold bg-indigo-950/40 border border-indigo-900/30 rounded px-1.5 py-0.5">
-            {skill.nameZh}
+            {displaySkillName(skill, appLang)}
           </span>
         </div>
         <div className="flex gap-2 overflow-x-auto pb-2 pt-0.5 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
@@ -1164,7 +1173,7 @@ export default function StudioPage() {
                 key={item.id}
                 type="button"
                 onClick={() => selectSkill(item.id)}
-                title={`${item.nameZh}: ${item.description}`}
+                title={`${displaySkillName(item as unknown as SkillDefinition, appLang)}: ${item.description}`}
                 className={`group flex flex-col w-28 shrink-0 rounded-xl overflow-hidden border text-left cursor-pointer transition-all duration-300 ${
                   active 
                     ? 'border-indigo-500 bg-indigo-950/20 ring-2 ring-indigo-500/20' 
@@ -1175,14 +1184,14 @@ export default function StudioPage() {
                   {preview ? (
                     <img 
                       src={preview} 
-                      alt={item.nameZh} 
+                      alt={displaySkillName(item as unknown as SkillDefinition, appLang)}
                       className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" 
                     />
                   ) : (
                     <div 
                       className="w-full h-full flex items-center justify-center p-2 text-center text-[10px] font-bold text-white/90 leading-tight bg-gradient-to-br from-indigo-900 to-zinc-900"
                     >
-                      {item.nameZh}
+                      {displaySkillName(item as unknown as SkillDefinition, appLang)}
                     </div>
                   )}
 
@@ -1196,7 +1205,7 @@ export default function StudioPage() {
 
                 {/* Label area below the image */}
                 <div className="w-full px-1.5 py-1.5 text-[9px] font-semibold text-zinc-300 truncate text-center bg-zinc-900/50 leading-none">
-                  {item.nameZh}
+                  {displaySkillName(item as unknown as SkillDefinition, appLang)}
                 </div>
               </button>
             )
@@ -1243,7 +1252,11 @@ export default function StudioPage() {
         {skill.parameters
           .filter(param => parameterNames.has(param.name))
           .map(param => {
-            const options = optionsForParameter(param)
+            const options = optionsForParameter(param).map(option => {
+              if (appLang !== 'en' || param.name !== 'language') return option
+              const names: Record<string, string> = { zh: 'Chinese', en: 'English', ja: 'Japanese' }
+              return { ...option, name: names[option.id] || option.name }
+            })
             
             // Get current active value
             let currentValue: string
@@ -1328,7 +1341,7 @@ export default function StudioPage() {
                 const val = prefFormValues[field.key] ?? field.defaultValue ?? ''
                 return (
                   <div key={field.key} className="flex items-center gap-2">
-                    <label className="text-[10px] text-zinc-400 w-24 shrink-0 truncate" title={field.labelZh || field.label}>{field.labelZh || field.label}</label>
+                    <label className="text-[10px] text-zinc-400 w-24 shrink-0 truncate" title={appLang === 'en' ? field.label : field.labelZh || field.label}>{appLang === 'en' ? field.label : field.labelZh || field.label}</label>
                     {field.type === 'boolean' ? (
                       <label className="flex items-center gap-1.5 text-[10px] text-zinc-300 cursor-pointer">
                         <input
@@ -1337,7 +1350,7 @@ export default function StudioPage() {
                           onChange={e => setPrefFormValues(prev => ({ ...prev, [field.key]: e.target.checked }))}
                           className="rounded text-indigo-600 focus:ring-0"
                         />
-                        {field.hint || (field.labelZh || field.label)}
+                        {field.hint || (appLang === 'en' ? field.label : field.labelZh || field.label)}
                       </label>
                     ) : field.type === 'select' && field.options ? (
                       <select
@@ -1346,7 +1359,7 @@ export default function StudioPage() {
                         className="flex-1 text-[10px] bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1.5 text-zinc-300 outline-none focus:border-indigo-500"
                       >
                         {field.options.map(opt => (
-                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          <option key={opt.value} value={opt.value}>{appLang === 'en' && field.key === 'language' ? ({ zh: 'Chinese', en: 'English', ja: 'Japanese' } as Record<string, string>)[opt.value] || opt.label : opt.label}</option>
                         ))}
                       </select>
                     ) : field.type === 'number' ? (
@@ -1424,9 +1437,9 @@ export default function StudioPage() {
 
   if (loadingProject) {
     return (
-      <div role="status" aria-label="Loading project" className="flex-1 flex flex-col items-center justify-center text-zinc-500 bg-zinc-950">
+      <div role="status" aria-label={L(appLang, '加载项目', 'Loading project')} className="flex-1 flex flex-col items-center justify-center text-zinc-500 bg-zinc-950">
         <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mb-2" aria-hidden="true" />
-        Loading project...
+        {L(appLang, '正在加载项目...', 'Loading project...')}
       </div>
     )
   }
@@ -1445,7 +1458,7 @@ export default function StudioPage() {
           <div className="flex items-center gap-2">
             {projectData && (
               <span className="text-zinc-400 text-xs font-semibold truncate max-w-[200px]">
-                Active Project: <strong className="text-zinc-200">{projectData.name}</strong>
+                {L(appLang, '当前项目', 'Active Project')}: <strong className="text-zinc-200">{projectData.name}</strong>
               </span>
             )}
           </div>
@@ -1480,23 +1493,23 @@ export default function StudioPage() {
         {/* Project chat streaming */}
         {projectChat.isStreaming && (
           <div className="flex flex-col gap-1.5 max-w-[85%] self-start items-start px-5 animate-fade-in">
-            <span className="text-zinc-500 text-xxs font-bold uppercase tracking-wider">Assistant</span>
+            <span className="text-zinc-500 text-xxs font-bold uppercase tracking-wider">{t(appLang, 'chat.assistant')}</span>
             {projectChat.plan && (
               <div className="px-4 py-3 rounded-2xl text-sm leading-relaxed border bg-zinc-900 border-zinc-850 text-zinc-150 rounded-tl-none">
-                <strong>Modification plan:</strong>
+                <strong>{L(appLang, '修改计划：', 'Modification plan:')}</strong>
                 <p className="mt-1 text-zinc-300 leading-normal m-0">{projectChat.plan}</p>
               </div>
             )}
             {projectChat.error && (
               <div className="px-3 py-2 rounded-lg bg-red-950/30 border border-red-900/40 text-sm text-red-400 flex items-center gap-2">
                 <span>{projectChat.error}</span>
-                <button onClick={projectChat.retrySend} className="text-xs text-amber-400 hover:text-amber-300 font-semibold bg-amber-950/30 px-2 py-0.5 rounded border border-amber-900/50 transition-colors">Retry</button>
+                <button onClick={projectChat.retrySend} className="text-xs text-amber-400 hover:text-amber-300 font-semibold bg-amber-950/30 px-2 py-0.5 rounded border border-amber-900/50 transition-colors">{t(appLang, 'chat.retry')}</button>
               </div>
             )}
             <details className="mt-2 w-full max-w-md self-start border border-zinc-850 rounded-xl bg-zinc-950/50 overflow-hidden">
-              <summary className="px-3 py-1.5 text-xs text-zinc-500 cursor-pointer hover:text-zinc-300 transition-colors select-none">Edit log ({projectChat.logs.length} entries)</summary>
+              <summary className="px-3 py-1.5 text-xs text-zinc-500 cursor-pointer hover:text-zinc-300 transition-colors select-none">{L(appLang, '修改日志', 'Edit log')} ({projectChat.logs.length} entries)</summary>
               <div className="px-3 pb-2 font-mono text-xxs text-emerald-400/70 max-h-[160px] overflow-auto select-text whitespace-pre-wrap border-t border-zinc-900 pt-1.5">
-                {projectChat.logs.join('\n') || 'No log entries yet.'}
+                {projectChat.logs.join('\n') || t(appLang, 'chat.no_log')}
               </div>
             </details>
           </div>
@@ -1536,7 +1549,7 @@ export default function StudioPage() {
           className="absolute top-1/2 -translate-y-1/2 z-20 w-5 h-16 bg-zinc-800/90 border border-zinc-700/80 border-r-0 rounded-l-xl flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-700 transition-all cursor-pointer backdrop-blur-sm shadow-lg"
           style={{ right: (workspaceOpen ? workspaceWidth : 0) + (isSidebarOpen ? sidebarWidth : 0) }}
           onClick={() => setWorkspaceOpen(v => !v)}
-          aria-label={workspaceOpen ? 'Collapse workspace' : 'Expand workspace'}
+          aria-label={workspaceOpen ? L(appLang, '折叠工作区', 'Collapse workspace') : L(appLang, '展开工作区', 'Expand workspace')}
         >
           {workspaceOpen ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
         </button>
@@ -1592,7 +1605,6 @@ export default function StudioPage() {
               publishingAccount={publishingAccount}
               onPublishingAccountChange={setPublishingAccount}
               aspectRatio={aspectRatio}
-              onInstallXhsSuccess={checkXhsAvailable}
             />
           </div>
         </div>

@@ -12,6 +12,7 @@ import GuidePage from './pages/GuidePage'
 import { applyAccent } from './lib/accent'
 import { applyTheme } from './lib/theme'
 import DashboardLayout from './components/layout/DashboardLayout'
+import { setAppLanguage } from './i18n/settings'
 
 function PageTracker() {
   const location = useLocation()
@@ -56,6 +57,7 @@ export default function App() {
       .then(settings => {
         if (settings.THEME_MODE) applyTheme(settings.THEME_MODE)
         if (settings.THEME_COLOR) applyAccent(settings.THEME_COLOR)
+        setAppLanguage(settings.DEFAULT_LANGUAGE)
       })
       .catch(() => {})
   }, [])

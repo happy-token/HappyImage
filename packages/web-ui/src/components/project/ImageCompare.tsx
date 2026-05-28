@@ -1,3 +1,5 @@
+import { useAppLanguage } from '../../i18n/settings'
+
 interface ImageCompareProps {
   images: Array<{ name: string; path: string; versions: string[] }>
   newImages: string[]
@@ -6,10 +8,11 @@ interface ImageCompareProps {
 }
 
 export default function ImageCompare({ images, newImages, selectedImage, onSelect }: ImageCompareProps) {
+  const lang = useAppLanguage()
   return (
     <div className="project-images">
       {images.length === 0 && newImages.length === 0 && (
-        <div className="studio-empty">此项目还没有图片</div>
+        <div className="studio-empty">{lang === 'en' ? 'This project has no images yet' : '此项目还没有图片'}</div>
       )}
       {images.map((img, i) => {
         const isSelected = selectedImage === i

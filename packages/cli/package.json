@@ -23,6 +23,7 @@
   "homepage": "https://github.com/happy-token/HappyImage/tree/main/packages/cli#readme",
   "scripts": {
     "build": "tsc",
+    "check": "tsc --noEmit",
     "dev": "tsc -w"
   },
   "dependencies": {

@@ -6,6 +6,7 @@ import ImageCompare from '../components/project/ImageCompare'
 import ProjectFileList from '../components/project/ProjectFileList'
 import Button from '../components/ui/Button'
 import BackToStudioButton from '../components/ui/BackToStudioButton'
+import { useAppLanguage, type AppLanguage } from '../i18n/settings'
 
 interface ProjectFile {
   name: string
@@ -39,7 +40,12 @@ interface ProjectData {
   conversations: ConversationSession[]
 }
 
+function L(lang: AppLanguage, zh: string, en: string) {
+  return lang === 'en' ? en : zh
+}
+
 export default function ProjectDetailPage() {
+  const lang = useAppLanguage()
   const { id } = useParams<{ id: string }>()
   const [project, setProject] = useState<ProjectData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -95,7 +101,7 @@ export default function ProjectDetailPage() {
     <div className="project-detail">
       <header className="project-detail-header">
         <div>
-          <Link to="/history" className="project-back-link">&larr; 历史</Link>
+          <Link to="/history" className="project-back-link">&larr; {L(lang, '历史', 'History')}</Link>
           <p className="studio-eyebrow">{project.categoryDir}</p>
           <h1>{project.name}</h1>
           <code>{project.path}</code>
@@ -123,9 +129,9 @@ export default function ProjectDetailPage() {
               <div>
                 <p className="studio-eyebrow">images</p>
                 <h2>
-                  图片
+                  {L(lang, '图片', 'Images')}
                   {selectedImage !== null && (
-                    <span className="project-selected-label"> · 选中第 {selectedImage + 1} 张</span>
+                    <span className="project-selected-label"> · {L(lang, `选中第 ${selectedImage + 1} 张`, `Selected image ${selectedImage + 1}`)}</span>
                   )}
                 </h2>
               </div>
@@ -168,7 +174,7 @@ export default function ProjectDetailPage() {
               <div className="studio-panel-head">
                 <div>
                   <p className="studio-eyebrow">conversation history</p>
-                  <h2>修改记录</h2>
+                  <h2>{L(lang, '修改记录', 'Revision History')}</h2>
                 </div>
                 <span>{project.conversations.length}</span>
               </div>

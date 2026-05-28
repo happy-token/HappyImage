@@ -5,7 +5,7 @@ import path from "node:path";
 import process from "node:process";
 import test, { type TestContext } from "node:test";
 
-import { COLOR_PRESETS, FONT_FAMILY_MAP } from "./constants.ts";
+import { COLOR_PRESETS, FONT_FAMILY_MAP } from "./constants.js";
 import {
   buildMarkdownDocumentMeta,
   formatTimestamp,
@@ -14,7 +14,7 @@ import {
   resolveFontFamilyToken,
   resolveMarkdownStyle,
   resolveRenderOptions,
-} from "./document.ts";
+} from "./document.js";
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, `\\$&`);

@@ -48,10 +48,12 @@ If a generated file is useful as documentation, move it into a deliberate docs o
 ## Common Commands
 
 ```bash
-npm run build
-npm run build:web
-npm run test:web
-npm run test:web:e2e
-bun packages/cli/src/bin.ts doctor
-bun packages/cli/src/bin.ts web --port 3200
+bun run build
+bun run build:web
+bun run test:web
+bun run test:web:e2e
+bun run cli -- doctor
+bun run web -- --port 3200
 ```
+
+For the complete root-level command matrix, see [Development, Build, and Release](development-release.md).

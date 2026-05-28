@@ -212,16 +212,13 @@ happyimage build
 - `happyimage init`：已完成，检查基础环境、生成 `.env`、创建输出目录。
 - `happyimage config`：已完成，打印配置路径。
 - `happyimage projects`：已完成，列出历史项目。
-- `happyimage doctor`：已完成，检查 Bun、Chrome、API key、skills root、built UI。
+- `happyimage doctor`：已完成，检查 Bun、Chrome、API key、内置技能、built UI。
 - `happyimage build`：已完成，构建 Web UI。
 
 ### npm 分发
 
 - package 不应依赖当前仓库相对路径。
-- 需要明确 baoyu-skills 查找策略：
-  - 当前工作目录
-  - `BAOYU_SKILLS_ROOT`
-  - `~/.baoyu-skills`
+- 使用项目内置 `skills/`，不再暴露外部 skills root 配置。
 - 发布前跑 `doctor` 和 smoke test。
 
 ### 桌面应用
@@ -239,7 +236,7 @@ happyimage build
 ### 验收标准
 
 - 新机器上按 README 能启动 Web UI。
-- `doctor` 能明确指出缺失的 Bun、Chrome、API key、baoyu-skills root。
+- `doctor` 能明确指出缺失的 Bun、Chrome、API key、内置技能。
 - `desktop` 能打开独立桌面式窗口。
 
 ## P2：测试计划

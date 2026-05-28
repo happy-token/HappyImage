@@ -4,21 +4,11 @@ The Settings page has 5 sections.
 
 ## 1. Runtime
 
-Checks whether system dependencies are installed (Bun, Git, Chrome, baoyu-skills directory).
+Checks whether system dependencies are installed (Bun, Git, Chrome, built-in skills).
 
 - **Green dot** = installed and ready
 - **Red dot** = required but missing
 - **Amber dot** = optional dependency
-
-### Skills Directory
-
-HappyImage needs a directory containing baoyu-* skills:
-
-- **Built-in**: Uses the project `skills/` directory by default — no config needed
-- **config/skills/**: Recommended install path (default)
-- **Custom**: Enter a path and click "Use Directory"
-
-To install skills from GitHub: click "Install from GitHub".
 
 ## 2. AI Models
 

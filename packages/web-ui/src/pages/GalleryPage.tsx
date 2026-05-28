@@ -5,6 +5,7 @@ import { skills } from '../data'
 import type { ConfigItem, SkillDefinition, SkillParameter } from '../types/skills'
 import { getStyleGradient, previewForItem, previewForSkill } from '../lib/screenshots'
 import BackToStudioButton from '../components/ui/BackToStudioButton'
+import { useAppLanguage, type AppLanguage } from '../i18n/settings'
 
 type WizardStep =
   | { kind: 'skill'; key: 'skill'; label: string; description: string }
@@ -14,20 +15,28 @@ type WizardStep =
 
 const parameterNames = new Set(['language', 'aspectRatio', 'imageCount', 'pageCount', 'slides', 'audience', 'density', 'scale'])
 
-
-
-const skillUseCases: Record<string, string> = {
-  'image-cards': '把文章、观点、项目介绍拆成多张社媒图文卡片',
-  'xhs-images': '生成小红书风格封面和多图笔记',
-  infographic: '把数据、流程、框架做成信息图',
-  'cover-image': '生成文章封面、博客头图、社媒 Banner',
-  'slide-deck': '把内容生成演示文稿和 PPT 风格页面',
-  comic: '把知识点、故事、教程做成漫画',
-  'article-illustrator': '给文章段落生成配图',
-  diagram: '生成技术架构图、流程图、时序图等 SVG 图表',
+function L(lang: AppLanguage, zh: string, en: string) {
+  return lang === 'en' ? en : zh
 }
 
+const skillUseCases: Record<string, { zh: string; en: string }> = {
+  'image-cards': { zh: '把文章、观点、项目介绍拆成多张社媒图文卡片', en: 'Turn articles, ideas, and project notes into multi-card social visuals' },
+  'xhs-images': { zh: '生成小红书风格封面和多图笔记', en: 'Create Xiaohongshu-style covers and multi-image posts' },
+  infographic: { zh: '把数据、流程、框架做成信息图', en: 'Turn data, processes, and frameworks into infographics' },
+  'cover-image': { zh: '生成文章封面、博客头图、社媒 Banner', en: 'Generate article covers, blog headers, and social banners' },
+  'slide-deck': { zh: '把内容生成演示文稿和 PPT 风格页面', en: 'Convert content into presentation decks and slide-style pages' },
+  comic: { zh: '把知识点、故事、教程做成漫画', en: 'Turn knowledge, stories, and tutorials into comics' },
+  'article-illustrator': { zh: '给文章段落生成配图', en: 'Generate illustrations for article sections' },
+  diagram: { zh: '生成技术架构图、流程图、时序图等 SVG 图表', en: 'Generate SVG diagrams such as architecture, flow, and sequence charts' },
+}
 
+function skillName(skill: SkillDefinition, lang: AppLanguage) {
+  return lang === 'en' ? skill.name : skill.nameZh
+}
+
+function englishTags(skill: SkillDefinition) {
+  return [skill.outputType, skill.category].filter(Boolean)
+}
 
 function buildStudioUrl(skill: SkillDefinition, selections: Record<string, string>, parameters: Record<string, string>) {
   const params = new URLSearchParams()
@@ -87,34 +96,37 @@ function optionsForParameter(parameter: SkillParameter): ConfigItem[] {
   return defaults[parameter.name] || [{ id: String(parameter.defaultValue || ''), name: String(parameter.defaultValue || 'Default'), description: 'Default value', tags: [] }]
 }
 
-function stepDescription(key: string) {
-  const descriptions: Record<string, string> = {
-    style: 'Select the visual style that controls overall look and feel.',
-    art: 'Select the comic drawing style.',
-    layout: 'Select how information is arranged on the image.',
-    palette: 'Select the color system.',
-    rendering: 'Select the rendering technique.',
-    text: 'Select how much text should appear inside the image.',
-    mood: 'Select the emotional tone.',
-    tone: 'Select the story mood.',
-    typography: 'Select typography style.',
-    texture: 'Select surface texture.',
-    density: 'Select information density.',
-    type: 'Select the concrete image subtype.',
-    aspectRatio: 'Select the output shape.',
-    language: 'Select the output language.',
+function stepDescription(key: string, lang: AppLanguage) {
+  const descriptions: Record<string, { zh: string; en: string }> = {
+    style: { zh: '选择整体视觉风格。', en: 'Select the visual style that controls overall look and feel.' },
+    art: { zh: '选择漫画绘制风格。', en: 'Select the comic drawing style.' },
+    layout: { zh: '选择信息在画面中的组织方式。', en: 'Select how information is arranged on the image.' },
+    palette: { zh: '选择配色系统。', en: 'Select the color system.' },
+    rendering: { zh: '选择渲染技法。', en: 'Select the rendering technique.' },
+    text: { zh: '选择图片内文字量。', en: 'Select how much text should appear inside the image.' },
+    mood: { zh: '选择情绪基调。', en: 'Select the emotional tone.' },
+    tone: { zh: '选择故事氛围。', en: 'Select the story mood.' },
+    typography: { zh: '选择字体风格。', en: 'Select typography style.' },
+    texture: { zh: '选择表面质感。', en: 'Select surface texture.' },
+    density: { zh: '选择信息密度。', en: 'Select information density.' },
+    type: { zh: '选择具体图片类型。', en: 'Select the concrete image subtype.' },
+    aspectRatio: { zh: '选择输出比例。', en: 'Select the output shape.' },
+    language: { zh: '选择输出语言。', en: 'Select the output language.' },
   }
-  return descriptions[key] || 'Select the option that best matches the content.'
+  const desc = descriptions[key]
+  return desc ? L(lang, desc.zh, desc.en) : L(lang, '选择最适合内容的选项。', 'Select the option that best matches the content.')
 }
 
 function TextChoiceCard({
   item,
   active,
   onClick,
+  lang,
 }: {
   item: ConfigItem
   active: boolean
   onClick: () => void
+  lang: AppLanguage
 }) {
   return (
     <button
@@ -132,7 +144,7 @@ function TextChoiceCard({
       )}
       {active && (
         <span className="mt-2 inline-flex items-center rounded-full bg-indigo-950/30 px-2 py-0.5 text-[10px] font-bold uppercase text-indigo-400 border border-indigo-900/30">
-          <Check className="w-2.5 h-2.5 mr-1 stroke-[3]" /> Selected
+          <Check className="w-2.5 h-2.5 mr-1 stroke-[3]" /> {L(lang, '已选择', 'Selected')}
         </span>
       )}
     </button>
@@ -144,11 +156,13 @@ function StepCard({
   active,
   preview,
   onClick,
+  lang,
 }: {
   item: ConfigItem
   active: boolean
   preview?: string
   onClick: () => void
+  lang: AppLanguage
 }) {
   const [imgError, setImgError] = useState(false)
   const fallback = getStyleGradient(item.id)
@@ -168,7 +182,7 @@ function StepCard({
           <img src={preview} alt={item.name} onError={() => setImgError(true)} className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]" />
         ) : (
           <div className="flex h-full items-center justify-center p-5 text-center text-sm font-semibold text-white/85" style={{ background: fallback }}>
-            Preview
+            {L(lang, '预览', 'Preview')}
           </div>
         )}
       </div>
@@ -178,7 +192,7 @@ function StepCard({
             <div className="text-sm font-semibold text-zinc-100">{item.name}</div>
             {active && (
               <span className="inline-flex items-center rounded-full bg-indigo-950/30 px-2 py-0.5 text-[10px] font-bold uppercase text-indigo-400 border border-indigo-900/30">
-                <Check className="w-2.5 h-2.5 mr-1 stroke-[3]" /> Selected
+                <Check className="w-2.5 h-2.5 mr-1 stroke-[3]" /> {L(lang, '已选择', 'Selected')}
               </span>
             )}
           </div>
@@ -197,6 +211,7 @@ function StepCard({
 }
 
 export default function GalleryPage() {
+  const lang = useAppLanguage()
   const navigate = useNavigate()
   const [guideSkillId, setGuideSkillId] = useState(skills[0].id)
   const [guideSelections, setGuideSelections] = useState<Record<string, string>>(() => initialSelections(skills[0]))
@@ -204,13 +219,19 @@ export default function GalleryPage() {
   const [stepIndex, setStepIndex] = useState(0)
 
   const guideSkill = skills.find(s => s.id === guideSkillId) || skills[0]
+  const localizedOptionsForParameter = (parameter: SkillParameter) => {
+    const options = optionsForParameter(parameter)
+    if (lang !== 'en' || parameter.name !== 'language') return options
+    const names: Record<string, string> = { zh: 'Chinese', en: 'English', ja: 'Japanese' }
+    return options.map(option => ({ ...option, name: names[option.id] || option.name }))
+  }
 
   const steps = useMemo<WizardStep[]>(() => {
     const dimensionSteps = Object.entries(guideSkill.dimensions).map(([key, dim]) => ({
       kind: 'dimension' as const,
       key,
       label: dim.label || dim.name,
-      description: stepDescription(key),
+      description: stepDescription(key, lang),
       items: dim.items,
     }))
     const parameterSteps = guideSkill.parameters
@@ -219,16 +240,16 @@ export default function GalleryPage() {
         kind: 'parameter' as const,
         key: param.name,
         label: param.label,
-        description: stepDescription(param.name),
+        description: stepDescription(param.name, lang),
         parameter: param,
       }))
     return [
-      { kind: 'skill', key: 'skill', label: '选择生成类型', description: '' },
+      { kind: 'skill', key: 'skill', label: L(lang, '选择生成类型', 'Choose Generation Type'), description: '' },
       ...dimensionSteps,
       ...parameterSteps,
-      { kind: 'review', key: 'review', label: 'Ready for Chat', description: 'Review choices and continue into the chat workflow.' },
+      { kind: 'review', key: 'review', label: L(lang, '准备进入对话', 'Ready for Chat'), description: L(lang, '确认选择并进入对话工作流。', 'Review choices and continue into the chat workflow.') },
     ]
-  }, [guideSkill])
+  }, [guideSkill, lang])
 
   const currentStep = steps[Math.min(stepIndex, steps.length - 1)]
 
@@ -258,7 +279,7 @@ export default function GalleryPage() {
   const selectedSummary = useMemo(() => {
     const dimensionSummary = Object.entries(guideSkill.dimensions).map(([key, dim]) => {
       const item = dim.items.find(i => i.id === guideSelections[key])
-      return { key, label: dim.label || dim.name, value: item?.name || 'Auto' }
+      return { key, label: dim.label || dim.name, value: item?.name || L(lang, '自动', 'Auto') }
     })
     const parameterSummary = guideSkill.parameters
       .filter(param => parameterNames.has(param.name))
@@ -268,7 +289,7 @@ export default function GalleryPage() {
         return { key: param.name, label: param.label, value: label }
       })
     return [...dimensionSummary, ...parameterSummary]
-  }, [guideSkill, guideSelections, guideParameters])
+  }, [guideSkill, guideSelections, guideParameters, lang])
 
   const goNext = () => setStepIndex(prev => Math.min(steps.length - 1, prev + 1))
   const goBack = () => setStepIndex(prev => Math.max(0, prev - 1))
@@ -280,7 +301,7 @@ export default function GalleryPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: `Gallery preset: ${guideSkill.nameZh}`,
+          message: `Gallery preset: ${skillName(guideSkill, lang)}`,
           commandRequest: {
             commandId: commandIdForSkill(guideSkill.id),
             source: { type: 'text', value: '' },
@@ -318,8 +339,8 @@ export default function GalleryPage() {
               <Compass className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-400">Visual setup wizard</p>
-              <h1 className="text-2xl md:text-3xl font-display font-semibold text-zinc-100">Gallery Wizard</h1>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-400">{L(lang, '视觉设置向导', 'Visual setup wizard')}</p>
+              <h1 className="text-2xl md:text-3xl font-display font-semibold text-zinc-100">{L(lang, '画廊向导', 'Gallery Wizard')}</h1>
             </div>
           </div>
           <BackToStudioButton className="absolute right-0 top-1/2 -translate-y-1/2" />
@@ -337,14 +358,14 @@ export default function GalleryPage() {
               <div>
                 <h2 className="text-lg font-bold text-zinc-100 flex items-center gap-2">
                   <span className="text-xs font-mono px-2 py-0.5 rounded bg-zinc-850 text-zinc-400">
-                    第 {stepIndex + 1} 步 / 共 {steps.length} 步
+                    {L(lang, `第 ${stepIndex + 1} 步 / 共 ${steps.length} 步`, `Step ${stepIndex + 1} / ${steps.length}`)}
                   </span>
                   {currentStep.label}
                 </h2>
                 {currentStep.description && <p className="mt-1 text-xs text-zinc-400">{currentStep.description}</p>}
               </div>
               {currentStep.kind === 'skill' && (
-                <span className="text-xs text-indigo-400 font-medium">当前选择：{guideSkill.nameZh}</span>
+                <span className="text-xs text-indigo-400 font-medium">{L(lang, '当前选择：', 'Selected: ')}{skillName(guideSkill, lang)}</span>
               )}
             </div>
 
@@ -360,10 +381,11 @@ export default function GalleryPage() {
                       onClick={() => selectGuideSkill(skill.id)}
                       item={{
                         id: skill.id,
-                        name: skill.nameZh,
-                        description: skillUseCases[skill.id] || skill.description,
-                        tags: [skill.outputType, ...skill.bestFor.slice(0, 2)],
+                        name: skillName(skill, lang),
+                        description: skillUseCases[skill.id] ? L(lang, skillUseCases[skill.id].zh, skillUseCases[skill.id].en) : skill.description,
+                        tags: lang === 'en' ? englishTags(skill) : [skill.outputType, ...skill.bestFor.slice(0, 2)],
                       }}
+                      lang={lang}
                     />
                   ))}
                 </div>
@@ -378,6 +400,7 @@ export default function GalleryPage() {
                       active={guideSelections[currentStep.key] === item.id}
                       preview={previewForItem(guideSkill, currentStep.key, item)}
                       onClick={() => selectGuideItem(guideSkill.id, currentStep.key, item.id)}
+                      lang={lang}
                     />
                   ))}
                 </div>
@@ -405,12 +428,13 @@ export default function GalleryPage() {
                 }
                 return (
                   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    {optionsForParameter(currentStep.parameter).map(item => (
+                    {localizedOptionsForParameter(currentStep.parameter).map(item => (
                       <TextChoiceCard
                         key={item.id}
                         item={item}
                         active={currentVal === item.id}
                         onClick={() => setGuideParameters(prev => ({ ...prev, [currentStep.key]: item.id }))}
+                        lang={lang}
                       />
                     ))}
                   </div>
@@ -419,12 +443,12 @@ export default function GalleryPage() {
 
               {currentStep.kind === 'review' && (
                 <div className="max-w-2xl mx-auto rounded-2xl border border-zinc-800 bg-zinc-950/40 p-6 w-full">
-                  <h3 className="text-sm font-bold text-zinc-150 mb-4 border-b border-zinc-800 pb-3">配置确认</h3>
+                  <h3 className="text-sm font-bold text-zinc-150 mb-4 border-b border-zinc-800 pb-3">{L(lang, '配置确认', 'Configuration Review')}</h3>
                   <div className="grid gap-3 sm:grid-cols-2">
                     {selectedSummary.map(item => (
                       <div key={item.key} className="rounded-xl border border-zinc-800 bg-zinc-900 p-3">
                         <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-550">{item.label}</div>
-                        <div className="mt-1 text-sm font-semibold text-zinc-200">{item.value || '自动'}</div>
+                        <div className="mt-1 text-sm font-semibold text-zinc-200">{item.value || L(lang, '自动', 'Auto')}</div>
                       </div>
                     ))}
                   </div>
@@ -441,7 +465,7 @@ export default function GalleryPage() {
                   onClick={goBack}
                   className="rounded-lg border border-zinc-800 bg-zinc-900 px-3.5 py-1.5 text-xs font-semibold text-zinc-300 shadow-sm hover:bg-zinc-850 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer inline-flex items-center gap-1.5 transition-colors"
                 >
-                  <ChevronLeft className="w-4 h-4" /> 上一步
+                  <ChevronLeft className="w-4 h-4" /> {L(lang, '上一步', 'Back')}
                 </button>
               </div>
 
@@ -452,7 +476,7 @@ export default function GalleryPage() {
                     onClick={skipCurrentStep}
                     className="rounded-lg border border-zinc-850 bg-zinc-900 px-3.5 py-1.5 text-xs font-semibold text-zinc-400 hover:border-zinc-700 hover:text-zinc-200 cursor-pointer transition-colors"
                   >
-                    使用默认
+                    {L(lang, '使用默认', 'Use Default')}
                   </button>
                 )}
                 {currentStep.kind === 'review' ? (
@@ -461,7 +485,7 @@ export default function GalleryPage() {
                     onClick={continueInChat}
                     className="rounded-lg bg-indigo-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-700 active:bg-indigo-850 cursor-pointer inline-flex items-center gap-1 transition-all"
                   >
-                    开始创作 <ArrowRight className="w-4 h-4" />
+                    {L(lang, '开始创作', 'Start Creating')} <ArrowRight className="w-4 h-4" />
                   </button>
                 ) : (
                   <button
@@ -469,7 +493,7 @@ export default function GalleryPage() {
                     onClick={goNext}
                     className="rounded-lg bg-indigo-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-700 active:bg-indigo-850 cursor-pointer inline-flex items-center gap-1 transition-all"
                   >
-                    下一步 <ChevronRight className="w-4 h-4" />
+                    {L(lang, '下一步', 'Next')} <ChevronRight className="w-4 h-4" />
                   </button>
                 )}
               </div>

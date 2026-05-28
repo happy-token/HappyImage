@@ -10,7 +10,7 @@ import {
   serializeFrontmatter,
   stripWrappingQuotes,
   toFrontmatterString,
-} from "./content.ts";
+} from "./content.js";
 
 test("parseFrontmatter extracts YAML fields and strips wrapping quotes", () => {
   const input = `---
