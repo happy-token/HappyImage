@@ -36,6 +36,7 @@ APPLE_APP_SPECIFIC_PASSWORD="$(env_get APPLE_APP_SPECIFIC_PASSWORD)"
 APPLE_TEAM_ID="$(env_get APPLE_TEAM_ID)"
 CSC_NAME="$(env_get CSC_NAME)"
 GITHUB_TOKEN="$(env_get GITHUB_TOKEN)"
+export NPM_TOKEN="$(env_get NPM_TOKEN)"
 
 echo ""
 echo -e "${BOLD}═══════════════════════════════════${RESET}"
