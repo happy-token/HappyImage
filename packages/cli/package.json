@@ -1,6 +1,6 @@
 {
   "name": "@happytokenai/happyimage-cli",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "CLI tool for HappyImage content generation workspace.",
   "type": "module",
   "publishConfig": {
@@ -27,8 +27,8 @@
     "dev": "tsc -w"
   },
   "dependencies": {
-    "@happytokenai/happyimage-core": "workspace:^0.3.0",
-    "@happytokenai/happyimage-web": "workspace:^0.3.0"
+    "@happytokenai/happyimage-core": "workspace:^0.3.1",
+    "@happytokenai/happyimage-web": "workspace:^0.3.1"
   },
   "devDependencies": {
     "@types/node": "^25.9.1",

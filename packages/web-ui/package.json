@@ -1,6 +1,6 @@
 {
   "name": "@happytokenai/happyimage-web",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Visual workspace for running baoyu-skills content generation workflows.",
   "license": "MIT",
   "type": "module",
@@ -43,7 +43,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.96.0",
-    "@happytokenai/happyimage-core": "workspace:^0.3.0",
+    "@happytokenai/happyimage-core": "workspace:^0.3.1",
     "dompurify": "^3.4.5",
     "hono": "^4.7.0",
     "lucide-react": "^1.16.0",

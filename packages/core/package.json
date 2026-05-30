@@ -1,6 +1,6 @@
 {
   "name": "@happytokenai/happyimage-core",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Core runtime, skill definitions, settings, and session persistence for HappyImage.",
   "license": "MIT",
   "type": "module",
