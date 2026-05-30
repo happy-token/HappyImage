@@ -2,6 +2,13 @@
 
 [English](./CHANGELOG.md) | 中文
 
+## 1.119.0 - 2026-05-30
+
+### 新功能
+- `desktop`：新增 macOS Intel (x64) 芯片支持 — 构建产物同时包含 `arm64` 和 `x64` 的 DMG/ZIP 安装包，文件名带架构标识
+- `desktop`：新增按架构构建脚本（`build:intel`、`build:x64`、`build:arm64`、`build:dir:intel` 等）
+- `ci`：更新桌面发布工作流，公证并上传 x64 和 arm64 两个 DMG
+
 ## 1.118.0 - 2026-05-25
 
 ### 新功能

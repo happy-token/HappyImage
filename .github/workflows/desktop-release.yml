@@ -80,21 +80,23 @@ jobs:
 
       - name: Notarize
         run: |
-          DMG=$(find packages/desktop/release -name "*.dmg" | head -1)
-          if [ -z "$DMG" ]; then
-            echo "ERROR: DMG not found"
+          DMGS=$(find packages/desktop/release -name "*.dmg" | sort)
+          if [ -z "$DMGS" ]; then
+            echo "ERROR: No DMGs found"
             exit 1
           fi
-          echo "Notarizing: $DMG"
 
-          xcrun notarytool submit "$DMG" \
-            --apple-id "${{ secrets.APPLE_ID }}" \
-            --password "${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}" \
-            --team-id "${{ secrets.APPLE_TEAM_ID }}" \
-            --wait --timeout 600
+          for DMG in $DMGS; do
+            echo "Notarizing: $DMG"
+            xcrun notarytool submit "$DMG" \
+              --apple-id "${{ secrets.APPLE_ID }}" \
+              --password "${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}" \
+              --team-id "${{ secrets.APPLE_TEAM_ID }}" \
+              --wait --timeout 600
 
-          echo "Stapling DMG..."
-          xcrun stapler staple "$DMG" || echo "Stapling warning (non-critical)"
+            echo "Stapling: $DMG"
+            xcrun stapler staple "$DMG" || echo "Stapling warning (non-critical)"
+          done
 
       - name: Create GitHub Release
         env:
@@ -106,7 +108,7 @@ jobs:
           echo "=== Release artifacts ==="
           find packages/desktop/release -type f | sort
 
-          ASSETS=$(find packages/desktop/release -type f \( -name "*.dmg" -o -name "*.zip" -o -name "latest-mac.yml" \) | tr '\n' ' ')
+          ASSETS=$(find packages/desktop/release -type f \( -name "*.dmg" -o -name "*.zip" -o -name "latest-mac*.yml" -o -name "*.blockmap" \) | tr '\n' ' ')
 
           gh release create "$TAG" $ASSETS \
             --repo "${{ github.repository }}" \

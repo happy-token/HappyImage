@@ -34,7 +34,7 @@ case "$MODE" in
     rm -rf packages/desktop/release
     bun run --cwd packages/desktop build
     shopt -s nullglob
-    artifacts=(packages/desktop/release/HappyImage-"${VERSION}"-mac.*)
+    artifacts=(packages/desktop/release/HappyImage-"${VERSION}"-mac-*)
     if [[ ${#artifacts[@]} -eq 0 ]]; then
       echo "No desktop artifacts found for ${VERSION}" >&2
       exit 1

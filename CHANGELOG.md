@@ -2,6 +2,13 @@
 
 English | [中文](./CHANGELOG.zh.md)
 
+## 1.119.0 - 2026-05-30
+
+### Features
+- `desktop`: add macOS Intel (x64) chip support — build artifacts now include both `arm64` and `x64` DMG/ZIP packages with architecture-specific naming
+- `desktop`: add arch-specific build scripts (`build:intel`, `build:x64`, `build:arm64`, `build:dir:intel`, etc.)
+- `ci`: update desktop release workflow to notarize and upload both x64 and arm64 DMGs
+
 ## 1.118.0 - 2026-05-25
 
 ### Features

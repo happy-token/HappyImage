@@ -1,6 +1,6 @@
 {
   "name": "@happyimage/desktop",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Electron desktop application wrapping HappyImage with native macOS integration.",
   "author": "HappyImage",
   "publishConfig": {
@@ -20,10 +20,16 @@
   "scripts": {
     "dev": "sh -c 'tsc && (tsc -w --preserveWatchOutput & TSC_PID=$!; electron .; STATUS=$?; kill $TSC_PID 2>/dev/null || true; exit $STATUS)'",
     "build": "tsc && bash scripts/bundle-deps.sh && electron-builder build --mac",
+    "build:arm64": "tsc && bash scripts/bundle-deps.sh && electron-builder build --mac --arm64",
+    "build:x64": "tsc && bash scripts/bundle-deps.sh && electron-builder build --mac --x64",
+    "build:intel": "tsc && bash scripts/bundle-deps.sh && electron-builder build --mac --x64",
     "check": "tsc --noEmit",
     "build:signed:local": "tsc && bash scripts/bundle-deps.sh && electron-builder build --mac --config.mac.timestamp=none",
     "build:unsigned": "sh -c 'export CSC_IDENTITY_AUTO_DISCOVERY=false; tsc && bash scripts/bundle-deps.sh && electron-builder build --mac'",
     "build:dir": "tsc && bash scripts/bundle-deps.sh && electron-builder build --mac --dir",
+    "build:dir:arm64": "tsc && bash scripts/bundle-deps.sh && electron-builder build --mac --dir --arm64",
+    "build:dir:x64": "tsc && bash scripts/bundle-deps.sh && electron-builder build --mac --dir --x64",
+    "build:dir:intel": "tsc && bash scripts/bundle-deps.sh && electron-builder build --mac --dir --x64",
     "build:dir:signed:local": "tsc && bash scripts/bundle-deps.sh && electron-builder build --mac --dir --config.mac.timestamp=none",
     "build:dir:unsigned": "sh -c 'export CSC_IDENTITY_AUTO_DISCOVERY=false; tsc && bash scripts/bundle-deps.sh && electron-builder build --mac --dir'",
     "release": "tsc && bash scripts/bundle-deps.sh && electron-builder build --mac --publish always",

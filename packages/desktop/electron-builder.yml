@@ -49,9 +49,11 @@ extraResources:
 
 mac:
   target:
-    - dmg
-    - zip
-  artifactName: HappyImage-${version}-mac.${ext}
+    - target: dmg
+      arch: [x64, arm64]
+    - target: zip
+      arch: [x64, arm64]
+  artifactName: HappyImage-${version}-mac-${arch}.${ext}
   entitlements: entitlements.mac.plist
   entitlementsInherit: entitlements.mac.plist
   hardenedRuntime: true
