@@ -18,7 +18,6 @@ ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
 ENV NEXT_PUBLIC_APP_VERSION=${NEXT_PUBLIC_APP_VERSION}
 RUN pnpm run build
 
-# ── Serve with nginx ──────────────────────────────────────────────
 FROM nginx:alpine AS serve
 
 COPY --from=web-build /app/web/out /usr/share/nginx/html
@@ -28,13 +27,39 @@ RUN printf 'server {\n\
     server_name localhost;\n\
     root /usr/share/nginx/html;\n\
     index index.html;\n\
-    # HTML must revalidate so browser always gets the latest JS references\n\
+    # Proxy API / images / health to backend\n\
+    location /api/ {\n\
+        proxy_pass http://happyimage-api:80;\n\
+        proxy_set_header Host \$host;\n\
+        proxy_set_header X-Real-IP \$remote_addr;\n\
+    }\n\
+    location /v1/ {\n\
+        proxy_pass http://happyimage-api:80;\n\
+        proxy_set_header Host \$host;\n\
+        proxy_set_header X-Real-IP \$remote_addr;\n\
+    }\n\
+    location /images/ {\n\
+        proxy_pass http://happyimage-api:80;\n\
+        proxy_set_header Host \$host;\n\
+        proxy_set_header X-Real-IP \$remote_addr;\n\
+    }\n\
+    location /image-thumbnails/ {\n\
+        proxy_pass http://happyimage-api:80;\n\
+        proxy_set_header Host \$host;\n\
+        proxy_set_header X-Real-IP \$remote_addr;\n\
+    }\n\
+    location /health {\n\
+        proxy_pass http://happyimage-api:80;\n\
+        proxy_set_header Host \$host;\n\
+        proxy_set_header X-Real-IP \$remote_addr;\n\
+    }\n\
+    # HTML must revalidate\n\
     location / {\n\
         try_files $uri $uri.html $uri/ /index.html;\n\
         add_header Cache-Control "no-cache";\n\
         add_header Pragma "no-cache";\n\
     }\n\
-    # JS/CSS are hashed — immutable cache is safe\n\
+    # JS/CSS are hashed\n\
     location /_next/static/ {\n\
         expires 1y;\n\
         add_header Cache-Control "public, immutable";\n\

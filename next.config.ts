@@ -28,8 +28,6 @@ const nextConfig: NextConfig = {
         NEXT_PUBLIC_APP_VERSION: appVersion,
         NEXT_PUBLIC_APP_RELEASES: appReleases,
     },
-    output: 'export',
-    trailingSlash: true,
     images: {
         unoptimized: true,
     },
@@ -37,5 +35,8 @@ const nextConfig: NextConfig = {
         ignoreBuildErrors: true,
     },
 }
+
+// Initialize OpenNext Cloudflare dev environment
+import('@opennextjs/cloudflare').then((m) => m.initOpenNextCloudflareForDev())
 
 export default nextConfig
