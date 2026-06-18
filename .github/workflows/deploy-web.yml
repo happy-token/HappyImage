@@ -1,0 +1,54 @@
+# 部署 HappyImage Web 到 Cloudflare Pages
+
+name: Deploy to Cloudflare Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      api_base_url:
+        description: '后端 API 地址（留空使用仓库变量）'
+        required: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Build
+        env:
+          NEXT_PUBLIC_API_BASE_URL: ${{ inputs.api_base_url || vars.API_BASE_URL }}
+          NEXT_PUBLIC_APP_VERSION: ${{ github.sha }}
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run build
+
+      - name: Deploy to Cloudflare Pages
+        id: deploy
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: >-
+            pages deploy out
+            --project-name=${{ vars.CF_PAGES_PROJECT || 'happyimage' }}
+            --branch=main
