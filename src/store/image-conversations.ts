@@ -51,6 +51,7 @@ export type ImageTurn = {
 
 export type ImageConversation = {
   id: string;
+  ownerId?: string;
   title: string;
   createdAt: string;
   updatedAt: string;
@@ -168,7 +169,14 @@ function normalizeTurn(turn: ImageTurn & Record<string, unknown>): ImageTurn {
   };
 }
 
-function normalizeConversation(conversation: ImageConversation & Record<string, unknown>): ImageConversation {
+function normalizeOwnerId(ownerId: string) {
+  return String(ownerId || "").trim();
+}
+
+function normalizeConversation(
+  conversation: ImageConversation & Record<string, unknown>,
+  ownerId = "",
+): ImageConversation {
   const turns = Array.isArray(conversation.turns)
     ? conversation.turns.map((turn) => normalizeTurn(turn as ImageTurn & Record<string, unknown>))
     : [
@@ -196,6 +204,7 @@ function normalizeConversation(conversation: ImageConversation & Record<string, 
 
   return {
     id: String(conversation.id || `${Date.now()}`),
+    ownerId: normalizeOwnerId(ownerId || String(conversation.ownerId || "")) || undefined,
     title: String(conversation.title || ""),
     createdAt: String(conversation.createdAt || lastTurn?.createdAt || new Date().toISOString()),
     updatedAt: String(conversation.updatedAt || lastTurn?.createdAt || new Date().toISOString()),
@@ -233,17 +242,27 @@ async function readStoredImageConversations(): Promise<ImageConversation[]> {
   return items.map(normalizeConversation);
 }
 
-export async function listImageConversations(): Promise<ImageConversation[]> {
-  return sortImageConversations(await readStoredImageConversations());
+export async function listImageConversations(ownerId: string): Promise<ImageConversation[]> {
+  const normalizedOwnerId = normalizeOwnerId(ownerId);
+  if (!normalizedOwnerId) {
+    return [];
+  }
+  const items = await readStoredImageConversations();
+  return sortImageConversations(items.filter((item) => item.ownerId === normalizedOwnerId));
 }
 
-export async function saveImageConversations(conversations: ImageConversation[]): Promise<void> {
+export async function saveImageConversations(conversations: ImageConversation[], ownerId: string): Promise<void> {
+  const normalizedOwnerId = normalizeOwnerId(ownerId);
+  if (!normalizedOwnerId) {
+    return;
+  }
   await queueImageConversationWrite(async () => {
     const items = await readStoredImageConversations();
-    const conversationMap = new Map(items.map((item) => [item.id, item]));
-    for (const conversation of conversations.map(normalizeConversation)) {
-      const current = conversationMap.get(conversation.id);
-      conversationMap.set(conversation.id, current ? pickLatestConversation(current, conversation) : conversation);
+    const conversationMap = new Map(items.map((item) => [`${item.ownerId || ""}:${item.id}`, item]));
+    for (const conversation of conversations.map((item) => normalizeConversation(item, normalizedOwnerId))) {
+      const key = `${normalizedOwnerId}:${conversation.id}`;
+      const current = conversationMap.get(key);
+      conversationMap.set(key, current ? pickLatestConversation(current, conversation) : conversation);
     }
     await imageConversationStorage.setItem(
       IMAGE_CONVERSATIONS_KEY,
@@ -252,47 +271,67 @@ export async function saveImageConversations(conversations: ImageConversation[])
   });
 }
 
-export async function saveImageConversation(conversation: ImageConversation): Promise<void> {
+export async function saveImageConversation(conversation: ImageConversation, ownerId: string): Promise<void> {
+  const normalizedOwnerId = normalizeOwnerId(ownerId);
+  if (!normalizedOwnerId) {
+    return;
+  }
   await queueImageConversationWrite(async () => {
     const items = await readStoredImageConversations();
-    const nextConversation = normalizeConversation(conversation);
-    const current = items.find((item) => item.id === nextConversation.id);
+    const nextConversation = normalizeConversation(conversation, normalizedOwnerId);
+    const current = items.find((item) => item.ownerId === normalizedOwnerId && item.id === nextConversation.id);
     const persistedConversation = current ? pickLatestConversation(current, nextConversation) : nextConversation;
     const nextItems = sortImageConversations([
       persistedConversation,
-      ...items.filter((item) => item.id !== persistedConversation.id),
+      ...items.filter((item) => item.ownerId !== normalizedOwnerId || item.id !== persistedConversation.id),
     ]);
     await imageConversationStorage.setItem(IMAGE_CONVERSATIONS_KEY, nextItems);
   });
 }
 
-export async function renameImageConversation(id: string, title: string): Promise<void> {
+export async function renameImageConversation(id: string, title: string, ownerId: string): Promise<void> {
+  const normalizedOwnerId = normalizeOwnerId(ownerId);
+  if (!normalizedOwnerId) {
+    return;
+  }
   await queueImageConversationWrite(async () => {
     const items = await readStoredImageConversations();
-    const target = items.find((item) => item.id === id);
+    const target = items.find((item) => item.ownerId === normalizedOwnerId && item.id === id);
     if (!target) return;
     const updated = { ...target, title, updatedAt: new Date().toISOString() };
     const nextItems = sortImageConversations([
       updated,
-      ...items.filter((item) => item.id !== id),
+      ...items.filter((item) => item.ownerId !== normalizedOwnerId || item.id !== id),
     ]);
     await imageConversationStorage.setItem(IMAGE_CONVERSATIONS_KEY, nextItems);
   });
 }
 
-export async function deleteImageConversation(id: string): Promise<void> {
+export async function deleteImageConversation(id: string, ownerId: string): Promise<void> {
+  const normalizedOwnerId = normalizeOwnerId(ownerId);
+  if (!normalizedOwnerId) {
+    return;
+  }
   await queueImageConversationWrite(async () => {
     const items = await readStoredImageConversations();
     await imageConversationStorage.setItem(
       IMAGE_CONVERSATIONS_KEY,
-      items.filter((item) => item.id !== id),
+      items.filter((item) => item.ownerId !== normalizedOwnerId || item.id !== id),
     );
   });
 }
 
-export async function clearImageConversations(): Promise<void> {
+export async function clearImageConversations(ownerId: string): Promise<void> {
+  const normalizedOwnerId = normalizeOwnerId(ownerId);
+  if (!normalizedOwnerId) {
+    return;
+  }
   await queueImageConversationWrite(async () => {
-    await imageConversationStorage.removeItem(IMAGE_CONVERSATIONS_KEY);
+    const items = await readStoredImageConversations();
+    await imageConversationStorage.setItem(
+      IMAGE_CONVERSATIONS_KEY,
+      items.filter((item) => item.ownerId !== normalizedOwnerId),
+    );
   });
 }
 

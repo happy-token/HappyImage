@@ -1,6 +1,7 @@
 import localforage from "localforage";
 
 import { httpRequest, request } from "@/lib/request";
+import { getStoredAuthKey } from "@/store/auth";
 
 export type AccountType = string;
 export type AccountStatus = "正常" | "限流" | "异常" | "禁用";
@@ -368,7 +369,7 @@ type LocalApiCacheRecord<T> = {
   data: T;
 };
 
-const seedGalleryApiCacheVersion = "v6-curated-portrait-count-sorted";
+const seedGalleryApiCacheVersion = "v9-simple-gallery-categories";
 const seedGalleryLocalCachePrefix = `happyimage:seed-gallery-api-cache:${seedGalleryApiCacheVersion}:`;
 const seedGalleryLocalCacheIndexKey = "__index";
 const seedGalleryListCacheMaxAgeMs = 10 * 60 * 1000;
@@ -471,7 +472,6 @@ async function cachedSeedGalleryRequest<T>(path: string, maxAgeMs: number) {
   const versionedPath = appendSeedGalleryCacheVersion(path);
   const cached = await readLocalApiCache<T>(versionedPath, maxAgeMs);
   if (cached) {
-    void httpRequest<T>(versionedPath).then((data) => writeLocalApiCache(versionedPath, data)).catch(() => {});
     return cached;
   }
   const data = await httpRequest<T>(versionedPath);
@@ -911,25 +911,69 @@ export async function deleteManagedImages(body: { paths?: string[]; start_date?:
 }
 
 export async function downloadImages(paths: string[]) {
+  const downloadToken = await createImageDownloadToken(paths);
+  const params = new URLSearchParams();
+  paths.forEach((path) => params.append("path", path));
+  if (downloadToken) {
+    params.set("download_token", downloadToken);
+  }
+  const href = `/api/images/download?${params.toString()}`;
+  if (downloadToken && href.length < 7000) {
+    triggerBrowserDownload(href, "images.zip");
+    return;
+  }
+
   const response = await request.post("/api/images/download", { paths }, { responseType: "blob" });
   const blob = response.data as Blob;
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "images.zip";
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  triggerBlobDownload(blob, "images.zip");
 }
 
 export async function downloadSingleImage(path: string) {
+  const downloadToken = await createImageDownloadToken([path]);
+  if (downloadToken) {
+    const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+    const params = new URLSearchParams({ download_token: downloadToken });
+    triggerBrowserDownload(`/api/images/download/${encodedPath}?${params.toString()}`, path.split("/").pop() || "image.png");
+    return;
+  }
+
   const response = await request.get(`/api/images/download/${path}`, { responseType: "blob" });
   const blob = response.data as Blob;
+  triggerBlobDownload(blob, path.split("/").pop() || "image.png");
+}
+
+async function createImageDownloadToken(paths: string[]) {
+  const authKey = await getStoredAuthKey();
+  if (!authKey || paths.length === 0) {
+    return "";
+  }
+  try {
+    const data = await httpRequest<{ token: string }>("/api/images/download-token", {
+      method: "POST",
+      body: { paths },
+      redirectOnUnauthorized: false,
+    });
+    return String(data.token || "").trim();
+  } catch {
+    return "";
+  }
+}
+
+function triggerBrowserDownload(href: string, filename: string) {
+  const a = document.createElement("a");
+  a.href = href;
+  a.download = filename;
+  a.rel = "noreferrer";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+function triggerBlobDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = path.split("/").pop() || "image.png";
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

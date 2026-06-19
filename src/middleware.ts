@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const BACKEND_BASE = process.env.BACKEND_URL || "";
+const BACKEND_BASE =
+  process.env.BACKEND_URL ||
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  (process.env.NODE_ENV === "development" ? "http://127.0.0.1:8000" : "");
 
 const PROXY_PREFIXES = [
   "/api/",
@@ -24,6 +27,10 @@ export async function middleware(request: NextRequest) {
 
   if (!shouldProxy(pathname)) {
     return NextResponse.next();
+  }
+
+  if (!BACKEND_BASE) {
+    return new NextResponse("Backend unavailable: BACKEND_URL is not configured", { status: 502 });
   }
 
   const backendUrl = `${BACKEND_BASE}${pathname}${search}`;

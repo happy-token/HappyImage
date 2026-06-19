@@ -30,7 +30,7 @@ function getNextPathFromLocation() {
 
 function buildStoredSession(response: LoginResponse, fallbackKey: string): StoredAuthSession {
   return {
-    key: String(response.access_token || fallbackKey || "").trim(),
+    key: "",
     role: response.user?.role || response.role,
     subjectId: response.user?.id || response.subject_id,
     name: response.user?.name || response.name,

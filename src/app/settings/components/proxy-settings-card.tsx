@@ -82,7 +82,7 @@ export function ProxySettingsCard() {
                 className="h-11 rounded-xl border-stone-200 bg-white"
               />
               <p className="text-sm text-stone-500">
-                留空表示不使用代理。支持外部代理和账号密码，例如 `http://用户名:密码@proxy.example.com:7890`、`socks5://proxy.example.com:7890`。Docker 容器访问宿主机代理时通常填写 `http://host.docker.internal:7897`。
+                留空表示不使用代理。当前本机开发服务通常填写 `http://127.0.0.1:7897`；Docker 容器访问宿主机代理时通常填写 `http://host.docker.internal:7897`。支持外部代理和账号密码，例如 `http://用户名:密码@proxy.example.com:7890`、`socks5://proxy.example.com:7890`。
               </p>
             </div>
 

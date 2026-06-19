@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, History, LoaderCircle, Plus, Trash2 } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 
 import { ImageComposer } from "@/app/image/components/image-composer";
@@ -58,6 +59,10 @@ const IMAGE_TIER_STORAGE_KEY = "happyimage:image_last_tier";
 const IMAGE_QUALITY_STORAGE_KEY = "happyimage:image_last_quality";
 const IMAGE_MODEL_STORAGE_KEY = "happyimage:image_last_model";
 const IMAGE_COUNT_STORAGE_KEY = "happyimage:image_last_count";
+
+function scopedLocalStorageKey(baseKey: string, ownerId: string) {
+  return `${baseKey}:${ownerId || "anonymous"}`;
+}
 const SCROLL_POSITIONS_STORAGE_KEY = "happyimage:image_scroll_positions";
 const SCROLL_TO_LATEST_THRESHOLD = 160;
 
@@ -305,7 +310,7 @@ function deriveTurnStatus(turn: ImageTurn): Pick<ImageTurn, "status" | "error"> 
   return { status: "success", error: undefined };
 }
 
-async function syncConversationImageTasks(items: ImageConversation[]) {
+async function syncConversationImageTasks(items: ImageConversation[], ownerId: string) {
   const taskIds = Array.from(
     new Set(
       items.flatMap((conversation) =>
@@ -375,12 +380,12 @@ async function syncConversationImageTasks(items: ImageConversation[]) {
   });
 
   if (changed) {
-    await saveImageConversations(normalized);
+    await saveImageConversations(normalized, ownerId);
   }
   return normalized;
 }
 
-async function recoverConversationHistory(items: ImageConversation[]) {
+async function recoverConversationHistory(items: ImageConversation[], ownerId: string) {
   let changed = false;
   const normalized = items.map((conversation) => {
     const turns = conversation.turns.map((turn) => {
@@ -424,10 +429,10 @@ async function recoverConversationHistory(items: ImageConversation[]) {
   });
 
   if (changed) {
-    await saveImageConversations(normalized);
+    await saveImageConversations(normalized, ownerId);
   }
 
-  return syncConversationImageTasks(normalized);
+  return syncConversationImageTasks(normalized, ownerId);
 }
 
 
@@ -435,12 +440,29 @@ function formatUserImageQuota(value: number | null | undefined) {
   return typeof value === "number" ? String(Math.max(0, value)) : "--";
 }
 
-function ImagePageContent({ isAdmin, initialUserQuota }: { isAdmin: boolean; initialUserQuota?: number | null }) {
+function parseWorkspaceMode(value: string | null): ImageWorkspaceMode | null {
+  if (value === "compose" || value === "official_gallery" || value === "user_gallery") {
+    return value;
+  }
+  return null;
+}
+
+function ImagePageContent({
+  isAdmin,
+  initialUserQuota,
+  ownerId,
+}: {
+  isAdmin: boolean;
+  initialUserQuota?: number | null;
+  ownerId: string;
+}) {
+  const searchParams = useSearchParams();
   const didLoadQuotaRef = useRef(false);
   const conversationsRef = useRef<ImageConversation[]>([]);
   const loadCancelledRef = useRef(false);
   const loadHistoryInFlightRef = useRef(false);
   const didLoadGalleryPromptRef = useRef(false);
+  const lastRouteIntentRef = useRef<string | null>(null);
   const skipNextHistoryConversationRestoreRef = useRef(false);
   const resultsViewportRef = useRef<HTMLDivElement>(null);
   const lastConversationIdRef = useRef<string | null>(null);
@@ -542,7 +564,7 @@ function ImagePageContent({ isAdmin, initialUserQuota }: { isAdmin: boolean; ini
       skipNextHistoryConversationRestoreRef.current = true;
     }
     if (typeof window !== "undefined") {
-      window.localStorage.removeItem(ACTIVE_CONVERSATION_STORAGE_KEY);
+      window.localStorage.removeItem(scopedLocalStorageKey(ACTIVE_CONVERSATION_STORAGE_KEY, ownerId));
     }
     setWorkspaceMode("compose");
     setSelectedConversationId(null);
@@ -552,7 +574,7 @@ function ImagePageContent({ isAdmin, initialUserQuota }: { isAdmin: boolean; ini
       toast.success(successMessage);
     }
     window.setTimeout(() => textareaRef.current?.focus(), 80);
-  }, [clearComposerInputs]);
+  }, [clearComposerInputs, ownerId]);
 
   useEffect(() => {
     conversationsRef.current = conversations;
@@ -662,8 +684,8 @@ function ImagePageContent({ isAdmin, initialUserQuota }: { isAdmin: boolean; ini
       setImageQuality(storedQuality || "auto");
       setImageCount(storedCount ? clampImageCount(storedCount) : "1");
 
-      const items = await listImageConversations();
-      const normalizedItems = await recoverConversationHistory(items);
+      const items = await listImageConversations(ownerId);
+      const normalizedItems = await recoverConversationHistory(items, ownerId);
       if (loadCancelledRef.current) {
         return;
       }
@@ -677,7 +699,7 @@ function ImagePageContent({ isAdmin, initialUserQuota }: { isAdmin: boolean; ini
         return;
       }
       const storedConversationId =
-        typeof window !== "undefined" ? window.localStorage.getItem(ACTIVE_CONVERSATION_STORAGE_KEY) : null;
+        typeof window !== "undefined" ? window.localStorage.getItem(scopedLocalStorageKey(ACTIVE_CONVERSATION_STORAGE_KEY, ownerId)) : null;
       const nextSelectedConversationId =
         (storedConversationId && normalizedItems.some((conversation) => conversation.id === storedConversationId)
           ? storedConversationId
@@ -696,6 +718,7 @@ function ImagePageContent({ isAdmin, initialUserQuota }: { isAdmin: boolean; ini
       }
     }
   }, [
+    ownerId,
     setImageRatio,
     setImageTier,
     setImageWidth,
@@ -911,11 +934,11 @@ function ImagePageContent({ isAdmin, initialUserQuota }: { isAdmin: boolean; ini
     }
 
     if (selectedConversationId) {
-      window.localStorage.setItem(ACTIVE_CONVERSATION_STORAGE_KEY, selectedConversationId);
+      window.localStorage.setItem(scopedLocalStorageKey(ACTIVE_CONVERSATION_STORAGE_KEY, ownerId), selectedConversationId);
     } else {
-      window.localStorage.removeItem(ACTIVE_CONVERSATION_STORAGE_KEY);
+      window.localStorage.removeItem(scopedLocalStorageKey(ACTIVE_CONVERSATION_STORAGE_KEY, ownerId));
     }
-  }, [selectedConversationId]);
+  }, [ownerId, selectedConversationId]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -947,7 +970,7 @@ function ImagePageContent({ isAdmin, initialUserQuota }: { isAdmin: boolean; ini
     ]);
     conversationsRef.current = nextConversations;
     setConversations(nextConversations);
-    await saveImageConversation(conversation);
+    await saveImageConversation(conversation, ownerId);
   };
 
   const updateConversation = useCallback(
@@ -965,17 +988,17 @@ function ImagePageContent({ isAdmin, initialUserQuota }: { isAdmin: boolean; ini
       conversationsRef.current = nextConversations;
       setConversations(nextConversations);
       if (options.persist !== false) {
-        await saveImageConversation(nextConversation);
+        await saveImageConversation(nextConversation, ownerId);
       }
     },
-    [],
+    [ownerId],
   );
 
   const resetComposer = useCallback(() => {
     clearComposerInputs();
   }, [clearComposerInputs]);
 
-  const handleCreateDraft = () => {
+  const handleCreateDraft = useCallback(() => {
     shouldStickToBottomRef.current = true;
     const btn = scrollToLatestBtnRef.current;
     if (btn) btn.style.display = "none";
@@ -983,7 +1006,27 @@ function ImagePageContent({ isAdmin, initialUserQuota }: { isAdmin: boolean; ini
     resetComposer();
     setWorkspaceMode("compose");
     textareaRef.current?.focus();
-  };
+  }, [resetComposer]);
+
+  useEffect(() => {
+    const mode = parseWorkspaceMode(searchParams.get("mode"));
+    const shouldCreateDraft = searchParams.get("new") === "1";
+    const intentKey = `${mode ?? ""}:${shouldCreateDraft ? "new" : ""}`;
+
+    if (lastRouteIntentRef.current === intentKey) {
+      return;
+    }
+    lastRouteIntentRef.current = intentKey;
+
+    if (shouldCreateDraft) {
+      handleCreateDraft();
+      return;
+    }
+    if (mode) {
+      setWorkspaceMode(mode);
+      setIsHistoryOpen(false);
+    }
+  }, [handleCreateDraft, searchParams]);
 
   const handleSelectConversation = useCallback((id: string) => {
     setWorkspaceMode("compose");
@@ -1006,11 +1049,11 @@ function ImagePageContent({ isAdmin, initialUserQuota }: { isAdmin: boolean; ini
     }
 
     try {
-      await deleteImageConversation(id);
+      await deleteImageConversation(id, ownerId);
     } catch (error) {
       const message = error instanceof Error ? error.message : "删除会话失败";
       toast.error(message);
-      const items = await listImageConversations();
+      const items = await listImageConversations(ownerId);
       conversationsRef.current = items;
       setConversations(items);
     }
@@ -1057,7 +1100,7 @@ function ImagePageContent({ isAdmin, initialUserQuota }: { isAdmin: boolean; ini
 
   const handleClearHistory = async () => {
     try {
-      await clearImageConversations();
+      await clearImageConversations(ownerId);
       conversationsRef.current = [];
       setConversations([]);
       setSelectedConversationId(null);
@@ -1076,7 +1119,7 @@ function ImagePageContent({ isAdmin, initialUserQuota }: { isAdmin: boolean; ini
     conversationsRef.current = sortImageConversations(nextConversations);
     setConversations(conversationsRef.current);
     try {
-      await renameImageConversation(id, title);
+      await renameImageConversation(id, title, ownerId);
     } catch (error) {
       const message = error instanceof Error ? error.message : "重命名失败";
       toast.error(message);
@@ -1887,5 +1930,11 @@ export default function ImagePage() {
     );
   }
 
-  return <ImagePageContent isAdmin={session.role === "admin"} initialUserQuota={session.imageQuota} />;
+  return (
+    <ImagePageContent
+      isAdmin={session.role === "admin"}
+      initialUserQuota={session.imageQuota}
+      ownerId={session.subjectId}
+    />
+  );
 }

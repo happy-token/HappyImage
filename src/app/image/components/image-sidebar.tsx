@@ -1,15 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Images, LoaderCircle, MessageSquarePlus, Pencil, Sparkles, Trash2 } from "lucide-react";
+import { LoaderCircle, Pencil, Trash2 } from "lucide-react";
 import Link from "next/link";
 
 import { adminNavigationItems } from "@/components/admin-navigation";
+import { ImageWorkspaceNav, type ImageWorkspaceMode } from "@/components/image-workspace-nav";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getImageConversationStats, type ImageConversation } from "@/store/image-conversations";
-
-export type ImageWorkspaceMode = "compose" | "official_gallery" | "user_gallery";
 
 type ImageSidebarProps = {
   conversations: ImageConversation[];
@@ -77,49 +76,41 @@ export function ImageSidebar({
     <aside className="h-full min-h-0 overflow-hidden">
       <div className="flex h-full min-h-0 flex-col gap-2 py-1 sm:gap-3 sm:py-2">
         {!hideActionButtons && (
-          <div className="flex items-center gap-2">
-            <Button className="h-10 flex-1 rounded-xl bg-stone-950 text-white hover:bg-stone-800" onClick={onCreateDraft}>
-              <MessageSquarePlus className="size-4" />
-              新建对话
-            </Button>
+          <div className="space-y-2">
+            <ImageWorkspaceNav activeMode={activeMode} onCreateDraft={onCreateDraft} onSelectMode={onSelectMode} />
             <Button
               variant="outline"
-              className="h-10 rounded-xl border-stone-200 bg-white/85 px-3 text-stone-600 hover:bg-white"
+              className="h-10 w-full justify-between rounded-lg border-stone-200 bg-white/85 px-3 text-sm font-medium text-stone-600 hover:bg-white"
               onClick={() => void onClearHistory()}
               disabled={conversations.length === 0}
             >
+              <span>清空历史</span>
               <Trash2 className="size-4" />
             </Button>
           </div>
         )}
 
-        <section className="shrink-0 space-y-1 border-b border-stone-200/70 pb-3">
-          <button
-            type="button"
-            className={cn(
-              "flex h-10 w-full items-center justify-between rounded-lg px-3 text-sm font-medium transition",
-              activeMode === "official_gallery"
-                ? "bg-stone-950 text-white"
-                : "text-stone-700 hover:bg-white/70 hover:text-stone-950",
-            )}
-            onClick={() => onSelectMode("official_gallery")}
-          >
-            <span>官方图库</span>
-            <Sparkles className="size-4" />
-          </button>
-          <button
-            type="button"
-            className={cn(
-              "flex h-10 w-full items-center justify-between rounded-lg px-3 text-sm font-medium transition",
-              activeMode === "user_gallery"
-                ? "bg-stone-950 text-white"
-                : "text-stone-700 hover:bg-white/70 hover:text-stone-950",
-            )}
-            onClick={() => onSelectMode("user_gallery")}
-          >
-            <span>我的图库</span>
-            <Images className="size-4" />
-          </button>
+        <section className="shrink-0 space-y-1">
+          {hideActionButtons ? (
+            <ImageWorkspaceNav activeMode={activeMode} onCreateDraft={onCreateDraft} onSelectMode={onSelectMode} />
+          ) : null}
+          {isAdmin ? (
+            <div className="space-y-1 pt-2">
+              {adminNavigationItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className="flex h-10 w-full items-center justify-between rounded-lg px-3 text-sm font-medium text-stone-700 transition hover:bg-white/70 hover:text-stone-950"
+                  >
+                    <span>{item.label}</span>
+                    <Icon className="size-4" />
+                  </Link>
+                );
+              })}
+            </div>
+          ) : null}
         </section>
 
         <div
@@ -211,23 +202,6 @@ export function ImageSidebar({
           )}
         </div>
 
-        {isAdmin ? (
-          <section className="shrink-0 space-y-1 border-t border-stone-200/70 pt-2">
-            {adminNavigationItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className="flex h-10 w-full items-center justify-between rounded-lg px-3 text-sm font-medium text-stone-700 transition hover:bg-white/70 hover:text-stone-950"
-                >
-                  <span>{item.label}</span>
-                  <Icon className="size-4" />
-                </Link>
-              );
-            })}
-          </section>
-        ) : null}
       </div>
     </aside>
   );

@@ -30,8 +30,7 @@ function errorMessageFromValue(value: unknown): string {
 
 export const request = axios.create({
     baseURL: webConfig.apiUrl.replace(/\/$/, ""),
-    // withCredentials is set per-request by the interceptor.
-    // Cookie sessions need it; Bearer-only clients can skip it.
+    withCredentials: true,
 });
 
 request.interceptors.request.use(async (config) => {
@@ -41,12 +40,7 @@ request.interceptors.request.use(async (config) => {
     if (authKey && !headers.Authorization) {
         headers.Authorization = `Bearer ${authKey}`;
     }
-    // Only send credentials (cookies) when not using Bearer auth.
-    // This keeps backward compatibility when CORS credentials
-    // are not configured.
-    if (!authKey) {
-        nextConfig.withCredentials = true;
-    }
+    nextConfig.withCredentials = true;
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-expect-error
     nextConfig.headers = headers;

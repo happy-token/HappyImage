@@ -140,30 +140,36 @@ ${skillEn}
   ];
 
   return (
-    <section className="grid items-stretch gap-4 lg:grid-cols-2">
-      {versions.map((item) => (
-        <div key={item.title} className="flex flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-white/[0.04]">
-          <div className="flex items-center justify-between gap-3 border-b border-slate-200/70 bg-slate-50/80 p-4 dark:border-white/10 dark:bg-white/[0.03]">
-            <div>
-              <h2 className="font-medium text-slate-900 dark:text-slate-100">{item.title}</h2>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{item.desc}</p>
+    <section className="space-y-4">
+      <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300">
+        <div className="font-medium text-slate-900 dark:text-slate-100">Agent 技能安装</div>
+        <p className="mt-1">生成 happyimage-search 的本地 skill 安装内容，让 Codex 或 Claude 可以调用本项目的联网搜索接口。</p>
+      </div>
+      <div className="grid items-stretch gap-4 lg:grid-cols-2">
+        {versions.map((item) => (
+          <div key={item.title} className="flex flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-white/[0.04]">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200/70 bg-slate-50/80 p-4 dark:border-white/10 dark:bg-white/[0.03]">
+              <div>
+                <h2 className="font-medium text-slate-900 dark:text-slate-100">{item.title}</h2>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{item.desc}</p>
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" className="cursor-pointer" onClick={() => downloadSkill(item.skill)}>
+                  <Download />
+                  下载
+                </Button>
+                <Button size="sm" className="cursor-pointer" onClick={() => void copyText(item.prompt)}>
+                  <Copy />
+                  复制
+                </Button>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <Button size="sm" variant="outline" className="cursor-pointer" onClick={() => downloadSkill(item.skill)}>
-                <Download />
-                下载
-              </Button>
-              <Button size="sm" className="cursor-pointer" onClick={() => void copyText(item.prompt)}>
-                <Copy />
-                复制
-              </Button>
-            </div>
+            <pre className="flex-1 whitespace-pre-wrap p-4 font-mono text-sm leading-6">
+              {item.prompt}
+            </pre>
           </div>
-          <pre className="flex-1 whitespace-pre-wrap p-4 font-mono text-sm leading-6">
-            {item.prompt}
-          </pre>
-        </div>
-      ))}
+        ))}
+      </div>
     </section>
   );
 }

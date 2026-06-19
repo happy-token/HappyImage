@@ -95,7 +95,7 @@ export function SearchPanel() {
     <section className={cn("mx-auto flex min-h-[calc(100vh-142px)] w-full max-w-6xl flex-col px-4 transition-all", searched ? "py-5" : "justify-center")}>
       <div className={cn("mx-auto w-full max-w-3xl", searched && "sticky top-3 z-10")}>
         {!searched ? (
-          <p className="mb-5 text-center text-sm text-stone-500 dark:text-stone-400">利用ChatGPT先进的网页搜索功能进行搜索</p>
+          <p className="mb-5 text-center text-sm text-stone-500 dark:text-stone-400">测试 /v1/search 联网搜索接口，返回答案和来源链接。</p>
         ) : null}
         <form
           className={cn("mx-auto flex w-full items-center gap-3 rounded-full border border-stone-200 bg-white/95 backdrop-blur transition-all dark:border-white/10 dark:bg-stone-950/90", searched ? "px-4 py-2" : "px-5 py-3")}
@@ -108,7 +108,7 @@ export function SearchPanel() {
           <input
             value={prompt}
             onChange={(event) => setPrompt(event.target.value)}
-            placeholder="搜索网页"
+            placeholder="输入要调试的搜索问题"
             className={cn("min-w-0 flex-1 bg-transparent text-[15px] text-stone-900 outline-none placeholder:text-stone-400 dark:text-stone-100 dark:placeholder:text-stone-500", searched ? "h-8" : "h-10")}
           />
           <button type="submit" disabled={loading || !prompt.trim()} className="inline-flex size-8 shrink-0 items-center justify-center rounded-full text-stone-800 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:text-stone-300 dark:text-stone-100 dark:hover:bg-white/10 dark:disabled:text-stone-600">

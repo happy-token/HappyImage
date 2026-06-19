@@ -47,10 +47,11 @@ const builtInHomeGalleryCategories = [
 ] as const;
 
 const homeGallerySectionLimit = 16;
-const homeGalleryCategoryFetchLimit = 16;
-const homeGalleryItemsPerSection = 8;
-const homeGalleryRotationItemLimit = 16;
-const heroBackdropItemCount = 24;
+const homeGalleryInitialSectionLimit = 4;
+const homeGalleryCategoryFetchLimit = 8;
+const homeGalleryItemsPerSection = 6;
+const homeGalleryRotationItemLimit = 8;
+const heroBackdropItemCount = 12;
 
 function formatStatCount(value: number) {
   return new Intl.NumberFormat("zh-CN").format(value);
@@ -829,6 +830,19 @@ function shouldRunAmbientAnimation() {
   return !["slow-2g", "2g"].includes(connection?.effectiveType || "");
 }
 
+function runWhenBrowserIdle(callback: () => void) {
+  const browserWindow = window as Window & {
+    requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number;
+    cancelIdleCallback?: (handle: number) => void;
+  };
+  if (browserWindow.requestIdleCallback && browserWindow.cancelIdleCallback) {
+    const handle = browserWindow.requestIdleCallback(callback, { timeout: 1800 });
+    return () => browserWindow.cancelIdleCallback?.(handle);
+  }
+  const timeoutId = window.setTimeout(callback, 900);
+  return () => window.clearTimeout(timeoutId);
+}
+
 function getNextHeroDelay() {
   return 4000 + Math.round(Math.random() * 3000);
 }
@@ -1219,6 +1233,7 @@ export default function HomePage() {
 
   useEffect(() => {
     let cancelled = false;
+    let cancelDeferredGalleryLoad: (() => void) | null = null;
     void getStoredAuthSession().then((storedSession) => {
       if (!cancelled) {
         setSession(storedSession);
@@ -1230,6 +1245,8 @@ export default function HomePage() {
         const facetsData = await fetchSeedGalleryFacets();
         const orderedCategories = getOrderedHomeGalleryCategories(facetsData.categories || {});
         const visibleCategories = orderedCategories.slice(0, homeGallerySectionLimit);
+        const initialCategories = visibleCategories.slice(0, homeGalleryInitialSectionLimit);
+        const deferredCategories = visibleCategories.slice(homeGalleryInitialSectionLimit);
         const visibleCuratedIds = Array.from(
           new Set([
             ...heroGalleryIds,
@@ -1264,18 +1281,8 @@ export default function HomePage() {
         setCategoryCount(Object.keys(facetsData.categories || {}).length);
         setIsLoading(false);
 
-        const galleryResults = await Promise.all(
-          visibleCategories.map((category) => fetchSeedGallery({ category, limit: homeGalleryCategoryFetchLimit })),
-        );
-        if (cancelled) {
-          return;
-        }
-        const allItems = uniqueGalleryItems([
-          ...curatedItems,
-          ...galleryResults.flatMap((result) => result.items),
-        ]);
         const categoryOrderIndex = new Map(visibleCategories.map((category, index) => [category, index]));
-        const curatedSections = visibleCategories.map((category) => {
+        const buildSections = (categories: string[], allItems: SeedGalleryItem[]) => categories.map((category) => {
           const config = homeGalleryCategoryConfigs[category];
           const rotationItems = selectGalleryItems(allItems, config.ids, homeGalleryRotationItemLimit, [category]);
           return {
@@ -1288,12 +1295,48 @@ export default function HomePage() {
             items: rotationItems.slice(0, homeGalleryItemsPerSection),
           };
         });
-        setItems(allItems);
+
+        const loadCategoryItems = async (categories: string[]) => {
+          const galleryResults = await Promise.all(
+            categories.map((category) => fetchSeedGallery({ category, limit: homeGalleryCategoryFetchLimit })),
+          );
+          return uniqueGalleryItems([
+            ...curatedItems,
+            ...galleryResults.flatMap((result) => result.items),
+          ]);
+        };
+
+        const initialItems = await loadCategoryItems(initialCategories);
+        if (cancelled) {
+          return;
+        }
+        setItems(initialItems);
         setGallerySections(
-          curatedSections.sort(
+          buildSections(initialCategories, initialItems).sort(
             (a, b) => (categoryOrderIndex.get(a.key) ?? 999) - (categoryOrderIndex.get(b.key) ?? 999),
           ),
         );
+
+        if (deferredCategories.length > 0) {
+          cancelDeferredGalleryLoad = runWhenBrowserIdle(() => {
+            if (cancelled) {
+              return;
+            }
+            void loadCategoryItems(visibleCategories)
+              .then((allItems) => {
+                if (cancelled) {
+                  return;
+                }
+                setItems(allItems);
+                setGallerySections(
+                  buildSections(visibleCategories, allItems).sort(
+                    (a, b) => (categoryOrderIndex.get(a.key) ?? 999) - (categoryOrderIndex.get(b.key) ?? 999),
+                  ),
+                );
+              })
+              .catch(() => {});
+          });
+        }
       } catch {
         if (!cancelled) {
           setItems([]);
@@ -1310,6 +1353,7 @@ export default function HomePage() {
     void loadHomeGallery();
     return () => {
       cancelled = true;
+      cancelDeferredGalleryLoad?.();
     };
   }, []);
 

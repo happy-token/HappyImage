@@ -28,7 +28,7 @@ function normalizeSession(value: unknown, fallbackKey = ""): StoredAuthSession |
   const candidate = value as Partial<StoredAuthSession>;
   const key = String(candidate.key || fallbackKey || "").trim();
   const role = candidate.role === "admin" || candidate.role === "user" ? candidate.role : null;
-  if (!key || !role) {
+  if (!role) {
     return null;
   }
 
@@ -76,8 +76,10 @@ export async function getStoredAuthSession() {
 
   const normalizedSession = normalizeSession(storedSession, String(storedKey || ""));
   if (normalizedSession) {
-    if (normalizedSession.key !== String(storedKey || "").trim()) {
+    if (normalizedSession.key && normalizedSession.key !== String(storedKey || "").trim()) {
       await authStorage.setItem(AUTH_KEY_STORAGE_KEY, normalizedSession.key);
+    } else if (!normalizedSession.key && String(storedKey || "").trim()) {
+      await authStorage.removeItem(AUTH_KEY_STORAGE_KEY);
     }
     return normalizedSession;
   }
@@ -96,7 +98,9 @@ export async function setStoredAuthSession(session: StoredAuthSession) {
   }
 
   await Promise.all([
-    authStorage.setItem(AUTH_KEY_STORAGE_KEY, normalizedSession.key),
+    normalizedSession.key
+      ? authStorage.setItem(AUTH_KEY_STORAGE_KEY, normalizedSession.key)
+      : authStorage.removeItem(AUTH_KEY_STORAGE_KEY),
     authStorage.setItem(AUTH_SESSION_STORAGE_KEY, normalizedSession),
   ]);
 }
