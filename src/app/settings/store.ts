@@ -26,6 +26,7 @@ import {
   type ImageStorageMode,
   type ImageStorageSettings,
   type OIDCSettings,
+  type RechargeSettings,
   type SettingsConfig,
 } from "@/lib/api";
 
@@ -87,12 +88,24 @@ function normalizeConfig(config: SettingsConfig): SettingsConfig {
       allowed_email_domains: "",
       default_image_quota: 0,
     };
+  const recharge = typeof config.recharge === "object" && config.recharge
+    ? config.recharge as RechargeSettings
+    : {
+      enabled: false,
+      provider: "contact",
+      newapi_base_url: "",
+      newapi_console_topup_path: "/console/topup",
+      webhook_secret: "",
+      webhook_secret_configured: false,
+      quota_per_unit: 1,
+    };
   return {
     ...config,
     refresh_account_interval_minute: Number(config.refresh_account_interval_minute || 5),
     image_retention_days: Number(config.image_retention_days || 30),
     image_poll_timeout_secs: Number(config.image_poll_timeout_secs || 120),
     image_account_concurrency: Number(config.image_account_concurrency || 3),
+    default_user_image_quota: Number(config.default_user_image_quota ?? 20),
     image_settle_enabled: Boolean(config.image_settle_enabled !== false),
     image_check_before_hit_enabled: Boolean(config.image_check_before_hit_enabled !== false),
     image_settle_secs: Number(config.image_settle_secs || 2.0),
@@ -153,6 +166,15 @@ function normalizeConfig(config: SettingsConfig): SettingsConfig {
       scopes: String(oidc.scopes || "openid profile email"),
       allowed_email_domains: String(oidc.allowed_email_domains || ""),
       default_image_quota: Number(oidc.default_image_quota || 0),
+    },
+    recharge: {
+      enabled: Boolean(recharge.enabled),
+      provider: String(recharge.provider || "contact"),
+      newapi_base_url: String(recharge.newapi_base_url || ""),
+      newapi_console_topup_path: String(recharge.newapi_console_topup_path || "/console/topup"),
+      webhook_secret: String(recharge.webhook_secret || ""),
+      webhook_secret_configured: Boolean(recharge.webhook_secret_configured),
+      quota_per_unit: Number(recharge.quota_per_unit || 1),
     },
   };
 }
@@ -220,6 +242,7 @@ type SettingsStore = {
   setImageRetentionDays: (value: string) => void;
   setImagePollTimeoutSecs: (value: string) => void;
   setImageAccountConcurrency: (value: string) => void;
+  setDefaultUserImageQuota: (value: string) => void;
   setImageSettleEnabled: (value: boolean) => void;
   setImageCheckBeforeHitEnabled: (value: boolean) => void;
   setImageSettleSecs: (value: string) => void;
@@ -239,6 +262,7 @@ type SettingsStore = {
   setBackupField: (key: keyof BackupSettings, value: string | boolean) => void;
   setBackupInclude: (key: keyof BackupSettings["include"], value: boolean) => void;
   setOIDCField: (key: keyof OIDCSettings, value: string | boolean | number) => void;
+  setRechargeField: (key: keyof RechargeSettings, value: string | boolean | number) => void;
 
   loadPools: (silent?: boolean) => Promise<void>;
   openAddDialog: () => void;
@@ -341,6 +365,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         image_retention_days: Math.max(1, Number(config.image_retention_days) || 30),
         image_poll_timeout_secs: Math.max(1, Number(config.image_poll_timeout_secs) || 120),
         image_account_concurrency: Math.max(1, Number(config.image_account_concurrency) || 3),
+        default_user_image_quota: Math.max(0, Number(config.default_user_image_quota) || 0),
         image_settle_enabled: Boolean(config.image_settle_enabled !== false),
         image_check_before_hit_enabled: Boolean(config.image_check_before_hit_enabled !== false),
         image_settle_secs: Math.max(0.5, Number(config.image_settle_secs) || 2.0),
@@ -378,6 +403,15 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
           interval_minutes: Math.max(1, Number(config.backup?.interval_minutes) || 360),
           rotation_keep: Math.max(0, Number(config.backup?.rotation_keep) || 0),
           passphrase: String(config.backup?.passphrase || "").trim(),
+        },
+        recharge: {
+          ...(config.recharge as RechargeSettings),
+          enabled: Boolean(config.recharge?.enabled),
+          provider: String(config.recharge?.provider || "contact"),
+          newapi_base_url: String(config.recharge?.newapi_base_url || "").trim().replace(/\/$/, ""),
+          newapi_console_topup_path: String(config.recharge?.newapi_console_topup_path || "/console/topup").trim() || "/console/topup",
+          webhook_secret: String(config.recharge?.webhook_secret || "").trim(),
+          quota_per_unit: Math.max(1, Number(config.recharge?.quota_per_unit) || 1),
         },
       });
       set({
@@ -417,6 +451,10 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
 
   setImageAccountConcurrency: (value) => {
     set((state) => state.config ? { config: { ...state.config, image_account_concurrency: value } } : {});
+  },
+
+  setDefaultUserImageQuota: (value) => {
+    set((state) => state.config ? { config: { ...state.config, default_user_image_quota: value } } : {});
   },
 
   setImageSettleEnabled: (value) => {
@@ -614,6 +652,32 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
           ...state.config,
           oidc: {
             ...oidc,
+            [key]: value,
+          },
+        },
+      };
+    });
+  },
+
+  setRechargeField: (key, value) => {
+    set((state) => {
+      if (!state.config) {
+        return {};
+      }
+      const recharge = state.config.recharge || {
+        enabled: false,
+        provider: "contact",
+        newapi_base_url: "",
+        newapi_console_topup_path: "/console/topup",
+        webhook_secret: "",
+        webhook_secret_configured: false,
+        quota_per_unit: 1,
+      };
+      return {
+        config: {
+          ...state.config,
+          recharge: {
+            ...recharge,
             [key]: value,
           },
         },

@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { ImageIcon, Plus, WandSparkles } from "lucide-react";
 
+import { AuthenticatedImage } from "@/components/authenticated-image";
 import { Button } from "@/components/ui/button";
 import type { ImageConversation } from "@/store/image-conversations";
 
@@ -58,11 +59,12 @@ function UserGalleryCard({
         className="block w-full bg-stone-100 text-left outline-none ring-stone-950/10 transition focus-visible:ring-4"
         onClick={() => onSelect(item)}
       >
-        <img
+        <AuthenticatedImage
           src={item.imageUrl}
           alt={label}
           loading="lazy"
           className="h-auto w-full object-cover"
+          placeholderClassName="aspect-square"
         />
       </button>
       <div className="flex items-center justify-between gap-2 px-3 py-2">
@@ -93,7 +95,7 @@ function EmptyUserGallery({
       </p>
       <Button
         type="button"
-        className="mt-4 h-9 rounded-md bg-stone-950 text-white hover:bg-stone-800"
+        className="mt-4 h-9 rounded-md bg-zinc-900 text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200"
         onClick={() => onUsePrompt("")}
       >
         <Plus className="size-4" />

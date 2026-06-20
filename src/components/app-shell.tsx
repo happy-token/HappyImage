@@ -86,7 +86,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      <TopNav session={session} />
+      {isImageWorkspacePath(pathname) ? null : <TopNav session={session} />}
       {showAdminSidebar ? (
         <div className="mx-auto grid h-[calc(100dvh-3rem)] min-h-0 w-full max-w-[1380px] grid-cols-[3.75rem_minmax(0,1fr)] gap-2 overflow-hidden px-0 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] sm:grid-cols-[200px_minmax(0,1fr)] sm:gap-3 sm:px-3 sm:pb-6 xl:grid-cols-[240px_minmax(0,1fr)]">
           <AdminSidebar />

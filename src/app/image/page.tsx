@@ -1,15 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, History, LoaderCircle, Plus, Trash2 } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import type { CSSProperties } from "react";
+import { ArrowDown, History, LogIn, LoaderCircle, Plus } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 
 import { ImageComposer } from "@/app/image/components/image-composer";
 import { ImageResults, type ImageLightboxItem } from "@/app/image/components/image-results";
 import { ImageSidebar, type ImageWorkspaceMode } from "@/app/image/components/image-sidebar";
-import { GalleryBrowser } from "@/app/gallery/page";
+import { GalleryBrowser } from "@/app/gallery/gallery-browser";
 import { UserGalleryPanel } from "@/app/image/components/user-gallery-panel";
+import { AccountMenu } from "@/components/account-menu";
+import { fetchAuthenticatedImageBlob } from "@/components/authenticated-image";
 import { ImageLightbox } from "@/components/image-lightbox";
 import {
   Dialog,
@@ -28,17 +31,20 @@ import {
   fetchImageTasks,
   login,
   resumeImagePoll,
+  updateImageTaskFeedback,
+  updateUserProfile,
   type Account,
+  type ImageFeedbackVote,
   type ImageModel,
   type Model,
   type ImageTask,
 } from "@/lib/api";
 import { consumeGalleryPromptIntent } from "@/lib/gallery-intent";
-import { useAuthGuard } from "@/lib/use-auth-guard";
+import { getValidatedAuthSession } from "@/lib/auth-session";
+import { cn } from "@/lib/utils";
 import { useSettingsStore } from "@/app/settings/store";
-import { getStoredAuthKey } from "@/store/auth";
+import { clearStoredAuthSession, getStoredAuthKey, getStoredAuthSession, setStoredAuthSession, type StoredAuthSession } from "@/store/auth";
 import {
-  clearImageConversations,
   deleteImageConversation,
   getImageConversationStats,
   listImageConversations,
@@ -59,9 +65,20 @@ const IMAGE_TIER_STORAGE_KEY = "happyimage:image_last_tier";
 const IMAGE_QUALITY_STORAGE_KEY = "happyimage:image_last_quality";
 const IMAGE_MODEL_STORAGE_KEY = "happyimage:image_last_model";
 const IMAGE_COUNT_STORAGE_KEY = "happyimage:image_last_count";
+const DEFAULT_IMAGE_COUNT = "1";
+const SIDEBAR_WIDTH_STORAGE_KEY = "happyimage:image_sidebar_width";
+const SIDEBAR_COLLAPSED_STORAGE_KEY = "happyimage:image_sidebar_collapsed";
+const SIDEBAR_MIN_WIDTH = 220;
+const SIDEBAR_MAX_WIDTH = 380;
+const SIDEBAR_DEFAULT_WIDTH = 260;
+const SIDEBAR_COLLAPSED_WIDTH = 72;
 
 function scopedLocalStorageKey(baseKey: string, ownerId: string) {
   return `${baseKey}:${ownerId || "anonymous"}`;
+}
+
+function clampSidebarWidth(value: number) {
+  return Math.max(SIDEBAR_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, value));
 }
 const SCROLL_POSITIONS_STORAGE_KEY = "happyimage:image_scroll_positions";
 const SCROLL_TO_LATEST_THRESHOLD = 160;
@@ -181,11 +198,7 @@ function buildReferenceImageFromResult(image: StoredImage, fileName: string): St
 }
 
 async function fetchImageAsFile(url: string, fileName: string) {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error("读取结果图失败");
-  }
-  const blob = await response.blob();
+  const blob = await fetchAuthenticatedImageBlob(url);
   return new File([blob], fileName, { type: blob.type || "image/png" });
 }
 
@@ -234,6 +247,7 @@ function taskDataToStoredImage(image: StoredImage, task: ImageTask): StoredImage
       b64_json: first.b64_json,
       url: first.url,
       revised_prompt: first.revised_prompt,
+      feedback: first.feedback,
       error: undefined,
       durationMs: task.duration_ms,
     };
@@ -451,12 +465,15 @@ function ImagePageContent({
   isAdmin,
   initialUserQuota,
   ownerId,
+  session,
 }: {
   isAdmin: boolean;
   initialUserQuota?: number | null;
   ownerId: string;
+  session: StoredAuthSession | null;
 }) {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const didLoadQuotaRef = useRef(false);
   const conversationsRef = useRef<ImageConversation[]>([]);
   const loadCancelledRef = useRef(false);
@@ -479,7 +496,7 @@ function ImagePageContent({
   const imageTimeoutRetrySecs = Number(config?.image_timeout_retry_secs || 30);
 
   const [imagePrompt, setImagePrompt] = useState("");
-  const [imageCount, setImageCount] = useState("3");
+  const [imageCount, setImageCount] = useState(DEFAULT_IMAGE_COUNT);
   const [imageRatio, setImageRatio] = useState("auto");
   const [imageTier, setImageTier] = useState("1k");
   const [imageWidth, setImageWidth] = useState("1024");
@@ -494,7 +511,20 @@ function ImagePageContent({
   const [conversations, setConversations] = useState<ImageConversation[]>([]);
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
-  const [availableQuota, setAvailableQuota] = useState(isAdmin ? "加载中..." : formatUserImageQuota(initialUserQuota));
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    if (typeof window === "undefined") {
+      return SIDEBAR_DEFAULT_WIDTH;
+    }
+    const storedWidth = Number(window.localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY));
+    return Number.isFinite(storedWidth) && storedWidth > 0 ? clampSidebarWidth(storedWidth) : SIDEBAR_DEFAULT_WIDTH;
+  });
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() =>
+    typeof window !== "undefined" && window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === "1",
+  );
+  const isGuest = !session;
+  const [availableQuota, setAvailableQuota] = useState(isGuest ? "登录后可用" : isAdmin ? "加载中..." : formatUserImageQuota(initialUserQuota));
+  const [watermarkLabel, setWatermarkLabel] = useState(session?.watermarkLabel ?? "");
+  const [watermarkUnlocked, setWatermarkUnlocked] = useState(true);
   const [lightboxImages, setLightboxImages] = useState<ImageLightboxItem[]>([]);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
@@ -503,7 +533,6 @@ function ImagePageContent({
     | { type: "one"; id: string }
     | { type: "prompt"; conversationId: string; turnId: string }
     | { type: "results"; conversationId: string; turnId: string }
-    | { type: "all" }
     | null
   >(null);
   const [timeoutRetry, setTimeoutRetry] = useState<{
@@ -525,10 +554,49 @@ function ImagePageContent({
       }, 0),
     [conversations],
   );
+  const accountUsageStats = useMemo(() => {
+    let turnCount = 0;
+    let generatedImageCount = 0;
+    let likedImageCount = 0;
+    let dislikedImageCount = 0;
+    let latestActivity = "";
+
+    for (const conversation of conversations) {
+      if (!latestActivity || conversation.updatedAt.localeCompare(latestActivity) > 0) {
+        latestActivity = conversation.updatedAt;
+      }
+      for (const turn of conversation.turns) {
+        if (!turn.promptDeleted) {
+          turnCount += 1;
+        }
+        if (!turn.resultsDeleted) {
+          for (const image of turn.images) {
+            if (image.status === "success" && (image.url || image.b64_json)) {
+              generatedImageCount += 1;
+            }
+            if (image.feedback?.vote === "like") {
+              likedImageCount += 1;
+            } else if (image.feedback?.vote === "dislike") {
+              dislikedImageCount += 1;
+            }
+          }
+        }
+      }
+    }
+
+    return {
+      remainingQuotaLabel: isAdmin ? undefined : availableQuota,
+      conversationCount: conversations.length,
+      turnCount,
+      generatedImageCount,
+      activeTaskCount,
+      likedImageCount,
+      dislikedImageCount,
+      lastActivityLabel: latestActivity ? formatConversationTime(latestActivity) : "",
+    };
+  }, [activeTaskCount, availableQuota, conversations, isAdmin]);
   const deleteConfirmTitle =
-    deleteConfirm?.type === "all"
-      ? "清空历史记录"
-      : deleteConfirm?.type === "prompt"
+    deleteConfirm?.type === "prompt"
         ? "删除提示词记录"
         : deleteConfirm?.type === "results"
           ? "删除生成结果"
@@ -536,15 +604,82 @@ function ImagePageContent({
             ? "删除对话"
             : "";
   const deleteConfirmDescription =
-    deleteConfirm?.type === "all"
-      ? "确认删除全部图片历史记录吗？删除后无法恢复。"
-      : deleteConfirm?.type === "prompt"
+    deleteConfirm?.type === "prompt"
         ? "确认删除这条提示词记录吗？对应生成结果会保留。"
         : deleteConfirm?.type === "results"
           ? "确认删除这条生成结果吗？对应提示词记录会保留。"
           : deleteConfirm?.type === "one"
             ? "确认删除这条图片对话吗？删除后无法恢复。"
             : "";
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(sidebarWidth));
+  }, [sidebarWidth]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, isSidebarCollapsed ? "1" : "0");
+  }, [isSidebarCollapsed]);
+
+  const handleSidebarResizeStart = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (isSidebarCollapsed) {
+        return;
+      }
+      event.preventDefault();
+      const startX = event.clientX;
+      const startWidth = sidebarWidth;
+      const previousCursor = document.body.style.cursor;
+      const previousUserSelect = document.body.style.userSelect;
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+
+      const handlePointerMove = (moveEvent: PointerEvent) => {
+        setSidebarWidth(clampSidebarWidth(startWidth + moveEvent.clientX - startX));
+      };
+      const handlePointerUp = () => {
+        document.body.style.cursor = previousCursor;
+        document.body.style.userSelect = previousUserSelect;
+        window.removeEventListener("pointermove", handlePointerMove);
+        window.removeEventListener("pointerup", handlePointerUp);
+      };
+
+      window.addEventListener("pointermove", handlePointerMove);
+      window.addEventListener("pointerup", handlePointerUp, { once: true });
+    },
+    [isSidebarCollapsed, sidebarWidth],
+  );
+
+  const handleLogout = useCallback(async () => {
+    await clearStoredAuthSession();
+    router.replace("/login");
+  }, [router]);
+
+  const handleSaveWatermarkLabel = useCallback(
+    async (nextLabel: string) => {
+      if (!session) {
+        toast.info("登录后可以设置水印标签");
+        return;
+      }
+      const data = await updateUserProfile({ watermark_label: nextLabel });
+      const updatedLabel = data.user?.watermark_label ?? data.watermark_label ?? nextLabel;
+      const updatedUnlocked = data.user?.watermark_unlocked ?? data.watermark_unlocked ?? watermarkUnlocked;
+      setWatermarkLabel(updatedLabel);
+      setWatermarkUnlocked(Boolean(updatedUnlocked));
+      await setStoredAuthSession({
+        ...session,
+        watermarkLabel: updatedLabel,
+        watermarkUnlocked: Boolean(updatedUnlocked),
+        imageQuota: data.user?.image_quota ?? data.image_quota ?? session.imageQuota ?? null,
+      });
+    },
+    [session, watermarkUnlocked],
+  );
 
   const clearComposerInputs = useCallback(() => {
     setImagePrompt("");
@@ -675,14 +810,13 @@ function ImagePageContent({
         typeof window !== "undefined" ? window.localStorage.getItem(IMAGE_TIER_STORAGE_KEY) : null;
       const storedQuality =
         typeof window !== "undefined" ? window.localStorage.getItem(IMAGE_QUALITY_STORAGE_KEY) : null;
-      const storedCount =
-        typeof window !== "undefined" ? window.localStorage.getItem(IMAGE_COUNT_STORAGE_KEY) : null;
       setImageRatio(storedRatio || "1:1");
       setImageTier(storedTier || "1k");
       setImageWidth("1024");
       setImageHeight("1024");
       setImageQuality(storedQuality || "auto");
-      setImageCount(storedCount ? clampImageCount(storedCount) : "1");
+      setImageCount(DEFAULT_IMAGE_COUNT);
+      window.localStorage.removeItem(IMAGE_COUNT_STORAGE_KEY);
 
       const items = await listImageConversations(ownerId);
       const normalizedItems = await recoverConversationHistory(items, ownerId);
@@ -765,6 +899,11 @@ function ImagePageContent({
     let cancelled = false;
 
     const loadImageModels = async () => {
+      if (isGuest) {
+        setImageModels(["gpt-image-2"]);
+        setImageModel("gpt-image-2");
+        return;
+      }
       try {
         const data = await fetchModels();
         const available = filterImageModels(Array.isArray(data.data) ? data.data : []);
@@ -790,9 +929,13 @@ function ImagePageContent({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isGuest]);
 
   const loadQuota = useCallback(async () => {
+    if (isGuest) {
+      setAvailableQuota("登录后可用");
+      return;
+    }
     if (!isAdmin) {
       try {
         const key = await getStoredAuthKey();
@@ -809,7 +952,7 @@ function ImagePageContent({
     } catch {
       setAvailableQuota((prev) => (prev === "加载中..." ? "--" : prev));
     }
-  }, [initialUserQuota, isAdmin]);
+  }, [initialUserQuota, isAdmin, isGuest]);
 
   useEffect(() => {
     if (didLoadQuotaRef.current) {
@@ -952,12 +1095,6 @@ function ImagePageContent({
   }, [imageRatio, imageTier, imageQuality, imageModel]);
 
   useEffect(() => {
-    if (typeof window !== "undefined" && parsedCount > 0) {
-      window.localStorage.setItem(IMAGE_COUNT_STORAGE_KEY, String(parsedCount));
-    }
-  }, [parsedCount]);
-
-  useEffect(() => {
     if (selectedConversationId && !conversations.some((conversation) => conversation.id === selectedConversationId)) {
       setSelectedConversationId(pickFallbackConversationId(conversations));
     }
@@ -1098,20 +1235,6 @@ function ImagePageContent({
     await persistConversation(nextConversation);
   };
 
-  const handleClearHistory = async () => {
-    try {
-      await clearImageConversations(ownerId);
-      conversationsRef.current = [];
-      setConversations([]);
-      setSelectedConversationId(null);
-      resetComposer();
-      toast.success("已清空历史记录");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "清空历史记录失败";
-      toast.error(message);
-    }
-  };
-
   const handleRenameConversation = async (id: string, title: string) => {
     const nextConversations = conversations.map((item) =>
       item.id === id ? { ...item, title, updatedAt: new Date().toISOString() } : item,
@@ -1139,19 +1262,10 @@ function ImagePageContent({
     setDeleteConfirm({ type: "results", conversationId, turnId });
   };
 
-  const openClearHistoryConfirm = () => {
-    setIsHistoryOpen(false);
-    setDeleteConfirm({ type: "all" });
-  };
-
   const handleConfirmDelete = async () => {
     const target = deleteConfirm;
     setDeleteConfirm(null);
     if (!target) {
-      return;
-    }
-    if (target.type === "all") {
-      await handleClearHistory();
       return;
     }
     if (target.type === "prompt" || target.type === "results") {
@@ -1541,6 +1655,87 @@ function ImagePageContent({
     [runConversationQueue],
   );
 
+  const handleImageFeedback = useCallback(
+    async (conversationId: string, turnId: string, imageId: string, taskId: string, vote: ImageFeedbackVote) => {
+      const conversation = conversationsRef.current.find((item) => item.id === conversationId);
+      const turn = conversation?.turns.find((item) => item.id === turnId);
+      const imageIndex = turn?.images.findIndex((item) => item.id === imageId) ?? -1;
+      const image = imageIndex >= 0 ? turn?.images[imageIndex] : null;
+      if (!conversation || !turn || !image || imageIndex < 0) {
+        toast.error("没有找到这张图片");
+        return;
+      }
+
+      const nextVote = image.feedback?.vote === vote ? null : vote;
+      const optimisticFeedback = nextVote
+        ? {
+            ...image.feedback,
+            vote: nextVote,
+            likes: nextVote === "like" ? 1 : 0,
+            dislikes: nextVote === "dislike" ? 1 : 0,
+          }
+        : undefined;
+
+      await updateConversation(conversationId, (current) => {
+        if (!current) return conversation;
+        return {
+          ...current,
+          turns: current.turns.map((candidateTurn) =>
+            candidateTurn.id === turnId
+              ? {
+                  ...candidateTurn,
+                  images: candidateTurn.images.map((candidateImage) =>
+                    candidateImage.id === imageId ? { ...candidateImage, feedback: optimisticFeedback } : candidateImage,
+                  ),
+                }
+              : candidateTurn,
+          ),
+        };
+      });
+
+      try {
+        const updatedTask = await updateImageTaskFeedback(taskId, 0, nextVote);
+        const feedback = updatedTask.data?.[0]?.feedback;
+        await updateConversation(conversationId, (current) => {
+          if (!current) return conversation;
+          return {
+            ...current,
+            turns: current.turns.map((candidateTurn) =>
+              candidateTurn.id === turnId
+                ? {
+                    ...candidateTurn,
+                    images: candidateTurn.images.map((candidateImage) =>
+                      candidateImage.id === imageId ? { ...candidateImage, feedback } : candidateImage,
+                    ),
+                  }
+                : candidateTurn,
+            ),
+          };
+        });
+        toast.success(nextVote === "like" ? "已记录喜欢" : nextVote === "dislike" ? "已记录不喜欢" : "已取消反馈");
+      } catch (error) {
+        await updateConversation(conversationId, (current) => {
+          if (!current) return conversation;
+          return {
+            ...current,
+            turns: current.turns.map((candidateTurn) =>
+              candidateTurn.id === turnId
+                ? {
+                    ...candidateTurn,
+                    images: candidateTurn.images.map((candidateImage) =>
+                      candidateImage.id === imageId ? { ...candidateImage, feedback: image.feedback } : candidateImage,
+                    ),
+                  }
+                : candidateTurn,
+            ),
+          };
+        });
+        toast.error(error instanceof Error ? error.message : "反馈保存失败");
+      }
+    },
+    [updateConversation],
+  );
+
   const handleTimeoutRetryContinue = useCallback(async () => {
     if (!timeoutRetry) return;
     const { conversationId, taskId } = timeoutRetry;
@@ -1654,6 +1849,13 @@ function ImagePageContent({
       toast.error("请输入提示词");
       return;
     }
+    if (isGuest) {
+      toast.info("登录或注册后即可生成图片", {
+        description: "新用户有免费额度，额度内生成和导出均不带水印。",
+      });
+      router.push("/login?next=%2Fimage");
+      return;
+    }
 
     const effectiveImageMode: ImageConversationMode = referenceImageFiles.length > 0 ? "edit" : "generate";
 
@@ -1719,11 +1921,14 @@ function ImagePageContent({
         <div
           ref={resultsViewportRef}
           onScroll={handleResultsScroll}
-          className="hide-scrollbar h-full overscroll-contain overflow-y-auto px-1 py-2 sm:px-4 sm:py-4"
+          className="hide-scrollbar h-full overscroll-contain overflow-y-auto px-3 py-4 sm:px-8 sm:py-6"
           style={{ contain: "layout style paint" }}
         >
           <ImageResults
             selectedConversation={selectedConversation}
+            currentUserId={ownerId}
+            watermarkLabel={watermarkLabel}
+            watermarkUnlocked={true}
             onOpenLightbox={openLightbox}
             onContinueEdit={handleContinueEdit}
             onDeletePrompt={openDeletePromptConfirm}
@@ -1731,6 +1936,7 @@ function ImagePageContent({
             onReuseTurnConfig={handleReuseTurnConfig}
             onRegenerateTurn={handleRegenerateTurn}
             onRetryImage={handleRetryImage}
+            onImageFeedback={handleImageFeedback}
             onTimeoutRetryContinue={handleTimeoutRetryContinue}
             onDismissErrors={handleDismissErrors}
             formatConversationTime={formatConversationTime}
@@ -1774,6 +1980,7 @@ function ImagePageContent({
         onImageQualityChange={setImageQuality}
         onImageModelChange={setImageModel}
         onSubmit={handleSubmit}
+        onOpenRecharge={() => router.push("/recharge")}
         onPickReferenceImage={() => fileInputRef.current?.click()}
         onReferenceImageChange={handleReferenceImageChange}
         onRemoveReferenceImage={handleRemoveReferenceImage}
@@ -1781,28 +1988,77 @@ function ImagePageContent({
     </>
   );
 
+  const sidebarAccountFooter = (
+    <div className="flex items-center justify-start gap-2 px-1">
+      {session ? (
+        <AccountMenu
+          session={{ ...session, watermarkLabel, watermarkUnlocked: true }}
+          onLogout={handleLogout}
+          iconOnly={isSidebarCollapsed}
+          watermarkLabel={watermarkLabel}
+          onSaveWatermarkLabel={handleSaveWatermarkLabel}
+          usageStats={accountUsageStats}
+        />
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          className={cn(
+            "h-9 rounded-full border-zinc-200 bg-white text-sm text-zinc-700 shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800",
+            isSidebarCollapsed ? "w-9 px-0" : "px-3",
+          )}
+          onClick={() => router.push("/login?next=%2Fimage")}
+          title="登录"
+          aria-label="登录"
+        >
+          <LogIn className="size-4" />
+          {isSidebarCollapsed ? null : "登录"}
+        </Button>
+      )}
+    </div>
+  );
+
+  const workspaceStyle = {
+    "--happyimage-sidebar-track": `${isSidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : sidebarWidth}px`,
+  } as CSSProperties;
+
   return (
     <>
-      <section className="mx-auto grid h-[calc(100dvh-6.5rem)] min-h-0 w-full max-w-[1380px] grid-cols-1 gap-2 overflow-hidden px-0 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] sm:h-[calc(100dvh-5.25rem)] sm:grid-cols-[200px_minmax(0,1fr)] sm:gap-3 sm:px-3 sm:pb-6 xl:grid-cols-[240px_minmax(0,1fr)]">
-        <div className="hidden h-full min-h-0 border-r border-stone-200/70 pr-3 sm:block">
+      <section
+        className="happyimage-workspace relative left-1/2 grid h-screen min-h-0 w-screen -translate-x-1/2 grid-cols-1 gap-0 overflow-hidden bg-zinc-50 px-0 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] dark:bg-[#171717] sm:-mt-2 sm:grid-cols-[var(--happyimage-sidebar-track)_minmax(0,1fr)] sm:pb-0"
+        style={workspaceStyle}
+      >
+        <div className="relative hidden h-full min-h-0 border-r border-zinc-200/70 bg-zinc-50 px-2 py-2 dark:border-zinc-800 dark:bg-[#171717] sm:block">
           <ImageSidebar
             conversations={conversations}
             isLoadingHistory={isLoadingHistory}
             selectedConversationId={selectedConversationId}
             activeMode={workspaceMode}
             onCreateDraft={handleCreateDraft}
-            onClearHistory={openClearHistoryConfirm}
             onSelectConversation={handleSelectConversation}
             onSelectMode={handleSelectWorkspaceMode}
             onDeleteConversation={openDeleteConversationConfirm}
             onRenameConversation={handleRenameConversation}
             formatConversationTime={formatConversationTime}
             isAdmin={isAdmin}
+            accountFooter={sidebarAccountFooter}
+            collapsed={isSidebarCollapsed}
+            onToggleCollapsed={() => setIsSidebarCollapsed((value) => !value)}
           />
+          {!isSidebarCollapsed ? (
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="调整侧边栏宽度"
+              title="拖动调整侧边栏宽度"
+              onPointerDown={handleSidebarResizeStart}
+              className="absolute top-0 right-[-3px] z-30 h-full w-1.5 cursor-col-resize bg-transparent transition hover:bg-zinc-300/70 dark:hover:bg-zinc-700/80"
+            />
+          ) : null}
         </div>
 
         <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
-          <DialogContent className="flex h-[min(82dvh,760px)] w-[92vw] max-w-[460px] flex-col overflow-hidden rounded-[32px] border-white/80 bg-white p-0 shadow-[0_32px_110px_-38px_rgba(15,23,42,0.45)] sm:rounded-[36px]">
+          <DialogContent className="flex h-[min(82dvh,760px)] w-[92vw] max-w-[460px] flex-col overflow-hidden rounded-[32px] border-white/80 bg-white p-0 shadow-[0_32px_110px_-38px_rgba(15,23,42,0.45)] dark:border-zinc-800 dark:bg-[#171717] sm:rounded-[36px]">
             <DialogHeader className="px-6 pt-7 pb-4 sm:px-8">
               <DialogTitle className="flex items-center gap-2 text-xl font-bold tracking-tight">
                 <History className="size-5" />
@@ -1819,7 +2075,6 @@ function ImagePageContent({
                   handleCreateDraft();
                   setIsHistoryOpen(false);
                 }}
-                onClearHistory={openClearHistoryConfirm}
                 onSelectConversation={handleSelectConversation}
                 onSelectMode={handleSelectWorkspaceMode}
                 onDeleteConversation={openDeleteConversationConfirm}
@@ -1827,35 +2082,28 @@ function ImagePageContent({
                 formatConversationTime={formatConversationTime}
                 hideActionButtons
                 isAdmin={isAdmin}
+                accountFooter={sidebarAccountFooter}
               />
             </div>
           </DialogContent>
         </Dialog>
 
-        <div className="flex min-h-0 flex-col gap-2 sm:gap-4">
-          <div className="flex items-center justify-between gap-2 px-1 sm:hidden">
+        <div className="flex min-h-0 flex-col bg-zinc-50 dark:bg-[#171717]">
+          <div className="flex items-center justify-between gap-2 border-b border-zinc-200/70 bg-zinc-50/95 px-3 py-2 dark:border-zinc-800 dark:bg-[#171717]/95 sm:hidden">
             <Button
               variant="outline"
-              className="h-10 flex-1 rounded-2xl border-stone-200 bg-white/90 text-stone-700 shadow-sm"
+              className="h-10 flex-1 rounded-2xl border-zinc-200 bg-white/90 text-zinc-700 shadow-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
               onClick={() => setIsHistoryOpen(true)}
             >
               <History className="mr-2 size-4" />
               历史记录 ({conversations.length})
             </Button>
             <Button
-              className="h-10 rounded-2xl bg-stone-950 text-white shadow-sm"
+              className="h-10 rounded-2xl bg-zinc-900 text-white shadow-sm hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200"
               onClick={handleCreateDraft}
             >
               <Plus className="size-4" />
               新建
-            </Button>
-            <Button
-              variant="outline"
-              className="h-10 rounded-2xl border-stone-200 bg-white/85 px-3 text-stone-600 shadow-sm"
-              onClick={openClearHistoryConfirm}
-              disabled={conversations.length === 0}
-            >
-              <Trash2 className="size-4" />
             </Button>
           </div>
 
@@ -1920,9 +2168,24 @@ function ImagePageContent({
 }
 
 export default function ImagePage() {
-  const { isCheckingAuth, session } = useAuthGuard();
+  const [session, setSession] = useState<StoredAuthSession | null | undefined>(undefined);
 
-  if (isCheckingAuth || !session) {
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      const storedSession = await getStoredAuthSession();
+      const nextSession = storedSession ? await getValidatedAuthSession() : null;
+      if (active) {
+        setSession(nextSession);
+      }
+    };
+    void load();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  if (session === undefined) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
         <LoaderCircle className="size-5 animate-spin text-stone-400" />
@@ -1932,9 +2195,10 @@ export default function ImagePage() {
 
   return (
     <ImagePageContent
-      isAdmin={session.role === "admin"}
-      initialUserQuota={session.imageQuota}
-      ownerId={session.subjectId}
+      isAdmin={session?.role === "admin"}
+      initialUserQuota={session?.imageQuota}
+      ownerId={session?.subjectId || "guest"}
+      session={session}
     />
   );
 }

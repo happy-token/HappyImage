@@ -22,13 +22,6 @@ import { fetchRelatedSeedGalleryItems, fetchSeedGalleryItem, type SeedGalleryIte
 import { formatGalleryCategory } from "@/lib/gallery-categories";
 import { saveGalleryPromptIntent } from "@/lib/gallery-intent";
 
-const watermarkLabels: Record<string, string> = {
-  needs_review: "待复核",
-  not_requested_in_prompt: "未要求水印",
-  suspected_from_prompt: "疑似水印/Logo",
-  suspected_from_ocr: "OCR 疑似水印",
-};
-
 function buildAssetUrl(path: string) {
   const base = webConfig.apiUrl.replace(/\/$/, "");
   return `${base}${path.startsWith("/") ? path : `/${path}`}`;
@@ -49,20 +42,6 @@ function getPreviewImageUrl(item: SeedGalleryItem) {
 
 function formatCategory(value: string) {
   return formatGalleryCategory(value);
-}
-
-function formatWatermarkStatus(value: string) {
-  return watermarkLabels[value] || value || "待复核";
-}
-
-function getWatermarkVariant(value: string) {
-  if (value === "suspected_from_prompt" || value === "suspected_from_ocr") {
-    return "warning" as const;
-  }
-  if (value === "not_requested_in_prompt") {
-    return "success" as const;
-  }
-  return "outline" as const;
 }
 
 function getRouteId(param: string | string[] | undefined) {
@@ -276,9 +255,6 @@ export function GalleryDetailClient() {
               <Badge variant="secondary" className="rounded-md px-2 py-0.5">
                 {formatCategory(item.category)}
               </Badge>
-              <Badge variant={getWatermarkVariant(item.watermark_status)} className="rounded-md px-2 py-0.5">
-                {formatWatermarkStatus(item.watermark_status)}
-              </Badge>
               {item.source_repo ? (
                 <Badge variant="outline" className="rounded-md px-2 py-0.5">
                   {item.source_repo}
@@ -329,14 +305,13 @@ export function GalleryDetailClient() {
             </div>
           ) : null}
 
-          {(item.rights_notes || item.watermark_signals.length > 0) ? (
+          {item.rights_notes ? (
             <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
               <div className="flex items-center gap-1.5 font-medium">
                 <ShieldAlert className="size-3.5" />
                 发布前复核
               </div>
-              {item.rights_notes ? <p className="mt-1">{item.rights_notes}</p> : null}
-              {item.watermark_signals.length > 0 ? <p className="mt-1">信号：{item.watermark_signals.join("、")}</p> : null}
+              <p className="mt-1">{item.rights_notes}</p>
             </div>
           ) : null}
 

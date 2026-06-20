@@ -26,6 +26,7 @@ export function ConfigCard() {
   const setImageRetentionDays = useSettingsStore((state) => state.setImageRetentionDays);
   const setImagePollTimeoutSecs = useSettingsStore((state) => state.setImagePollTimeoutSecs);
   const setImageAccountConcurrency = useSettingsStore((state) => state.setImageAccountConcurrency);
+  const setDefaultUserImageQuota = useSettingsStore((state) => state.setDefaultUserImageQuota);
   const setImageSettleEnabled = useSettingsStore((state) => state.setImageSettleEnabled);
   const setImageSettleSecs = useSettingsStore((state) => state.setImageSettleSecs);
   const setImageTimeoutRetrySecs = useSettingsStore((state) => state.setImageTimeoutRetrySecs);
@@ -174,6 +175,16 @@ export function ConfigCard() {
             <p className="text-xs text-stone-500">限制每个账号同时处理的图片请求数量，默认 3。</p>
           </div>
           <div className="space-y-2">
+            <label className="text-sm text-stone-700">新用户免费额度</label>
+            <Input
+              value={String(config?.default_user_image_quota ?? "")}
+              onChange={(event) => setDefaultUserImageQuota(event.target.value)}
+              placeholder="20"
+              className="h-10 rounded-xl border-stone-200 bg-white"
+            />
+            <p className="text-xs text-stone-500">注册新用户默认获得的无水印生成次数。</p>
+          </div>
+          <div className="space-y-2">
             <label className="flex items-center gap-3 rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm text-stone-700">
               <Checkbox
                 checked={Boolean(config?.auto_remove_invalid_accounts)}
@@ -201,7 +212,7 @@ export function ConfigCard() {
               placeholder="30"
               className="h-10 rounded-xl border-stone-200 bg-white"
             />
-            <p className="text-xs text-stone-500">单位秒，超时后点击"继续等待"额外等待的时间。</p>
+            <p className="text-xs text-stone-500">单位秒，超时后点击“继续等待”额外等待的时间。</p>
           </div>
           <div className="space-y-2">
             <label className="text-sm text-stone-700">图片二次确认等待时间</label>

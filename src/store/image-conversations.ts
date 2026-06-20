@@ -2,7 +2,7 @@
 
 import localforage from "localforage";
 
-import type { ImageModel } from "@/lib/api";
+import type { ImageFeedbackSummary, ImageModel } from "@/lib/api";
 
 export type ImageConversationMode = "generate" | "edit";
 
@@ -26,6 +26,7 @@ export type StoredImage = {
   elapsedSecs?: number;
   elapsedUpdatedAt?: number;
   durationMs?: number;
+  feedback?: ImageFeedbackSummary;
 };
 
 export type ImageTurnStatus = "queued" | "generating" | "success" | "error";
@@ -239,7 +240,7 @@ async function readStoredImageConversations(): Promise<ImageConversation[]> {
     (await imageConversationStorage.getItem<Array<ImageConversation & Record<string, unknown>>>(
       IMAGE_CONVERSATIONS_KEY,
     )) || [];
-  return items.map(normalizeConversation);
+  return items.map((item) => normalizeConversation(item));
 }
 
 export async function listImageConversations(ownerId: string): Promise<ImageConversation[]> {

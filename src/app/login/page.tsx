@@ -30,11 +30,13 @@ function getNextPathFromLocation() {
 
 function buildStoredSession(response: LoginResponse, fallbackKey: string): StoredAuthSession {
   return {
-    key: "",
+    key: response.access_token || fallbackKey,
     role: response.user?.role || response.role,
     subjectId: response.user?.id || response.subject_id,
     name: response.user?.name || response.name,
     imageQuota: response.user?.image_quota ?? response.image_quota ?? null,
+    watermarkLabel: response.user?.watermark_label ?? response.watermark_label ?? "",
+    watermarkUnlocked: response.user?.watermark_unlocked ?? response.watermark_unlocked ?? response.role === "admin",
   };
 }
 

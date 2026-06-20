@@ -11,6 +11,7 @@ type ImageWorkspaceNavProps = {
   activeMode?: ImageWorkspaceMode;
   asLinks?: boolean;
   collapseLabels?: boolean;
+  iconOnly?: boolean;
   className?: string;
   onCreateDraft?: () => void;
   onSelectMode?: (mode: ImageWorkspaceMode) => void;
@@ -21,18 +22,21 @@ const workspaceItems = [
     mode: "compose" as const,
     href: "/image?mode=compose&new=1",
     label: "新建对话",
+    collapsedLabel: "新对话",
     icon: MessageSquarePlus,
   },
   {
     mode: "official_gallery" as const,
     href: "/image?mode=official_gallery",
     label: "官方图库",
+    collapsedLabel: "官方图库",
     icon: Sparkles,
   },
   {
     mode: "user_gallery" as const,
     href: "/image?mode=user_gallery",
     label: "我的图库",
+    collapsedLabel: "我的图库",
     icon: Images,
   },
 ];
@@ -41,6 +45,7 @@ export function ImageWorkspaceNav({
   activeMode,
   asLinks = false,
   collapseLabels = false,
+  iconOnly = false,
   className,
   onCreateDraft,
   onSelectMode,
@@ -52,18 +57,19 @@ export function ImageWorkspaceNav({
         const active = activeMode === item.mode;
         const itemClassName = cn(
           "flex h-10 w-full items-center rounded-lg px-3 text-sm font-medium transition",
-          collapseLabels ? "justify-center md:justify-between" : "justify-between",
+          iconOnly ? "justify-center px-0" : collapseLabels ? "justify-center md:justify-between" : "justify-between",
           active
-            ? "bg-stone-950 text-white dark:bg-white dark:text-stone-950"
-            : "text-stone-700 hover:bg-white/70 hover:text-stone-950 dark:text-stone-300 dark:hover:bg-white/10 dark:hover:text-white",
+            ? "border border-zinc-200 bg-white text-zinc-950 shadow-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-50"
+            : "text-zinc-600 hover:bg-white/70 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-white/8 dark:hover:text-zinc-50",
         );
-        const label = <span className={cn(collapseLabels && "hidden md:inline")}>{item.label}</span>;
+        const label = iconOnly ? null : <span className={cn(collapseLabels && "hidden md:inline")}>{item.label}</span>;
+        const icon = <Icon className="size-4 shrink-0" />;
 
         if (asLinks) {
           return (
             <Link key={item.mode} href={item.href} title={item.label} aria-label={item.label} className={itemClassName}>
               {label}
-              <Icon className="size-4 shrink-0" />
+              {icon}
             </Link>
           );
         }
@@ -73,6 +79,8 @@ export function ImageWorkspaceNav({
             key={item.mode}
             type="button"
             className={itemClassName}
+            aria-label={item.label}
+            title={item.label}
             onClick={() => {
               if (item.mode === "compose") {
                 onCreateDraft?.();
@@ -82,7 +90,7 @@ export function ImageWorkspaceNav({
             }}
           >
             {label}
-            <Icon className="size-4 shrink-0" />
+            {icon}
           </button>
         );
       })}

@@ -2,15 +2,18 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { ChevronLeft, ChevronRight, Download, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Stamp, X } from "lucide-react";
+import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
+import { downloadImageUrlWithTextWatermark } from "@/lib/watermark-image";
 
 type LightboxImage = {
   id: string;
   src: string;
   sizeLabel?: string;
   dimensions?: string;
+  watermarkText?: string;
 };
 
 type ImageLightboxProps = {
@@ -182,12 +185,30 @@ export function ImageLightbox({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [open, goPrev, goNext]);
 
-  const handleDownload = useCallback(() => {
+  const handleDownload = useCallback(async () => {
     if (!current) return;
+    if (current.watermarkText) {
+      try {
+        await downloadImageUrlWithTextWatermark(current.src, `image-${current.id}.png`, current.watermarkText);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "水印图片生成失败");
+      }
+      return;
+    }
     const link = document.createElement("a");
     link.href = current.src;
     link.download = `image-${current.id}.png`;
     link.click();
+  }, [current]);
+
+  const handleWatermarkDownload = useCallback(async () => {
+    if (!current) return;
+    try {
+      await downloadImageUrlWithTextWatermark(current.src, `image-${current.id}.png`, current.watermarkText);
+    } catch (error) {
+      console.error("Failed to download watermarked image:", error);
+      toast.error(error instanceof Error ? error.message : "水印图片生成失败");
+    }
   }, [current]);
 
   const toggleZoom = useCallback(() => {
@@ -366,12 +387,24 @@ export function ImageLightbox({
             )}
             <button
               type="button"
-              onClick={handleDownload}
+              onClick={() => void handleDownload()}
               className="inline-flex size-9 items-center justify-center rounded-full bg-black/50 text-white/90 transition hover:bg-black/70"
               aria-label="下载图片"
+              title="下载图片"
             >
               <Download className="size-4" />
             </button>
+            {!current.watermarkText ? (
+            <button
+              type="button"
+              onClick={() => void handleWatermarkDownload()}
+              className="inline-flex size-9 items-center justify-center rounded-full bg-black/50 text-white/90 transition hover:bg-black/70"
+              aria-label="带水印下载"
+              title="带水印下载"
+            >
+              <Stamp className="size-4" />
+            </button>
+            ) : null}
             <DialogPrimitive.Close className="inline-flex size-9 items-center justify-center rounded-full bg-black/50 text-white/90 transition hover:bg-black/70">
               <X className="size-4" />
               <span className="sr-only">关闭</span>
@@ -397,14 +430,8 @@ export function ImageLightbox({
             onTouchEnd={handleTouchEnd}
             onTouchCancel={handleTouchCancel}
           >
-            <img
-              src={current.src}
-              alt=""
-              className={cn(
-                "max-h-[90vh] max-w-[90vw] rounded-lg object-contain will-change-transform",
-                isGesturing ? "" : "transition-transform duration-150 ease-out",
-                transform.scale > minScale ? "cursor-grab active:cursor-grabbing" : "cursor-zoom-in",
-              )}
+            <div
+              className="relative"
               style={{
                 transform: `translate3d(${transform.x}px, ${transform.y}px, 0) scale(${transform.scale})`,
               }}
@@ -413,8 +440,23 @@ export function ImageLightbox({
                 e.stopPropagation();
                 toggleZoom();
               }}
-              draggable={false}
-            />
+            >
+              <img
+                src={current.src}
+                alt=""
+                className={cn(
+                  "max-h-[90vh] max-w-[90vw] rounded-lg object-contain will-change-transform",
+                  isGesturing ? "" : "transition-transform duration-150 ease-out",
+                  transform.scale > minScale ? "cursor-grab active:cursor-grabbing" : "cursor-zoom-in",
+                )}
+                draggable={false}
+              />
+              {current.watermarkText ? (
+                <div className="pointer-events-none absolute right-5 bottom-5 rounded-xl border border-white/25 bg-zinc-950/55 px-4 py-2 text-sm font-semibold text-white shadow-lg backdrop-blur-sm">
+                  {current.watermarkText}
+                </div>
+              ) : null}
+            </div>
           </div>
 
           {hasNext && transform.scale <= minScale && (

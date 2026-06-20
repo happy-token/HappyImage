@@ -86,9 +86,11 @@ export function TopNav({ session: providedSession }: { session?: StoredAuthSessi
           </Link>
         </div>
         <div className="hidden min-w-0 flex-1 sm:block" />
-        <div className="flex items-center justify-end gap-2 sm:gap-3">
-          <AccountMenu session={currentSession} onLogout={handleLogout} />
-        </div>
+        {isImageWorkspace ? null : (
+          <div className="flex items-center justify-end gap-2 sm:gap-3">
+            <AccountMenu session={currentSession} onLogout={handleLogout} />
+          </div>
+        )}
       </div>
     </header>
   );

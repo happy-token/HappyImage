@@ -15,6 +15,15 @@ pnpm run dev
 NEXT_PUBLIC_API_BASE_URL=https://api.example.com pnpm run dev
 ```
 
+常用公开配置：
+
+| 变量 | 说明 |
+|:--|:--|
+| `NEXT_PUBLIC_API_BASE_URL` | 后端 API 地址 |
+| `NEXT_PUBLIC_APP_VERSION` | 前端展示版本号 |
+| `NEXT_PUBLIC_SUPPORT_EMAIL` | “联系我们”里的邮箱 |
+| `NEXT_PUBLIC_SUPPORT_WECHAT` | “联系我们”里的微信号 |
+
 ## 构建
 
 ```bash

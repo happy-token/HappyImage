@@ -113,6 +113,25 @@ export type OIDCSettings = {
   default_image_quota: number | string;
 };
 
+export type RechargeSettings = {
+  enabled: boolean;
+  provider: "contact" | "newapi" | string;
+  newapi_base_url: string;
+  newapi_console_topup_path: string;
+  webhook_secret?: string;
+  webhook_secret_configured?: boolean;
+  quota_per_unit: number | string;
+};
+
+export type RechargeSession = {
+  enabled: boolean;
+  provider: "contact" | "newapi" | string;
+  mode: "contact" | "redirect" | string;
+  quota?: number | null;
+  recharge_url?: string;
+  message?: string;
+};
+
 export type SettingsConfig = {
   proxy: string;
   base_url?: string;
@@ -135,6 +154,7 @@ export type SettingsConfig = {
   image_retention_days?: number | string;
   image_poll_timeout_secs?: number | string;
   image_account_concurrency?: number | string;
+  default_user_image_quota?: number | string;
   image_parallel_generation?: boolean;
   image_settle_enabled?: boolean;
   image_check_before_hit_enabled?: boolean;
@@ -145,6 +165,7 @@ export type SettingsConfig = {
   auto_relogin_after_refresh?: boolean;
   log_levels?: string[];
   oidc?: OIDCSettings;
+  recharge?: RechargeSettings;
   image_storage?: ImageStorageSettings;
   backup?: BackupSettings;
   backup_state?: BackupState;
@@ -342,6 +363,15 @@ export type ImageResponse = {
   data: Array<{ b64_json?: string; url?: string; revised_prompt?: string }>;
 };
 
+export type ImageFeedbackVote = "like" | "dislike";
+
+export type ImageFeedbackSummary = {
+  vote?: ImageFeedbackVote | null;
+  likes?: number;
+  dislikes?: number;
+  updated_at?: string;
+};
+
 export type ImageTask = {
   id: string;
   status: "queued" | "running" | "success" | "error";
@@ -352,7 +382,7 @@ export type ImageTask = {
   created_at: string;
   updated_at: string;
   conversation_id?: string;
-  data?: Array<{ b64_json?: string; url?: string; revised_prompt?: string }>;
+  data?: Array<{ b64_json?: string; url?: string; revised_prompt?: string; feedback?: ImageFeedbackSummary }>;
   error?: string;
   progress?: string;
   elapsed_secs?: number;
@@ -486,6 +516,11 @@ export type LoginResponse = {
   subject_id: string;
   name: string;
   image_quota?: number | null;
+  watermark_label?: string;
+  watermark_unlocked?: boolean;
+  auth_provider?: string;
+  auth_subject?: string;
+  email?: string;
   access_token?: string;
   token_type?: string;
   expires_in?: number | null;
@@ -494,6 +529,11 @@ export type LoginResponse = {
     name: string;
     role: AuthRole;
     image_quota?: number | null;
+    watermark_label?: string;
+    watermark_unlocked?: boolean;
+    auth_provider?: string;
+    auth_subject?: string;
+    email?: string;
   };
 };
 
@@ -503,6 +543,8 @@ export type UserKey = {
   role: "user";
   enabled: boolean;
   image_quota?: number | null;
+  watermark_label?: string;
+  watermark_unlocked?: boolean;
   created_at: string | null;
   last_used_at: string | null;
 };
@@ -548,7 +590,7 @@ export async function fetchAccounts() {
 }
 
 export async function fetchModels() {
-  return httpRequest<ModelListResponse>("/v1/models");
+  return httpRequest<ModelListResponse>("/v1/models", { redirectOnUnauthorized: false });
 }
 
 export async function createAccounts(tokens: string[], accounts: AccountImportPayload[] = []) {
@@ -593,13 +635,25 @@ export type SessionResponse = {
   subject_id: string;
   name: string;
   image_quota?: number | null;
+  watermark_label?: string;
+  watermark_unlocked?: boolean;
+  auth_provider?: string;
+  auth_subject?: string;
+  email?: string;
   user?: {
     id: string;
     name: string;
     role: AuthRole;
     image_quota?: number | null;
+    watermark_label?: string;
+    watermark_unlocked?: boolean;
+    auth_provider?: string;
+    auth_subject?: string;
+    email?: string;
   };
 };
+
+export type UserProfileResponse = LoginResponse;
 
 export async function startOIDCLogin(nextPath?: string) {
   return httpRequest<OIDCStartResponse>("/api/auth/oidc/start", {
@@ -611,6 +665,20 @@ export async function startOIDCLogin(nextPath?: string) {
 
 export async function fetchSession() {
   return httpRequest<SessionResponse>("/api/auth/session", {
+    redirectOnUnauthorized: false,
+  });
+}
+
+export async function fetchUserProfile() {
+  return httpRequest<UserProfileResponse>("/api/auth/profile", {
+    redirectOnUnauthorized: false,
+  });
+}
+
+export async function updateUserProfile(updates: { watermark_label?: string }) {
+  return httpRequest<UserProfileResponse>("/api/auth/profile", {
+    method: "PATCH",
+    body: updates,
     redirectOnUnauthorized: false,
   });
 }
@@ -715,6 +783,7 @@ export async function editImage(files: File | File[], prompt: string, model?: Im
 export async function createImageGenerationTask(clientTaskId: string, prompt: string, model?: ImageModel, size?: string, quality = "auto") {
   return httpRequest<ImageTask>("/api/image-tasks/generations", {
     method: "POST",
+    redirectOnUnauthorized: false,
     body: {
       client_task_id: clientTaskId,
       prompt,
@@ -751,6 +820,7 @@ export async function createImageEditTask(
 
   return httpRequest<ImageTask>("/api/image-tasks/edits", {
     method: "POST",
+    redirectOnUnauthorized: false,
     body: formData,
   });
 }
@@ -761,13 +831,26 @@ export async function fetchImageTasks(ids: string[]) {
     params.set("ids", ids.join(","));
   }
   params.set("_t", String(Date.now()));
-  return httpRequest<ImageTaskListResponse>(`/api/image-tasks?${params.toString()}`);
+  return httpRequest<ImageTaskListResponse>(`/api/image-tasks?${params.toString()}`, {
+    redirectOnUnauthorized: false,
+  });
 }
 
 export async function resumeImagePoll(taskId: string, extraTimeoutSecs = 30) {
   return httpRequest<ImageTask>(`/api/image-tasks/${encodeURIComponent(taskId)}/resume-poll`, {
     method: "POST",
     body: { extra_timeout_secs: extraTimeoutSecs },
+  });
+}
+
+export async function updateImageTaskFeedback(taskId: string, imageIndex: number, vote: ImageFeedbackVote | null) {
+  return httpRequest<ImageTask>(`/api/image-tasks/${encodeURIComponent(taskId)}/feedback`, {
+    method: "POST",
+    redirectOnUnauthorized: false,
+    body: {
+      image_index: imageIndex,
+      vote,
+    },
   });
 }
 
@@ -833,6 +916,10 @@ export async function saveShareDraft(payload: SaveShareDraftPayload) {
 
 export async function fetchShareDrafts() {
   return httpRequest<{ items: ShareDraft[] }>("/api/share-drafts");
+}
+
+export async function fetchRechargeSession() {
+  return httpRequest<RechargeSession>("/api/recharge/session");
 }
 
 export async function fetchSettingsConfig() {
@@ -940,6 +1027,15 @@ export async function downloadSingleImage(path: string) {
   const response = await request.get(`/api/images/download/${path}`, { responseType: "blob" });
   const blob = response.data as Blob;
   triggerBlobDownload(blob, path.split("/").pop() || "image.png");
+}
+
+export async function createImageAccessLink(source: string) {
+  const data = await httpRequest<{ url: string; path: string }>("/api/images/access-link", {
+    method: "POST",
+    body: { url: source },
+    redirectOnUnauthorized: false,
+  });
+  return String(data.url || "").trim();
 }
 
 async function createImageDownloadToken(paths: string[]) {
@@ -1062,7 +1158,10 @@ export async function createUserKeyWithOptions({
   });
 }
 
-export async function updateUserKey(keyId: string, updates: { enabled?: boolean; name?: string; key?: string; image_quota?: number }) {
+export async function updateUserKey(
+  keyId: string,
+  updates: { enabled?: boolean; name?: string; key?: string; image_quota?: number; watermark_unlocked?: boolean },
+) {
   return httpRequest<{ item: UserKey; items: UserKey[] }>(`/api/auth/users/${keyId}`, {
     method: "POST",
     body: updates,

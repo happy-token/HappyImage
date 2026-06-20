@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { AuthenticatedImage } from "@/components/authenticated-image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -308,16 +309,17 @@ export function UserGalleryDetailDrawer({
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 [scrollbar-color:rgba(120,113,108,.45)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-stone-400/45 [&::-webkit-scrollbar-track]:bg-transparent">
         <div className="overflow-hidden rounded-lg border border-stone-200 bg-stone-100">
-          <img
+          <AuthenticatedImage
             src={item.imageUrl}
             alt="选中的我的图库作品预览"
             className="h-auto w-full object-contain"
+            placeholderClassName="min-h-64"
           />
         </div>
 
         <div className="mt-4 space-y-4">
           {!canUseShareDraftActions ? (
-            <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+            <p className="rounded-md border border-zinc-200 bg-zinc-100 px-3 py-2 text-xs leading-5 text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">
               {shareUnavailableMessage}
             </p>
           ) : null}
@@ -376,7 +378,7 @@ export function UserGalleryDetailDrawer({
             </div>
             <Button
               type="button"
-              className="h-9 w-full rounded-md bg-stone-950 text-white hover:bg-stone-800"
+              className="h-9 w-full rounded-md bg-zinc-900 text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200"
               onClick={handleUsePrompt}
             >
               <WandSparkles className="size-4" />
@@ -443,7 +445,7 @@ export function UserGalleryDetailDrawer({
       <footer className="shrink-0 border-t border-stone-200 bg-white px-4 py-3">
         <Button
           type="button"
-          className="h-10 w-full rounded-md bg-stone-950 text-white hover:bg-stone-800"
+          className="h-10 w-full rounded-md bg-zinc-900 text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200"
           onClick={handleSaveDraft}
           disabled={!canUseShareDraftActions || isSavingDraft}
         >

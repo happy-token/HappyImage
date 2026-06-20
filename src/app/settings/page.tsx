@@ -11,6 +11,7 @@ import { CPAPoolDialog } from "./components/cpa-pool-dialog";
 import { CPAPoolsCard } from "./components/cpa-pools-card";
 import { ImportBrowserDialog } from "./components/import-browser-dialog";
 import { OIDCSettingsCard } from "./components/oidc-settings-card";
+import { RechargeSettingsCard } from "./components/recharge-settings-card";
 import { SettingsHeader } from "./components/settings-header";
 import { Sub2APIConnections } from "./components/sub2api-connections";
 import { useSettingsStore } from "./store";
@@ -67,6 +68,7 @@ function SettingsPageContent() {
       <section className="space-y-6">
         <ConfigCard />
         <OIDCSettingsCard />
+        <RechargeSettingsCard />
         <BackupSettingsCard />
         <CPAPoolsCard />
         <Sub2APIConnections />

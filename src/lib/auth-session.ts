@@ -8,20 +8,37 @@ export async function getValidatedAuthSession(): Promise<StoredAuthSession | nul
 
   if (storedSession?.key) {
     try {
-      const { loginWithAccessKey } = await import("@/lib/api");
-      const data = await loginWithAccessKey(storedSession.key);
+      const data = await fetchSession();
       const nextSession: StoredAuthSession = {
-        key: "",
+        key: storedSession.key,
         role: data.role,
         subjectId: data.subject_id,
         name: data.name,
         imageQuota: data.user?.image_quota ?? data.image_quota ?? null,
+        watermarkLabel: data.user?.watermark_label ?? data.watermark_label ?? "",
+        watermarkUnlocked: data.user?.watermark_unlocked ?? data.watermark_unlocked ?? data.role === "admin",
       };
       await setStoredAuthSession(nextSession);
       return nextSession;
     } catch {
-      await clearStoredAuthSession();
-      return null;
+      try {
+        const { loginWithAccessKey } = await import("@/lib/api");
+        const data = await loginWithAccessKey(storedSession.key);
+        const nextSession: StoredAuthSession = {
+          key: data.access_token || storedSession.key,
+          role: data.role,
+          subjectId: data.subject_id,
+          name: data.name,
+          imageQuota: data.user?.image_quota ?? data.image_quota ?? null,
+          watermarkLabel: data.user?.watermark_label ?? data.watermark_label ?? "",
+          watermarkUnlocked: data.user?.watermark_unlocked ?? data.watermark_unlocked ?? data.role === "admin",
+        };
+        await setStoredAuthSession(nextSession);
+        return nextSession;
+      } catch {
+        await clearStoredAuthSession();
+        return null;
+      }
     }
   }
 
@@ -36,6 +53,8 @@ export async function getValidatedAuthSession(): Promise<StoredAuthSession | nul
       subjectId: data.user.id,
       name: data.user.name,
       imageQuota: data.user.image_quota ?? data.image_quota ?? null,
+      watermarkLabel: data.user.watermark_label ?? data.watermark_label ?? "",
+      watermarkUnlocked: data.user.watermark_unlocked ?? data.watermark_unlocked ?? data.user.role === "admin",
     };
     await setStoredAuthSession(nextSession);
     return nextSession;

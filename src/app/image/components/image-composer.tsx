@@ -1,5 +1,5 @@
 "use client";
-import { ArrowUp, ChevronDown, ImagePlus, Info, LoaderCircle, RectangleHorizontal, RectangleVertical, Square, X } from "lucide-react";
+import { ArrowUp, ChevronDown, ImagePlus, Info, LoaderCircle, RectangleHorizontal, RectangleVertical, Square, TicketPlus, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type RefObject } from "react";
 
 import { ImageLightbox } from "@/components/image-lightbox";
@@ -34,6 +34,7 @@ type ImageComposerProps = {
   onImageQualityChange: (value: string) => void;
   onImageModelChange: (value: ImageModel) => void;
   onSubmit: () => void | Promise<void>;
+  onOpenRecharge: () => void;
   onPickReferenceImage: () => void;
   onReferenceImageChange: (files: File[]) => void | Promise<void>;
   onRemoveReferenceImage: (index: number) => void;
@@ -104,6 +105,7 @@ export function ImageComposer({
   onImageQualityChange,
   onImageModelChange,
   onSubmit,
+  onOpenRecharge,
   onPickReferenceImage,
   onReferenceImageChange,
   onRemoveReferenceImage,
@@ -206,8 +208,8 @@ export function ImageComposer({
   };
 
   return (
-    <div className="shrink-0 flex justify-center px-1 sm:px-0">
-      <div style={{ width: "min(980px, 100%)" }}>
+    <div className="shrink-0 flex justify-center bg-zinc-50 px-3 pb-3 pt-2 dark:bg-[#171717] sm:px-8 sm:pb-5 sm:pt-3">
+      <div style={{ width: "min(920px, 100%)" }}>
         <input
           ref={fileInputRef}
           type="file"
@@ -256,8 +258,8 @@ export function ImageComposer({
 
         <div
           className={cn(
-            "overflow-hidden rounded-[24px] border border-stone-200 bg-white shadow-[0_14px_60px_-42px_rgba(15,23,42,0.45)] transition dark:border-white/10 dark:bg-stone-950/80 sm:rounded-[32px] sm:shadow-none",
-            isDraggingImage && "border-stone-900 bg-stone-50",
+            "overflow-hidden rounded-[24px] border border-zinc-200/90 bg-zinc-50 shadow-[0_18px_70px_-46px_rgba(15,23,42,0.55)] transition dark:border-zinc-800 dark:bg-[#171717] sm:rounded-[28px]",
+            isDraggingImage && "border-zinc-400 bg-zinc-50 shadow-[0_22px_80px_-44px_rgba(39,39,42,0.36)] dark:border-zinc-500 dark:bg-zinc-900",
           )}
         >
           <div
@@ -293,35 +295,44 @@ export function ImageComposer({
                   void onSubmit();
                 }
               }}
-              className="min-h-[82px] resize-none rounded-[24px] border-0 bg-transparent px-4 pt-4 pb-2 text-[15px] leading-6 text-stone-900 shadow-none placeholder:text-stone-400 focus-visible:ring-0 dark:text-stone-100 dark:placeholder:text-stone-500 sm:min-h-[148px] sm:rounded-[32px] sm:px-6 sm:pt-6 sm:pb-20 sm:leading-7"
+              className="min-h-[72px] resize-none rounded-[24px] border-0 bg-transparent px-4 pt-4 pb-2 text-[15px] leading-6 text-zinc-900 shadow-none placeholder:text-zinc-400 focus-visible:ring-0 dark:text-zinc-100 dark:placeholder:text-zinc-500 sm:min-h-[116px] sm:rounded-[28px] sm:px-5 sm:pt-5 sm:pb-18 sm:leading-7"
             />
             {isDraggingImage ? (
-              <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-[24px] border-2 border-dashed border-stone-900 bg-white/85 text-sm font-medium text-stone-900 backdrop-blur-[1px] sm:rounded-[32px]">
-                <div className="flex items-center gap-2 rounded-full bg-stone-950 px-4 py-2 text-white shadow-lg">
+              <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-[24px] border-2 border-dashed border-zinc-400 bg-white/85 text-sm font-medium text-zinc-950 backdrop-blur-[1px] dark:border-zinc-500 dark:bg-black/35 dark:text-zinc-100 sm:rounded-[32px]">
+                <div className="flex items-center gap-2 rounded-full bg-zinc-900 px-4 py-2 text-white shadow-lg dark:bg-zinc-100 dark:text-zinc-950">
                   <ImagePlus className="size-4" />
                   <span>松开以上传参考图</span>
                 </div>
               </div>
             ) : null}
 
-            <div className="rounded-b-[24px] border-t border-stone-100 bg-white px-3 pb-3 pt-2 dark:border-white/10 dark:bg-stone-950/95 sm:absolute sm:inset-x-0 sm:bottom-0 sm:rounded-b-none sm:border-t-0 sm:bg-gradient-to-t sm:from-white sm:via-white/95 sm:to-transparent sm:px-6 sm:pb-4 sm:pt-6 sm:dark:from-stone-950 sm:dark:via-stone-950/95 sm:dark:to-stone-950/0" onClick={(event) => event.stopPropagation()}>
+            <div className="rounded-b-[24px] border-t border-zinc-100 bg-zinc-50 px-3 pb-3 pt-2 dark:border-zinc-800 dark:bg-[#171717]/95 sm:absolute sm:inset-x-0 sm:bottom-0 sm:rounded-b-[28px] sm:border-t-0 sm:bg-gradient-to-t sm:from-zinc-50 sm:via-zinc-50/96 sm:to-transparent sm:px-5 sm:pb-3 sm:pt-6 sm:dark:from-[#171717] sm:dark:via-[#171717]/95 sm:dark:to-[#171717]/0" onClick={(event) => event.stopPropagation()}>
               <div className="flex items-end justify-between gap-2 sm:gap-3">
                 <div className="hide-scrollbar flex min-w-0 flex-1 flex-nowrap items-center gap-1.5 overflow-x-auto pb-0.5 sm:flex-wrap sm:gap-3 sm:overflow-visible sm:pb-0">
                   <Button
                     type="button"
                     variant="outline"
-                    className="h-9 shrink-0 rounded-full border-stone-200 bg-white px-3 text-xs font-medium text-stone-700 shadow-none sm:h-10 sm:px-4 sm:text-sm"
+                    className="h-9 shrink-0 rounded-full border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-700 shadow-none hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 sm:h-9 sm:px-3 sm:text-sm"
                     onClick={onPickReferenceImage}
                     aria-label={referenceImages.length > 0 ? "添加参考图" : "上传"}
                   >
                     <ImagePlus className="size-3.5 sm:size-4" />
                     <span className="hidden sm:inline">{referenceImages.length > 0 ? "添加参考图" : "上传"}</span>
                   </Button>
-                  <div className="shrink-0 rounded-full bg-stone-100 px-2 py-1 text-[10px] font-medium text-stone-600 sm:px-3 sm:py-2 sm:text-xs">
-                    <span className="hidden sm:inline">剩余额度 </span>{availableQuota}
-                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-9 shrink-0 rounded-full border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-700 shadow-none hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 sm:h-9 sm:px-3 sm:text-sm"
+                    onClick={onOpenRecharge}
+                    title="查看额度与充值"
+                    aria-label="查看额度与充值"
+                  >
+                    <TicketPlus className="size-3.5 sm:size-4" />
+                    <span className="hidden sm:inline">剩余额度 </span>
+                    {availableQuota}
+                  </Button>
                   {activeTaskCount > 0 && (
-                    <div className="flex shrink-0 items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-[10px] font-medium text-amber-700 sm:gap-1.5 sm:px-3 sm:py-2 sm:text-xs">
+                    <div className="flex shrink-0 items-center gap-1 rounded-full bg-zinc-100 px-2 py-1 text-[10px] font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 sm:gap-1.5 sm:px-3 sm:py-1.5 sm:text-xs">
                       <LoaderCircle className="size-3 animate-spin" />
                       {activeTaskCount}<span className="hidden sm:inline"> 个任务处理中</span>
                     </div>
@@ -330,7 +341,7 @@ export function ImageComposer({
                     <button
                       ref={sizeMenuBtnRef}
                       type="button"
-                      className="inline-flex h-9 w-fit max-w-[calc(100vw-12rem)] items-center justify-between gap-2 rounded-full bg-stone-100 px-4 text-left text-xs font-semibold text-stone-900 sm:h-10 sm:max-w-none sm:text-sm"
+                      className="inline-flex h-9 w-fit max-w-[calc(100vw-12rem)] items-center justify-between gap-2 rounded-full bg-zinc-100 px-3 text-left text-xs font-semibold text-zinc-900 hover:bg-zinc-200/70 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700 sm:h-9 sm:max-w-none sm:text-sm"
                       onClick={() => {
                         if (!isSizeMenuOpen && sizeMenuBtnRef.current) {
                           const rect = sizeMenuBtnRef.current.getBoundingClientRect();
@@ -527,7 +538,7 @@ export function ImageComposer({
                   type="button"
                   onClick={() => void onSubmit()}
                   disabled={!prompt.trim()}
-                  className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-stone-950 text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-300 sm:size-11"
+                  className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-white shadow-sm transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:bg-zinc-300 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200 dark:disabled:bg-zinc-700 dark:disabled:text-zinc-400 sm:size-10"
                   aria-label={referenceImages.length > 0 ? "编辑图片" : "生成图片"}
                 >
                   <ArrowUp className="size-3.5 sm:size-4" />

@@ -73,7 +73,7 @@ export function UserKeysCard({ standalone = false }: UserKeysCardProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [name, setName] = useState("");
   const [customKey, setCustomKey] = useState("");
-  const [createQuota, setCreateQuota] = useState("0");
+  const [createQuota, setCreateQuota] = useState("20");
   const [isCreating, setIsCreating] = useState(false);
   const [pendingIds, setPendingIds] = useState<Set<string>>(() => new Set());
   const [revealedKey, setRevealedKey] = useState("");
@@ -133,7 +133,7 @@ export function UserKeysCard({ standalone = false }: UserKeysCardProps) {
       setRevealedKey(data.key);
       setName("");
       setCustomKey("");
-      setCreateQuota("0");
+      setCreateQuota("20");
       setIsDialogOpen(false);
       toast.success("用户已创建");
     } catch (error) {
@@ -229,7 +229,7 @@ export function UserKeysCard({ standalone = false }: UserKeysCardProps) {
       setItems(data.items);
       setRechargeItem(null);
       setRechargeAmount("10");
-      toast.success(`已为 ${item.name} 充值 ${amount} 次`);
+      toast.success(`已为 ${item.name} 充值 ${amount} 次，已解锁无水印下载`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "充值失败");
     } finally {
@@ -336,6 +336,9 @@ export function UserKeysCard({ standalone = false }: UserKeysCardProps) {
                         <Badge variant="secondary" className="rounded-md">
                           剩余额度 {formatQuota(item.image_quota)}
                         </Badge>
+                        <Badge variant={item.watermark_unlocked ? "success" : "secondary"} className="rounded-md">
+                          {item.watermark_unlocked ? "无水印已解锁" : "下载需水印"}
+                        </Badge>
                       </div>
                       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-stone-500">
                         <span>登录账号 {item.name}</span>
@@ -437,7 +440,7 @@ export function UserKeysCard({ standalone = false }: UserKeysCardProps) {
                 value={createQuota}
                 onChange={(event) => setCreateQuota(event.target.value)}
                 inputMode="numeric"
-                placeholder="0"
+                placeholder="20"
                 className="h-11 rounded-xl border-stone-200 bg-white"
               />
             </div>
@@ -450,7 +453,7 @@ export function UserKeysCard({ standalone = false }: UserKeysCardProps) {
               onClick={() => {
                 setIsDialogOpen(false);
                 setCustomKey("");
-                setCreateQuota("0");
+                setCreateQuota("20");
               }}
               disabled={isCreating}
             >

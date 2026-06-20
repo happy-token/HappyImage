@@ -87,7 +87,7 @@ function OfficialGalleryCard({
 
         <Button
           size="sm"
-          className="h-8 w-full rounded-md bg-stone-950 text-white hover:bg-stone-800"
+          className="h-8 w-full rounded-md bg-zinc-900 text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200"
           onClick={() => onUsePrompt(item.prompt, item.title)}
         >
           <WandSparkles className="size-3.5" />
@@ -191,7 +191,7 @@ export function OfficialGalleryPanel({
 
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3 [scrollbar-color:rgba(120,113,108,.45)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-stone-400/45 [&::-webkit-scrollbar-track]:bg-transparent sm:px-4">
         {error ? (
-          <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <div className="mb-3 rounded-lg border border-zinc-200 bg-zinc-100 px-3 py-2 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">
             {error}
           </div>
         ) : null}

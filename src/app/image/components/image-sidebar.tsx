@@ -1,14 +1,17 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { LoaderCircle, Pencil, Trash2 } from "lucide-react";
+import type { ReactNode } from "react";
+import { LoaderCircle, PanelLeftClose, PanelLeftOpen, Pencil, Trash2 } from "lucide-react";
 import Link from "next/link";
 
 import { adminNavigationItems } from "@/components/admin-navigation";
 import { ImageWorkspaceNav, type ImageWorkspaceMode } from "@/components/image-workspace-nav";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getImageConversationStats, type ImageConversation } from "@/store/image-conversations";
+
+export type { ImageWorkspaceMode };
 
 type ImageSidebarProps = {
   conversations: ImageConversation[];
@@ -16,7 +19,6 @@ type ImageSidebarProps = {
   selectedConversationId: string | null;
   activeMode: ImageWorkspaceMode;
   onCreateDraft: () => void;
-  onClearHistory: () => void | Promise<void>;
   onSelectConversation: (id: string) => void;
   onSelectMode: (mode: ImageWorkspaceMode) => void;
   onDeleteConversation: (id: string) => void | Promise<void>;
@@ -24,6 +26,9 @@ type ImageSidebarProps = {
   formatConversationTime: (value: string) => string;
   hideActionButtons?: boolean;
   isAdmin?: boolean;
+  accountFooter?: ReactNode;
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
 };
 
 export function ImageSidebar({
@@ -32,7 +37,6 @@ export function ImageSidebar({
   selectedConversationId,
   activeMode,
   onCreateDraft,
-  onClearHistory,
   onSelectConversation,
   onSelectMode,
   onDeleteConversation,
@@ -40,6 +44,9 @@ export function ImageSidebar({
   formatConversationTime,
   hideActionButtons = false,
   isAdmin = false,
+  accountFooter,
+  collapsed = false,
+  onToggleCollapsed,
 }: ImageSidebarProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
@@ -74,19 +81,38 @@ export function ImageSidebar({
 
   return (
     <aside className="h-full min-h-0 overflow-hidden">
-      <div className="flex h-full min-h-0 flex-col gap-2 py-1 sm:gap-3 sm:py-2">
+      <div className="flex h-full min-h-0 flex-col gap-2 py-1 sm:gap-2 sm:py-1">
         {!hideActionButtons && (
           <div className="space-y-2">
-            <ImageWorkspaceNav activeMode={activeMode} onCreateDraft={onCreateDraft} onSelectMode={onSelectMode} />
-            <Button
-              variant="outline"
-              className="h-10 w-full justify-between rounded-lg border-stone-200 bg-white/85 px-3 text-sm font-medium text-stone-600 hover:bg-white"
-              onClick={() => void onClearHistory()}
-              disabled={conversations.length === 0}
-            >
-              <span>清空历史</span>
-              <Trash2 className="size-4" />
-            </Button>
+            <div className={cn("flex items-center gap-2 px-2 pt-1 pb-2", collapsed && "justify-center px-0")}>
+              {collapsed ? null : (
+                <Image
+                  src="/happyimage-logo.svg"
+                  alt="HappyImage"
+                  width={28}
+                  height={28}
+                  priority
+                  className="size-7 rounded-md shadow-[0_8px_20px_-14px_rgba(161,98,7,0.8)]"
+                />
+              )}
+              {collapsed ? null : (
+                <span className="min-w-0 flex-1 truncate text-[15px] font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+                  HappyImage
+                </span>
+              )}
+              {onToggleCollapsed ? (
+                <button
+                  type="button"
+                  onClick={onToggleCollapsed}
+                  className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-white/70 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-50"
+                  aria-label={collapsed ? "展开侧边栏" : "折叠侧边栏"}
+                  title={collapsed ? "展开侧边栏" : "折叠侧边栏"}
+                >
+                  {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+                </button>
+              ) : null}
+            </div>
+            <ImageWorkspaceNav activeMode={activeMode} iconOnly={collapsed} onCreateDraft={onCreateDraft} onSelectMode={onSelectMode} />
           </div>
         )}
 
@@ -94,7 +120,7 @@ export function ImageSidebar({
           {hideActionButtons ? (
             <ImageWorkspaceNav activeMode={activeMode} onCreateDraft={onCreateDraft} onSelectMode={onSelectMode} />
           ) : null}
-          {isAdmin ? (
+          {isAdmin && !collapsed ? (
             <div className="space-y-1 pt-2">
               {adminNavigationItems.map((item) => {
                 const Icon = item.icon;
@@ -102,7 +128,7 @@ export function ImageSidebar({
                   <Link
                     key={item.href}
                     href={item.href}
-                    className="flex h-10 w-full items-center justify-between rounded-lg px-3 text-sm font-medium text-stone-700 transition hover:bg-white/70 hover:text-stone-950"
+                    className="flex h-9 w-full items-center justify-between rounded-xl px-3 text-sm font-medium text-zinc-600 transition hover:bg-white/70 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-white/8 dark:hover:text-zinc-50"
                   >
                     <span>{item.label}</span>
                     <Icon className="size-4" />
@@ -117,15 +143,16 @@ export function ImageSidebar({
           className={cn(
             "min-h-0 flex-1 overflow-y-auto [scrollbar-color:rgba(120,113,108,.45)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-stone-400/45 [&::-webkit-scrollbar-track]:bg-transparent",
             hideActionButtons ? "space-y-1 pr-0" : "space-y-2 pr-1",
+            collapsed && !hideActionButtons && "pr-0",
           )}
         >
-          {isLoadingHistory ? (
-            <div className="flex items-center gap-2 px-2 py-3 text-sm text-stone-500">
+          {collapsed && !hideActionButtons ? null : isLoadingHistory ? (
+            <div className="flex items-center gap-2 px-2 py-3 text-sm text-zinc-500 dark:text-zinc-400">
               <LoaderCircle className="size-4 animate-spin" />
               正在读取会话记录
             </div>
           ) : conversations.length === 0 ? (
-            <div className="px-2 py-3 text-sm leading-6 text-stone-500">还没有图片记录，输入提示词后会在这里显示。</div>
+            <div className="px-2 py-3 text-sm leading-6 text-zinc-500 dark:text-zinc-400">还没有图片记录，输入提示词后会在这里显示。</div>
           ) : (
             conversations.map((conversation) => {
               const active = conversation.id === selectedConversationId;
@@ -134,11 +161,11 @@ export function ImageSidebar({
                 <div
                   key={conversation.id}
                   className={cn(
-                    "group relative w-full border-l-2 text-left transition",
-                    hideActionButtons ? "px-4 py-3.5" : "px-3 py-2 sm:py-3",
+                    "group relative w-full rounded-xl text-left transition",
+                    hideActionButtons ? "px-4 py-3.5" : "px-3 py-2.5",
                     active
-                      ? "border-stone-900 bg-black/[0.035] text-stone-950"
-                      : "border-transparent text-stone-700 hover:border-stone-300 hover:bg-white/40",
+                      ? "bg-white text-zinc-950 shadow-sm ring-1 ring-zinc-200/70 dark:bg-zinc-800 dark:text-zinc-50 dark:ring-zinc-700"
+                      : "text-zinc-600 hover:bg-white/65 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-white/8 dark:hover:text-zinc-50",
                   )}
                 >
                   <button
@@ -146,7 +173,7 @@ export function ImageSidebar({
                     onClick={() => onSelectConversation(conversation.id)}
                     className="block w-full pr-8 text-left"
                   >
-                    <div className={cn("truncate font-semibold", hideActionButtons ? "text-base" : "text-sm")}>
+                    <div className={cn("truncate font-medium", hideActionButtons ? "text-base" : "text-sm")}>
                       {editingId === conversation.id ? (
                         <input
                           ref={editInputRef}
@@ -158,13 +185,13 @@ export function ImageSidebar({
                             if (e.key === "Escape") cancelRename();
                           }}
                           onClick={(e) => e.stopPropagation()}
-                          className="w-full truncate rounded border border-stone-300 bg-white px-1 py-0.5 text-sm outline-none focus:border-stone-500"
+                          className="w-full truncate rounded border border-zinc-300 bg-white px-1 py-0.5 text-sm outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900"
                         />
                       ) : (
                         <span className="truncate">{conversation.title}</span>
                       )}
                     </div>
-                    <div className={cn("mt-1 text-xs", active ? "text-stone-500" : "text-stone-400")}>
+                    <div className={cn("mt-1 text-xs", active ? "text-zinc-500 dark:text-zinc-400" : "text-zinc-400 dark:text-zinc-500")}>
                       {conversation.turns.length} 轮 · {formatConversationTime(conversation.updatedAt)}
                     </div>
                     {stats.running > 0 || stats.queued > 0 ? (
@@ -173,7 +200,7 @@ export function ImageSidebar({
                           <span className="rounded-full bg-blue-50 px-2 py-1 text-blue-600">处理中 {stats.running}</span>
                         ) : null}
                         {stats.queued > 0 ? (
-                          <span className="rounded-full bg-amber-50 px-2 py-1 text-amber-700">排队 {stats.queued}</span>
+                          <span className="rounded-full bg-zinc-100 px-2 py-1 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">排队 {stats.queued}</span>
                         ) : null}
                       </div>
                     ) : null}
@@ -182,7 +209,7 @@ export function ImageSidebar({
                     <button
                       type="button"
                       onClick={(e) => startRename(conversation, e)}
-                      className="inline-flex size-7 items-center justify-center rounded-md text-stone-400 hover:bg-stone-100 hover:text-stone-600"
+                      className="inline-flex size-7 items-center justify-center rounded-md text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-white/10 dark:hover:text-zinc-100"
                       aria-label="重命名会话"
                     >
                       <Pencil className="size-3.5" />
@@ -190,7 +217,7 @@ export function ImageSidebar({
                     <button
                       type="button"
                       onClick={() => void onDeleteConversation(conversation.id)}
-                      className="inline-flex size-7 items-center justify-center rounded-md text-stone-400 hover:bg-stone-100 hover:text-rose-500"
+                      className="inline-flex size-7 items-center justify-center rounded-md text-zinc-400 hover:bg-zinc-100 hover:text-rose-500 dark:hover:bg-white/10"
                       aria-label="删除会话"
                     >
                       <Trash2 className="size-4" />
@@ -202,6 +229,11 @@ export function ImageSidebar({
           )}
         </div>
 
+        {accountFooter ? (
+          <div className="shrink-0 border-t border-zinc-200/70 pt-2 dark:border-zinc-800">
+            {accountFooter}
+          </div>
+        ) : null}
       </div>
     </aside>
   );

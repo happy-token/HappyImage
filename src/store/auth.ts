@@ -10,6 +10,8 @@ export type StoredAuthSession = {
   subjectId: string;
   name: string;
   imageQuota?: number | null;
+  watermarkLabel?: string;
+  watermarkUnlocked?: boolean;
 };
 
 export const AUTH_KEY_STORAGE_KEY = "happyimage_auth_key";
@@ -38,6 +40,8 @@ function normalizeSession(value: unknown, fallbackKey = ""): StoredAuthSession |
     subjectId: String(candidate.subjectId || "").trim(),
     name: String(candidate.name || "").trim(),
     imageQuota: typeof candidate.imageQuota === "number" ? candidate.imageQuota : null,
+    watermarkLabel: String(candidate.watermarkLabel || "").trim(),
+    watermarkUnlocked: Boolean(candidate.watermarkUnlocked),
   };
 }
 
