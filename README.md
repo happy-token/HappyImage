@@ -117,15 +117,26 @@ Docker 镜像运行的是 Next.js server，不是静态 nginx。这样 `/api/*`�
 
 ```bash
 cd ../happyimage-api
-uv run python scripts/export_seed_gallery_static.py --output ../happyimage-web/public/seed-gallery
+uv run python scripts/export_seed_gallery_static.py \
+  --seed-dir ~/workspace/happyimage-gallery-source/image-gallery-seed \
+  --candidate-dir ~/workspace/happyimage-gallery-source/image-gallery-candidates \
+  --output ../happyimage-web/public/seed-gallery
 ```
 
 生成完整静态包（包含图片和已生成缩略图）：
 
 ```bash
 cd ../happyimage-api
-uv run python scripts/pregenerate_seed_gallery_thumbnails.py --widths 640 --quiet
-uv run python scripts/export_seed_gallery_static.py --output ../happyimage-web/public/seed-gallery --copy-assets
+uv run python scripts/pregenerate_seed_gallery_thumbnails.py \
+  --seed-dir ~/workspace/happyimage-gallery-source/image-gallery-seed \
+  --candidate-dir ~/workspace/happyimage-gallery-source/image-gallery-candidates \
+  --widths 640 \
+  --quiet
+uv run python scripts/export_seed_gallery_static.py \
+  --seed-dir ~/workspace/happyimage-gallery-source/image-gallery-seed \
+  --candidate-dir ~/workspace/happyimage-gallery-source/image-gallery-candidates \
+  --output ../happyimage-web/public/seed-gallery \
+  --copy-assets
 ```
 
 Docker 部署时建议把图库包作为只读 volume 挂载：
