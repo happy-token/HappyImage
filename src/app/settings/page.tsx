@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { LoaderCircle } from "lucide-react";
 
+import { externalModelAdminEnabled } from "@/lib/model-admin";
 import { useAuthGuard } from "@/lib/use-auth-guard";
 
 import { BackupSettingsCard } from "./components/backup-settings-card";
@@ -33,6 +34,9 @@ function SettingsDataController() {
   }, [initialize]);
 
   useEffect(() => {
+    if (externalModelAdminEnabled) {
+      return;
+    }
     const hasRunningJobs = pools.some((pool) => {
       const status = pool.import_job?.status;
       return status === "pending" || status === "running";
@@ -70,11 +74,19 @@ function SettingsPageContent() {
         <OIDCSettingsCard />
         <RechargeSettingsCard />
         <BackupSettingsCard />
-        <CPAPoolsCard />
-        <Sub2APIConnections />
+        {externalModelAdminEnabled ? null : (
+          <>
+            <CPAPoolsCard />
+            <Sub2APIConnections />
+          </>
+        )}
       </section>
-      <CPAPoolDialog />
-      <ImportBrowserDialog />
+      {externalModelAdminEnabled ? null : (
+        <>
+          <CPAPoolDialog />
+          <ImportBrowserDialog />
+        </>
+      )}
     </>
   );
 }

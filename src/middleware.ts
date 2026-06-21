@@ -4,6 +4,11 @@ const BACKEND_BASE =
   process.env.BACKEND_URL ||
   process.env.NEXT_PUBLIC_API_BASE_URL ||
   (process.env.NODE_ENV === "development" ? "http://127.0.0.1:8000" : "");
+const MODEL_BACKEND_BASE =
+  process.env.MODEL_BACKEND_URL ||
+  process.env.NEXT_PUBLIC_MODEL_API_BASE_URL ||
+  BACKEND_BASE;
+const MODEL_BACKEND_API_KEY = process.env.MODEL_BACKEND_API_KEY || "";
 
 const PROXY_PREFIXES = [
   "/api/",
@@ -29,11 +34,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (!BACKEND_BASE) {
+  const targetBase = pathname.startsWith("/v1/") || pathname === "/v1" ? MODEL_BACKEND_BASE : BACKEND_BASE;
+
+  if (!targetBase) {
     return new NextResponse("Backend unavailable: BACKEND_URL is not configured", { status: 502 });
   }
 
-  const backendUrl = `${BACKEND_BASE}${pathname}${search}`;
+  const backendUrl = `${targetBase}${pathname}${search}`;
 
   try {
     const headers = new Headers();
@@ -47,6 +54,9 @@ export async function middleware(request: NextRequest) {
         headers.set(key, value);
       }
     });
+    if ((pathname.startsWith("/v1/") || pathname === "/v1") && MODEL_BACKEND_API_KEY) {
+      headers.set("authorization", `Bearer ${MODEL_BACKEND_API_KEY}`);
+    }
 
     const body =
       request.method === "GET" || request.method === "HEAD"

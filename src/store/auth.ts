@@ -2,6 +2,8 @@
 
 import localforage from "localforage";
 
+import { externalModelAdminEnabled } from "@/lib/model-admin";
+
 export type AuthRole = "admin" | "user";
 
 export type StoredAuthSession = {
@@ -46,7 +48,7 @@ function normalizeSession(value: unknown, fallbackKey = ""): StoredAuthSession |
 }
 
 export function getDefaultRouteForRole(role: AuthRole) {
-  return role === "admin" ? "/accounts" : "/image";
+  return role === "admin" ? (externalModelAdminEnabled ? "/image-manager" : "/accounts") : "/image";
 }
 
 export function normalizePostAuthRedirectPath(value: string | null | undefined) {

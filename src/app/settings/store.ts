@@ -29,6 +29,7 @@ import {
   type RechargeSettings,
   type SettingsConfig,
 } from "@/lib/api";
+import { externalModelAdminEnabled } from "@/lib/model-admin";
 
 export const PAGE_SIZE_OPTIONS = ["50", "100", "200"] as const;
 
@@ -116,6 +117,9 @@ function normalizeConfig(config: SettingsConfig): SettingsConfig {
     log_levels: Array.isArray(config.log_levels) ? config.log_levels : [],
     proxy: typeof config.proxy === "string" ? config.proxy : "",
     base_url: typeof config.base_url === "string" ? config.base_url : "",
+    model_gateway_base_url: typeof config.model_gateway_base_url === "string" ? config.model_gateway_base_url : "",
+    model_gateway_api_key: "",
+    model_gateway_api_key_configured: Boolean(config.model_gateway_api_key_configured),
     global_system_prompt: String(config.global_system_prompt || ""),
     sensitive_words: Array.isArray(config.sensitive_words) ? config.sensitive_words : [],
     ai_review: {
@@ -253,6 +257,7 @@ type SettingsStore = {
   setLogLevel: (level: string, enabled: boolean) => void;
   setProxy: (value: string) => void;
   setBaseUrl: (value: string) => void;
+  setModelGatewayField: (key: "model_gateway_base_url" | "model_gateway_api_key", value: string) => void;
   setGlobalSystemPrompt: (value: string) => void;
   setSensitiveWordsText: (value: string) => void;
   setAIReviewField: (key: "enabled" | "base_url" | "api_key" | "model" | "prompt", value: string | boolean) => void;
@@ -321,7 +326,10 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   isStartingImport: false,
 
   initialize: async () => {
-    await Promise.allSettled([get().loadConfig(), get().loadPools()]);
+    await Promise.allSettled([
+      get().loadConfig(),
+      externalModelAdminEnabled ? Promise.resolve() : get().loadPools(),
+    ]);
     const backup = get().config?.backup;
     const isConfigured = Boolean(
       String(backup?.account_id || "").trim()
@@ -375,6 +383,8 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         auto_relogin_after_refresh: Boolean(config.auto_relogin_after_refresh),
         proxy: config.proxy.trim(),
         base_url: String(config.base_url || "").trim(),
+        model_gateway_base_url: String(config.model_gateway_base_url || "").trim().replace(/\/$/, ""),
+        model_gateway_api_key: String(config.model_gateway_api_key || "").trim(),
         global_system_prompt: String(config.global_system_prompt || "").trim(),
         sensitive_words: (config.sensitive_words || []).map((item) => String(item).trim()).filter(Boolean),
         ai_review: {
@@ -521,6 +531,10 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         },
       };
     });
+  },
+
+  setModelGatewayField: (key, value) => {
+    set((state) => state.config ? { config: { ...state.config, [key]: value } } : {});
   },
 
   setGlobalSystemPrompt: (value) => {

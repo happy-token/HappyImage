@@ -155,6 +155,9 @@ export type SettingsConfig = {
   image_poll_timeout_secs?: number | string;
   image_account_concurrency?: number | string;
   default_user_image_quota?: number | string;
+  model_gateway_base_url?: string;
+  model_gateway_api_key?: string;
+  model_gateway_api_key_configured?: boolean;
   image_parallel_generation?: boolean;
   image_settle_enabled?: boolean;
   image_check_before_hit_enabled?: boolean;
