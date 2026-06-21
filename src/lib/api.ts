@@ -405,6 +405,7 @@ type LocalApiCacheRecord<T> = {
 const seedGalleryApiCacheVersion = "v9-simple-gallery-categories";
 const seedGalleryLocalCachePrefix = `happyimage:seed-gallery-api-cache:${seedGalleryApiCacheVersion}:`;
 const seedGalleryLocalCacheIndexKey = "__index";
+const seedGalleryStaticItemsPath = "/seed-gallery/static/items.json";
 const seedGalleryListCacheMaxAgeMs = 10 * 60 * 1000;
 const seedGalleryDetailCacheMaxAgeMs = 24 * 60 * 60 * 1000;
 const seedGalleryFacetCacheMaxAgeMs = 60 * 60 * 1000;
@@ -416,6 +417,7 @@ const seedGalleryApiCache = localforage.createInstance({
   storeName: "seed_gallery_api_cache",
 });
 const seedGalleryMemoryCache = new Map<string, LocalApiCacheRecord<unknown>>();
+let seedGalleryStaticItemsPromise: Promise<SeedGalleryItem[] | null> | null = null;
 
 function getLocalApiCacheKey(path: string) {
   return `${seedGalleryLocalCachePrefix}${path}`;
@@ -510,6 +512,88 @@ async function cachedSeedGalleryRequest<T>(path: string, maxAgeMs: number) {
   const data = await httpRequest<T>(versionedPath);
   void writeLocalApiCache(versionedPath, data);
   return data;
+}
+
+async function fetchSeedGalleryStaticItems() {
+  if (!seedGalleryStaticItemsPromise) {
+    seedGalleryStaticItemsPromise = (async () => {
+      try {
+        const response = await fetch(appendSeedGalleryCacheVersion(seedGalleryStaticItemsPath), {
+          cache: "force-cache",
+        });
+        if (!response.ok) {
+          return null;
+        }
+        const payload = (await response.json()) as { items?: unknown } | unknown[];
+        const items = Array.isArray(payload) ? payload : Array.isArray(payload?.items) ? payload.items : [];
+        return items.filter((item): item is SeedGalleryItem => {
+          return Boolean(item && typeof item === "object" && typeof (item as SeedGalleryItem).id === "string");
+        });
+      } catch {
+        return null;
+      }
+    })();
+  }
+  return seedGalleryStaticItemsPromise;
+}
+
+function filterSeedGalleryItems(
+  items: SeedGalleryItem[],
+  params: {
+    query?: string;
+    category?: string;
+    watermark_status?: string;
+  },
+) {
+  const query = String(params.query || "").trim().toLowerCase();
+  const category = String(params.category || "").trim().toLowerCase();
+  const watermark = String(params.watermark_status || "").trim().toLowerCase();
+  return items.filter((item) => {
+    if (category && item.category.toLowerCase() !== category) {
+      return false;
+    }
+    if (watermark && item.watermark_status.toLowerCase() !== watermark) {
+      return false;
+    }
+    if (!query) {
+      return true;
+    }
+    return (
+      item.title.toLowerCase().includes(query) ||
+      item.prompt.toLowerCase().includes(query) ||
+      item.tags.join(" ").toLowerCase().includes(query)
+    );
+  });
+}
+
+function paginateSeedGalleryItems(items: SeedGalleryItem[], limit = 60, offset = 0): SeedGalleryListResponse {
+  const normalizedLimit = Math.min(Math.max(Number(limit) || 60, 1), 240);
+  const normalizedOffset = Math.min(Math.max(Number(offset) || 0, 0), items.length);
+  return {
+    items: items.slice(normalizedOffset, normalizedOffset + normalizedLimit),
+    total: items.length,
+    limit: normalizedLimit,
+    offset: normalizedOffset,
+    has_more: normalizedOffset + normalizedLimit < items.length,
+  };
+}
+
+function buildStaticSeedGalleryFacets(items: SeedGalleryItem[]): SeedGalleryFacetsResponse {
+  const categories: Record<string, number> = {};
+  const watermark_statuses: Record<string, number> = {};
+  for (const item of items) {
+    const category = item.category || "uncategorized";
+    const watermark = item.watermark_status || "needs_review";
+    categories[category] = (categories[category] || 0) + 1;
+    watermark_statuses[watermark] = (watermark_statuses[watermark] || 0) + 1;
+  }
+  return {
+    total: items.length,
+    categories,
+    watermark_statuses,
+    available: items.length > 0,
+    index_file: seedGalleryStaticItemsPath,
+  };
 }
 
 export type LoginResponse = {
@@ -864,6 +948,11 @@ export async function fetchSeedGallery(params: {
   limit?: number;
   offset?: number;
 } = {}) {
+  const staticItems = await fetchSeedGalleryStaticItems();
+  if (staticItems) {
+    return paginateSeedGalleryItems(filterSeedGalleryItems(staticItems, params), params.limit || 60, params.offset || 0);
+  }
+
   const search = new URLSearchParams();
   if (params.query) search.set("query", params.query);
   if (params.category) search.set("category", params.category);
@@ -877,10 +966,24 @@ export async function fetchSeedGallery(params: {
 }
 
 export async function fetchSeedGalleryFacets() {
+  const staticItems = await fetchSeedGalleryStaticItems();
+  if (staticItems) {
+    return buildStaticSeedGalleryFacets(staticItems);
+  }
+
   return cachedSeedGalleryRequest<SeedGalleryFacetsResponse>("/api/seed-gallery/facets", seedGalleryFacetCacheMaxAgeMs);
 }
 
 export async function fetchSeedGalleryItem(id: string) {
+  const staticItems = await fetchSeedGalleryStaticItems();
+  if (staticItems) {
+    const item = staticItems.find((candidate) => candidate.id === id);
+    if (!item) {
+      throw new Error("图库素材不存在");
+    }
+    return { item };
+  }
+
   return cachedSeedGalleryRequest<{ item: SeedGalleryItem }>(
     `/api/seed-gallery/${encodeURIComponent(id)}`,
     seedGalleryDetailCacheMaxAgeMs,
@@ -888,6 +991,25 @@ export async function fetchSeedGalleryItem(id: string) {
 }
 
 export async function fetchRelatedSeedGalleryItems(id: string, limit = 4) {
+  const staticItems = await fetchSeedGalleryStaticItems();
+  if (staticItems) {
+    const item = staticItems.find((candidate) => candidate.id === id);
+    if (!item) {
+      return paginateSeedGalleryItems([], limit, 0);
+    }
+    const itemTags = new Set(item.tags.map((tag) => tag.toLowerCase()));
+    const related = staticItems
+      .filter((candidate) => candidate.id !== id)
+      .map((candidate, index) => {
+        const categoryScore = candidate.category === item.category ? 100 : 0;
+        const tagScore = candidate.tags.reduce((score, tag) => score + (itemTags.has(tag.toLowerCase()) ? 10 : 0), 0);
+        return { item: candidate, index, score: categoryScore + tagScore };
+      })
+      .sort((a, b) => b.score - a.score || a.index - b.index)
+      .map((candidate) => candidate.item);
+    return paginateSeedGalleryItems(related, limit, 0);
+  }
+
   const search = new URLSearchParams();
   search.set("limit", String(limit));
   return cachedSeedGalleryRequest<SeedGalleryListResponse>(

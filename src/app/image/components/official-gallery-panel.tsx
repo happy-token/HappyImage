@@ -16,6 +16,9 @@ function buildAssetUrl(path: string) {
   if (/^(https?:|data:|blob:)/.test(path)) {
     return path;
   }
+  if (path.startsWith("/seed-gallery/")) {
+    return path;
+  }
   const base = webConfig.apiUrl.replace(/\/$/, "");
   return `${base}${path.startsWith("/") ? path : `/${path}`}`;
 }

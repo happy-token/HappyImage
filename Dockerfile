@@ -54,6 +54,8 @@ COPY --from=build /app/web/public ./public
 COPY --from=build /app/web/next.config.ts ./next.config.ts
 COPY --from=build /app/web/src/lib/release.ts ./src/lib/release.ts
 
+RUN mkdir -p /app/web/public/seed-gallery
+
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

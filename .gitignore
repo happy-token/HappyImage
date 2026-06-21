@@ -47,3 +47,7 @@ next-env.d.ts
 .wrangler
 .dev.vars*
 !.dev.vars.example
+
+# Official gallery static package. Generated or mounted at deploy time.
+/public/seed-gallery/*
+!/public/seed-gallery/README.md

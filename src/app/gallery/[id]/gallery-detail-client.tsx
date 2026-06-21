@@ -23,6 +23,9 @@ import { formatGalleryCategory } from "@/lib/gallery-categories";
 import { saveGalleryPromptIntent } from "@/lib/gallery-intent";
 
 function buildAssetUrl(path: string) {
+  if (/^(https?:|data:|blob:)/.test(path) || path.startsWith("/seed-gallery/")) {
+    return path;
+  }
   const base = webConfig.apiUrl.replace(/\/$/, "");
   return `${base}${path.startsWith("/") ? path : `/${path}`}`;
 }
@@ -37,7 +40,12 @@ function getPreviewImageUrl(item: SeedGalleryItem) {
   if (!image) {
     return "";
   }
-  return buildAssetUrl(image.thumbnail_url || image.url.replace("/api/seed-gallery/images/", "/api/seed-gallery/thumbnails/640/"));
+  return buildAssetUrl(
+    image.thumbnail_url ||
+      image.url
+        .replace("/api/seed-gallery/images/", "/api/seed-gallery/thumbnails/640/")
+        .replace("/seed-gallery/images/", "/seed-gallery/thumbnails/w640/"),
+  );
 }
 
 function formatCategory(value: string) {
