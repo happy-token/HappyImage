@@ -9,7 +9,7 @@ pnpm install
 pnpm run dev
 ```
 
-前端开发模式默认连接 `http://127.0.0.1:8000`（本地后端）。如需指向其他后端地址，设置环境变量：
+前端开发模式默认使用同源请求，由 Next.js middleware 转发 `/api/*`、`/images/*` 到 `BACKEND_URL`。如需让浏览器直接请求其他后端地址，才设置环境变量：
 
 ```bash
 NEXT_PUBLIC_API_BASE_URL=https://api.example.com pnpm run dev
@@ -22,7 +22,6 @@ BACKEND_URL=http://127.0.0.1:8000 \
 MODEL_BACKEND_URL=http://127.0.0.1:3001 \
 MODEL_BACKEND_API_KEY=sk-happyimagetest \
 NEXT_PUBLIC_EXTERNAL_MODEL_ADMIN=true \
-NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:3000 \
 pnpm run dev
 ```
 
@@ -35,13 +34,15 @@ pnpm run dev
 
 `MODEL_BACKEND_API_KEY` 只在 Next.js middleware 服务端使用，用于代理 `/v1/*` 时替换成 NewAPI token，不会直接暴露给浏览器。
 
+同源代理模式下不要设置 `NEXT_PUBLIC_API_BASE_URL`。例如页面从 `http://localhost:3000` 打开时，如果把它设置成 `http://127.0.0.1:3000`，浏览器会按跨域请求处理，历史会话恢复、图片访问等接口可能无法同步。
+
 如果号池管理、模型调试、上游账号配置已经迁移到 NewAPI，设置 `NEXT_PUBLIC_EXTERNAL_MODEL_ADMIN=true`。开启后前端会隐藏本地“号池管理”和“调试”入口，管理员登录后默认进入图片管理，系统设置里也不会展示 CPA/Sub2API 账号导入管理。
 
 常用公开配置：
 
 | 变量 | 说明 |
 |:--|:--|
-| `NEXT_PUBLIC_API_BASE_URL` | 后端 API 地址 |
+| `NEXT_PUBLIC_API_BASE_URL` | 浏览器直连 API 地址；同源代理模式保持为空 |
 | `BACKEND_URL` | Next.js middleware 转发 `/api/*`、`/images/*` 的服务端地址 |
 | `MODEL_BACKEND_URL` | Next.js middleware 转发 `/v1/*` 的服务端模型网关地址 |
 | `MODEL_BACKEND_API_KEY` | 服务端代理 `/v1/*` 使用的模型网关 token |
