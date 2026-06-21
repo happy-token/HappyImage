@@ -27,6 +27,25 @@ function shouldProxy(pathname: string): boolean {
   );
 }
 
+export function isModelPath(pathname: string) {
+  return pathname === "/v1" || pathname.startsWith("/v1/");
+}
+
+export function getProxyTargetBase(pathname: string) {
+  return isModelPath(pathname) ? MODEL_BACKEND_BASE : BACKEND_BASE;
+}
+
+export function buildProxyHeaders(pathname: string, incoming: Headers) {
+  const headers = new Headers(incoming);
+  for (const header of ["host", "connection", "content-length"]) {
+    headers.delete(header);
+  }
+  if (isModelPath(pathname) && MODEL_BACKEND_API_KEY) {
+    headers.set("authorization", `Bearer ${MODEL_BACKEND_API_KEY}`);
+  }
+  return headers;
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
 
@@ -34,7 +53,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const targetBase = pathname.startsWith("/v1/") || pathname === "/v1" ? MODEL_BACKEND_BASE : BACKEND_BASE;
+  const targetBase = getProxyTargetBase(pathname);
 
   if (!targetBase) {
     return new NextResponse("Backend unavailable: BACKEND_URL is not configured", { status: 502 });
@@ -43,20 +62,7 @@ export async function middleware(request: NextRequest) {
   const backendUrl = `${targetBase}${pathname}${search}`;
 
   try {
-    const headers = new Headers();
-    // Forward relevant request headers
-    request.headers.forEach((value, key) => {
-      if (
-        !["host", "connection", "content-length"].includes(
-          key.toLowerCase(),
-        )
-      ) {
-        headers.set(key, value);
-      }
-    });
-    if ((pathname.startsWith("/v1/") || pathname === "/v1") && MODEL_BACKEND_API_KEY) {
-      headers.set("authorization", `Bearer ${MODEL_BACKEND_API_KEY}`);
-    }
+    const headers = buildProxyHeaders(pathname, request.headers);
 
     const body =
       request.method === "GET" || request.method === "HEAD"
