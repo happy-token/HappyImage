@@ -9,7 +9,7 @@ pnpm install
 pnpm run dev
 ```
 
-前端开发模式默认使用同源请求，由 Next.js middleware 转发 `/api/*`、`/images/*` 到 `BACKEND_URL`。如需让浏览器直接请求其他后端地址，才设置环境变量：
+前端开发模式默认使用同源请求，由 Next.js middleware 转发 `/api/*`、`/images/*` 到 `BACKEND_URL`。这是推荐模式，因为登录 Cookie、历史会话同步、私有图片签名链接都会保持在当前浏览器 origin 下。如需让浏览器直接请求其他后端地址，才设置环境变量：
 
 ```bash
 NEXT_PUBLIC_API_BASE_URL=https://api.example.com pnpm run dev
@@ -57,6 +57,34 @@ pnpm run dev
 NEXT_PUBLIC_API_BASE_URL=https://api.example.com pnpm run build
 # 静态文件输出到 out/
 ```
+
+如果部署环境也运行 Next.js middleware，则可以继续保持 `NEXT_PUBLIC_API_BASE_URL` 为空，并通过服务端环境变量配置：
+
+```bash
+BACKEND_URL=https://api.example.com
+MODEL_BACKEND_URL=https://newapi.example.com/v1
+MODEL_BACKEND_API_KEY=<newapi-token>
+NEXT_PUBLIC_EXTERNAL_MODEL_ADMIN=true
+```
+
+## 故障记录
+
+跨仓库技术日志维护在后端仓库：
+
+- `happyimage-api/docs/technical-log.md`
+- `happyimage-api/docs/newapi-gateway.md`
+
+排查图片无法加载、历史会话恢复、NewAPI 网关、同源代理配置时，优先阅读这两个文档。
+
+## 本地清理
+
+可安全删除的生成目录：
+
+```bash
+rm -rf .next .open-next out .wrangler tsconfig.tsbuildinfo
+```
+
+不要删除 `.dev.vars` 或 `.env*`，除非你明确要重置本地环境变量。
 
 ## Docker 部署
 
