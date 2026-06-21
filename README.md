@@ -1,6 +1,26 @@
 <h1 align="center">HappyImage Web</h1>
 
-<p align="center">HappyImage 前端 — Next.js 静态导出，部署到 Cloudflare Pages 或 nginx。</p>
+<p align="center">HappyImage Web frontend — Next.js workspace UI, same-origin proxy, and official gallery static package host.</p>
+
+HappyImage Web 是 HappyImage 的用户界面层，负责图片工作台、登录态页面、官方图库静态包、同源 middleware，以及浏览器到 HappyImage API / NewAPI 的请求分流。用户、会话、历史记录、私有图片和系统设置由 `happyimage-api` 持久化；模型账号池、上游调试和 token 路由由 NewAPI 等模型网关管理。
+
+## 职责边界
+
+| 模块 | 负责 | 不负责 |
+|:--|:--|:--|
+| `happyimage-web`（本仓库） | Next.js 页面、用户工作台、同源 middleware、官方图库静态包读取与构建入口、`/v1/*` 服务端代理 | 用户历史/私有图库持久化、API 数据库、模型账号池管理 |
+| `happyimage-api` | 登录、OIDC、用户/额度、图片任务历史、用户图库、私有图片访问、设置、日志、充值、OpenAI-compatible 兼容入口 | 前端页面、官方图库静态资源发布、NewAPI 上游账号调试 |
+| `happyimage-gallery-source` | 官方图库源数据和候选池，供 `pnpm run gallery:build` 导出 | 运行时服务、GitHub 版本化发布 |
+| NewAPI / 模型网关 | 模型渠道、账号池、上游调试、token、额度路由 | HappyImage 用户登录、历史会话、用户图库、私有图片 |
+
+推荐请求分流：
+
+```text
+Browser -> happyimage-web
+  /api/*, /images/*, /image-thumbnails/* -> BACKEND_URL / happyimage-api
+  /seed-gallery/*                       -> public/seed-gallery static package
+  /v1/*                                 -> MODEL_BACKEND_URL / NewAPI
+```
 
 ## 本地开发
 
@@ -160,5 +180,10 @@ docker run -p 3000:3000 \
 
 ## 关联仓库
 
-- 后端：[happyimage-api](https://github.com/happy-token/happyimage-api)
-- 部署编排：见后端的 `docker-compose.yml`
+| 项目 | 说明 |
+|:--|:--|
+| [happyimage-api](https://github.com/happy-token/happyimage-api) | 产品后端，负责登录、用户、历史、图库、设置和 `/api/*` |
+| `../happyimage-gallery-source` | 本地/服务器官方图库源数据，不提交 GitHub |
+| NewAPI / 模型网关 | 外部模型渠道、账号池、上游调试和 token 管理 |
+
+部署编排见后端的 `docker-compose.yml`；Web Docker 镜像运行 Next.js server，官方图库静态包通过 volume/CDN/对象存储提供。
