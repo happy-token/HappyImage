@@ -17,6 +17,12 @@ const PROXY_PREFIXES = [
   "/image-thumbnails/",
   "/health",
 ] as const;
+const MODEL_PROXY_HEADER_ALLOWLIST = [
+  "accept",
+  "accept-language",
+  "content-type",
+  "user-agent",
+] as const;
 
 function shouldProxy(pathname: string): boolean {
   return PROXY_PREFIXES.some(
@@ -35,13 +41,42 @@ export function getProxyTargetBase(pathname: string) {
   return isModelPath(pathname) ? MODEL_BACKEND_BASE : BACKEND_BASE;
 }
 
+export function buildProxyUrl(pathname: string, search: string) {
+  const targetBase = getProxyTargetBase(pathname);
+  if (!targetBase) {
+    return "";
+  }
+
+  if (!isModelPath(pathname)) {
+    return `${targetBase}${pathname}${search}`;
+  }
+
+  const base = targetBase.replace(/\/+$/, "");
+  const modelPath = base.endsWith("/v1")
+    ? pathname.replace(/^\/v1(?=\/|$)/, "")
+    : pathname;
+
+  return `${base}${modelPath || ""}${search}`;
+}
+
 export function buildProxyHeaders(pathname: string, incoming: Headers) {
+  if (isModelPath(pathname)) {
+    const headers = new Headers();
+    for (const header of MODEL_PROXY_HEADER_ALLOWLIST) {
+      const value = incoming.get(header);
+      if (value) {
+        headers.set(header, value);
+      }
+    }
+    if (MODEL_BACKEND_API_KEY) {
+      headers.set("authorization", `Bearer ${MODEL_BACKEND_API_KEY}`);
+    }
+    return headers;
+  }
+
   const headers = new Headers(incoming);
   for (const header of ["host", "connection", "content-length"]) {
     headers.delete(header);
-  }
-  if (isModelPath(pathname) && MODEL_BACKEND_API_KEY) {
-    headers.set("authorization", `Bearer ${MODEL_BACKEND_API_KEY}`);
   }
   return headers;
 }
@@ -53,13 +88,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const targetBase = getProxyTargetBase(pathname);
+  const backendUrl = buildProxyUrl(pathname, search);
 
-  if (!targetBase) {
+  if (!backendUrl) {
     return new NextResponse("Backend unavailable: BACKEND_URL is not configured", { status: 502 });
   }
-
-  const backendUrl = `${targetBase}${pathname}${search}`;
 
   try {
     const headers = buildProxyHeaders(pathname, request.headers);
