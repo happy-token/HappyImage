@@ -1,76 +1,62 @@
 ARG BUILDPLATFORM
 ARG NODE_IMAGE=node:22-alpine
 
-FROM --platform=$BUILDPLATFORM ${NODE_IMAGE} AS web-build
+FROM --platform=$BUILDPLATFORM ${NODE_IMAGE} AS deps
 
 WORKDIR /app/web
 
-RUN npm config set registry https://registry.npmmirror.com
-RUN npm install -g pnpm@10.33.2
+RUN npm config set registry https://registry.npmmirror.com \
+    && npm install -g pnpm@10.33.2
+
 COPY package.json pnpm-lock.yaml .npmrc ./
 RUN pnpm config set registry https://registry.npmmirror.com \
     && pnpm install --frozen-lockfile
 
+FROM --platform=$BUILDPLATFORM ${NODE_IMAGE} AS build
+
+WORKDIR /app/web
+
+RUN npm config set registry https://registry.npmmirror.com \
+    && npm install -g pnpm@10.33.2
+
+COPY --from=deps /app/web/node_modules ./node_modules
 COPY . ./
+
 ARG NEXT_PUBLIC_API_BASE_URL=
 ARG NEXT_PUBLIC_APP_VERSION=0.0.0
-ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
-ENV NEXT_PUBLIC_APP_VERSION=${NEXT_PUBLIC_APP_VERSION}
+ARG NEXT_PUBLIC_EXTERNAL_MODEL_ADMIN=false
+ARG NEXT_PUBLIC_SUPPORT_EMAIL=
+ARG NEXT_PUBLIC_SUPPORT_WECHAT=
+
+ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL} \
+    NEXT_PUBLIC_APP_VERSION=${NEXT_PUBLIC_APP_VERSION} \
+    NEXT_PUBLIC_EXTERNAL_MODEL_ADMIN=${NEXT_PUBLIC_EXTERNAL_MODEL_ADMIN} \
+    NEXT_PUBLIC_SUPPORT_EMAIL=${NEXT_PUBLIC_SUPPORT_EMAIL} \
+    NEXT_PUBLIC_SUPPORT_WECHAT=${NEXT_PUBLIC_SUPPORT_WECHAT}
+
 RUN pnpm run build
 
-FROM nginx:alpine AS serve
+FROM ${NODE_IMAGE} AS runner
 
-COPY --from=web-build /app/web/out /usr/share/nginx/html
+WORKDIR /app/web
 
-RUN printf 'server {\n\
-    listen 80;\n\
-    server_name localhost;\n\
-    root /usr/share/nginx/html;\n\
-    index index.html;\n\
-    # Proxy API / images / health to backend\n\
-    location /api/ {\n\
-        proxy_pass http://happyimage-api:80;\n\
-        proxy_set_header Host \$host;\n\
-        proxy_set_header X-Real-IP \$remote_addr;\n\
-    }\n\
-    location /v1/ {\n\
-        proxy_pass http://happyimage-api:80;\n\
-        proxy_set_header Host \$host;\n\
-        proxy_set_header X-Real-IP \$remote_addr;\n\
-    }\n\
-    location /images/ {\n\
-        proxy_pass http://happyimage-api:80;\n\
-        proxy_set_header Host \$host;\n\
-        proxy_set_header X-Real-IP \$remote_addr;\n\
-    }\n\
-    location /image-thumbnails/ {\n\
-        proxy_pass http://happyimage-api:80;\n\
-        proxy_set_header Host \$host;\n\
-        proxy_set_header X-Real-IP \$remote_addr;\n\
-    }\n\
-    location /health {\n\
-        proxy_pass http://happyimage-api:80;\n\
-        proxy_set_header Host \$host;\n\
-        proxy_set_header X-Real-IP \$remote_addr;\n\
-    }\n\
-    # HTML must revalidate\n\
-    location / {\n\
-        try_files $uri $uri.html $uri/ /index.html;\n\
-        add_header Cache-Control "no-cache";\n\
-        add_header Pragma "no-cache";\n\
-    }\n\
-    # JS/CSS are hashed\n\
-    location /_next/static/ {\n\
-        expires 1y;\n\
-        add_header Cache-Control "public, immutable";\n\
-    }\n\
-    gzip on;\n\
-    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;\n\
-}\n' > /etc/nginx/conf.d/default.conf
+ENV NODE_ENV=production \
+    HOSTNAME=0.0.0.0 \
+    PORT=3000 \
+    NEXT_PUBLIC_API_BASE_URL="" \
+    BACKEND_URL=http://happyimage-api:80 \
+    MODEL_BACKEND_URL=http://happyimage-api:80
 
-EXPOSE 80
+COPY --from=build /app/web/package.json ./package.json
+COPY --from=build /app/web/node_modules ./node_modules
+COPY --from=build /app/web/.next ./.next
+COPY --from=build /app/web/public ./public
+COPY --from=build /app/web/next.config.ts ./next.config.ts
+COPY --from=build /app/web/src/lib/release.ts ./src/lib/release.ts
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD wget -qO- http://127.0.0.1/ || exit 1
+EXPOSE 3000
 
-CMD ["nginx", "-g", "daemon off;"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:3000/ >/dev/null || exit 1
+
+CMD ["node", "node_modules/next/dist/bin/next", "start", "-H", "0.0.0.0", "-p", "3000"]

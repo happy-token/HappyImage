@@ -50,7 +50,8 @@ const nextConfig: NextConfig = {
     },
 }
 
-// Initialize OpenNext Cloudflare dev environment
-import('@opennextjs/cloudflare').then((m) => m.initOpenNextCloudflareForDev())
+if (process.env.HAPPYIMAGE_OPENNEXT_DEV === 'true') {
+    void import('@opennextjs/cloudflare').then((m) => m.initOpenNextCloudflareForDev())
+}
 
 export default nextConfig

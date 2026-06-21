@@ -89,9 +89,25 @@ rm -rf .next .open-next out .wrangler tsconfig.tsbuildinfo
 ## Docker 部署
 
 ```bash
-docker build -t happyimage-web .
-docker run -p 3000:80 happyimage-web
+docker build \
+  --build-arg NEXT_PUBLIC_EXTERNAL_MODEL_ADMIN=true \
+  -t happyimage-web .
+
+docker run -p 3000:3000 \
+  -e BACKEND_URL=http://happyimage-api:80 \
+  -e MODEL_BACKEND_URL=https://newapi.example.com/v1 \
+  -e MODEL_BACKEND_API_KEY=<newapi-token> \
+  happyimage-web
 ```
+
+Docker 镜像运行的是 Next.js server，不是静态 nginx。这样 `/api/*`、`/images/*`、`/image-thumbnails/*` 和 `/v1/*` 可以继续走 middleware 分流：
+
+```text
+/api/*, /images/*, /image-thumbnails/* -> BACKEND_URL
+/v1/*                                  -> MODEL_BACKEND_URL
+```
+
+同源代理模式下 `NEXT_PUBLIC_API_BASE_URL` 保持为空；如果构建时设置了它，浏览器会直连该地址，不再使用同源代理。
 
 ## 部署到 Cloudflare Pages
 
