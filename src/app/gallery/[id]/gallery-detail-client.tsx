@@ -235,7 +235,7 @@ export function GalleryDetailClient() {
         </Button>
         <div className="inline-flex items-center gap-2 text-xs font-medium text-stone-500 dark:text-stone-400">
           <Sparkles className="size-4" />
-          HappyImage 灵感图库
+          Happy Token 灵感图库
         </div>
       </div>
 

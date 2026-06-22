@@ -2,6 +2,7 @@
 
 import {
   Activity,
+  ArrowLeft,
   BarChart3,
   Check,
   Copy,
@@ -16,7 +17,10 @@ import {
   Monitor,
   Moon,
   Palette,
+  Pencil,
+  Plus,
   Save,
+  ServerCog,
   Stamp,
   Sun,
   ThumbsDown,
@@ -27,17 +31,29 @@ import { toast } from "sonner";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import webConfig from "@/constants/common-env";
+import { updateUserProfile } from "@/lib/api";
 import { SUPPORT_EMAIL, SUPPORT_WECHAT, SUPPORT_WECHAT_QR } from "@/lib/contact";
+import {
+  resolveLanguage,
+  saveLanguagePreference,
+  useLanguagePreference,
+  type EffectiveLanguage,
+  type LanguagePreference,
+} from "@/lib/language";
 import { cn } from "@/lib/utils";
-import type { StoredAuthSession } from "@/store/auth";
+import {
+  normalizeModelProviders,
+  normalizeUserPreferences,
+  setStoredAuthSession,
+  type StoredAuthSession,
+  type StoredModelProvider,
+  type StoredUserPreferences,
+} from "@/store/auth";
 
-type LanguagePreference = "system" | "zh-CN" | "en-US";
-type EffectiveLanguage = "zh-CN" | "en-US";
 type ThemePreference = "system" | "light" | "dark";
-type SettingsSection = "account" | "appearance" | "watermark" | "contact" | "about";
+type SettingsSection = "account" | "appearance" | "provider" | "watermark" | "contact" | "about";
 
 export type AccountUsageStats = {
-  remainingQuotaLabel?: string;
   conversationCount: number;
   turnCount: number;
   generatedImageCount: number;
@@ -47,8 +63,7 @@ export type AccountUsageStats = {
   lastActivityLabel?: string;
 };
 
-const LANGUAGE_STORAGE_KEY = "happyimage:language";
-const THEME_STORAGE_KEY = "happyimage-theme";
+const THEME_STORAGE_KEY = "happytoken-theme";
 
 const settingsCopy = {
   "zh-CN": {
@@ -64,12 +79,10 @@ const settingsCopy = {
       watermark: "水印",
       contact: "联系我们",
       about: "关于",
+      provider: "供应商",
     },
     account: {
       current: "当前登录账户",
-      quota: "剩余额度",
-      quotaUnit: "张",
-      unlimited: "不限量",
       localStats: "本机历史统计",
       conversations: "对话",
       turns: "生成轮次",
@@ -79,6 +92,25 @@ const settingsCopy = {
       disliked: "不喜欢",
       lastActivity: "最近活动",
       noActivity: "暂无记录",
+    },
+    provider: {
+      title: "模型供应商",
+      type: "供应商类型",
+      baseUrl: "Base URL",
+      apiKey: "API Key",
+      apiKeyPlaceholder: "留空则保持现有 API Key",
+      configured: "已保存 API Key",
+      notConfigured: "尚未保存 API Key",
+      save: "保存供应商",
+      add: "添加供应商",
+      edit: "编辑",
+      use: "使用",
+      active: "使用中",
+      back: "返回列表",
+      empty: "还没有供应商",
+      saved: "供应商配置已保存",
+      failed: "保存供应商配置失败",
+      hint: "配置后，当前账户发起的图片生成会优先使用这个 OpenAI 兼容网关。",
     },
     appearance: {
       theme: "主题",
@@ -99,7 +131,7 @@ const settingsCopy = {
       failed: "保存水印标签失败",
       hint: "带水印下载会使用“标签 · 用户 ID”。",
       previewTitle: "示例图片",
-      previewAlt: "HappyImage 水印示例",
+      previewAlt: "Happy Token 水印示例",
       previewCaption: "水印通常会显示在右下角。",
     },
     contact: {
@@ -129,12 +161,10 @@ const settingsCopy = {
       watermark: "Watermark",
       contact: "Contact",
       about: "About",
+      provider: "Provider",
     },
     account: {
       current: "Current signed-in account",
-      quota: "Remaining quota",
-      quotaUnit: "images",
-      unlimited: "Unlimited",
       localStats: "Local history stats",
       conversations: "Chats",
       turns: "Runs",
@@ -144,6 +174,25 @@ const settingsCopy = {
       disliked: "Disliked",
       lastActivity: "Last activity",
       noActivity: "No activity",
+    },
+    provider: {
+      title: "Model provider",
+      type: "Provider type",
+      baseUrl: "Base URL",
+      apiKey: "API Key",
+      apiKeyPlaceholder: "Leave blank to keep the current API key",
+      configured: "API key saved",
+      notConfigured: "No API key saved",
+      save: "Save provider",
+      add: "Add provider",
+      edit: "Edit",
+      use: "Use",
+      active: "Active",
+      back: "Back",
+      empty: "No providers yet",
+      saved: "Provider settings saved",
+      failed: "Failed to save provider settings",
+      hint: "When configured, image generation from this account uses this OpenAI-compatible gateway first.",
     },
     appearance: {
       theme: "Theme",
@@ -164,7 +213,7 @@ const settingsCopy = {
       failed: "Failed to save watermark label",
       hint: "Watermarked downloads use “label · user ID”.",
       previewTitle: "Preview",
-      previewAlt: "HappyImage watermark preview",
+      previewAlt: "Happy Token watermark preview",
       previewCaption: "The watermark usually appears in the lower-right corner.",
     },
     contact: {
@@ -183,15 +232,6 @@ const settingsCopy = {
   },
 } satisfies Record<EffectiveLanguage, unknown>;
 
-function getSystemLanguage(): EffectiveLanguage {
-  if (typeof navigator === "undefined") return "zh-CN";
-  return navigator.language.toLowerCase().startsWith("en") ? "en-US" : "zh-CN";
-}
-
-function resolveLanguage(preference: LanguagePreference): EffectiveLanguage {
-  return preference === "system" ? getSystemLanguage() : preference;
-}
-
 function getSystemTheme(): "light" | "dark" {
   if (typeof window === "undefined") return "light";
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
@@ -204,6 +244,66 @@ function applyThemePreference(preference: ThemePreference) {
   window.localStorage.setItem(THEME_STORAGE_KEY, preference);
 }
 
+function getSessionModelProviders(session: StoredAuthSession): StoredModelProvider[] {
+  const normalizedProviders = normalizeModelProviders(session.modelProviders);
+  if (normalizedProviders.length > 0) {
+    return normalizedProviders;
+  }
+  const baseUrl = String(session.modelBaseUrl || "").trim().replace(/\/+$/, "");
+  if (!baseUrl) {
+    return [];
+  }
+  return [
+    {
+      id: "default",
+      type: String(session.modelProvider || "newapi").trim() || "newapi",
+      baseUrl,
+      apiKeyConfigured: Boolean(session.modelApiKeyConfigured),
+      selected: true,
+    },
+  ];
+}
+
+function createProviderId() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `provider-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function buildSessionFromProfileResponse(
+  session: StoredAuthSession,
+  data: Awaited<ReturnType<typeof updateUserProfile>>,
+  fallbackProviders: StoredModelProvider[],
+): StoredAuthSession {
+  const modelProviders = normalizeModelProviders(data.user?.model_providers ?? data.model_providers ?? fallbackProviders);
+  return {
+    ...session,
+    name: data.user?.name || data.name || session.name,
+    watermarkLabel: data.user?.watermark_label ?? data.watermark_label ?? session.watermarkLabel ?? "",
+    watermarkUnlocked: data.user?.watermark_unlocked ?? data.watermark_unlocked ?? session.watermarkUnlocked,
+    modelProvider: data.user?.model_provider ?? data.model_provider ?? session.modelProvider ?? "",
+    modelBaseUrl: data.user?.model_base_url ?? data.model_base_url ?? session.modelBaseUrl ?? "",
+    modelApiKeyConfigured: data.user?.model_api_key_configured ?? data.model_api_key_configured ?? session.modelApiKeyConfigured ?? false,
+    modelGatewayEnabled: data.user?.model_gateway_enabled ?? data.model_gateway_enabled ?? session.modelGatewayEnabled ?? false,
+    modelProviders,
+    preferences: normalizeUserPreferences(data.user?.preferences ?? data.preferences ?? session.preferences),
+  };
+}
+
+function toPreferencePayload(preferences: StoredUserPreferences) {
+  return {
+    theme: preferences.theme,
+    language: preferences.language,
+    image_ratio: preferences.imageRatio,
+    image_tier: preferences.imageTier,
+    image_quality: preferences.imageQuality,
+    image_model: preferences.imageModel,
+    sidebar_collapsed: preferences.sidebarCollapsed,
+    sidebar_width: preferences.sidebarWidth,
+  };
+}
+
 export function AccountMenu({
   session,
   onLogout,
@@ -211,6 +311,7 @@ export function AccountMenu({
   iconOnly = false,
   watermarkLabel,
   onSaveWatermarkLabel,
+  onSessionUpdate,
   usageStats,
 }: {
   session: StoredAuthSession;
@@ -219,35 +320,36 @@ export function AccountMenu({
   iconOnly?: boolean;
   watermarkLabel?: string;
   onSaveWatermarkLabel?: (value: string) => void | Promise<void>;
+  onSessionUpdate?: (session: StoredAuthSession) => void;
   usageStats?: AccountUsageStats;
 }) {
   const [draftWatermarkLabel, setDraftWatermarkLabel] = useState(watermarkLabel ?? session.watermarkLabel ?? "");
+  const [draftModelProviders, setDraftModelProviders] = useState<StoredModelProvider[]>(() => getSessionModelProviders(session));
+  const [providerView, setProviderView] = useState<"list" | "form">("list");
+  const [editingProviderId, setEditingProviderId] = useState<string | null>(null);
+  const [draftModelProvider, setDraftModelProvider] = useState("newapi");
+  const [draftModelBaseUrl, setDraftModelBaseUrl] = useState("");
+  const [draftModelApiKey, setDraftModelApiKey] = useState("");
   const [isSavingWatermarkLabel, setIsSavingWatermarkLabel] = useState(false);
-  const [language, setLanguage] = useState<LanguagePreference>("system");
+  const [isSavingProvider, setIsSavingProvider] = useState(false);
+  const language = useLanguagePreference();
   const [themePreference, setThemePreference] = useState<ThemePreference>("system");
   const [activeSection, setActiveSection] = useState<SettingsSection>("account");
   const effectiveLanguage = resolveLanguage(language);
   const copy = settingsCopy[effectiveLanguage];
   const displayName = session.name.trim() || copy.fallbackName;
   const triggerLabel = session.role === "admin" ? copy.trigger.admin : copy.trigger.mine;
-  const quotaLabel =
-    usageStats?.remainingQuotaLabel ??
-    (session.role === "admin"
-      ? copy.account.unlimited
-      : typeof session.imageQuota === "number"
-        ? String(Math.max(0, session.imageQuota))
-        : "--");
-
   useEffect(() => {
-    const stored = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
-    if (stored === "system" || stored === "zh-CN" || stored === "en-US") {
-      setLanguage(stored);
-    }
-    const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+    const accountTheme = session.preferences?.theme;
+    const storedTheme = accountTheme || window.localStorage.getItem(THEME_STORAGE_KEY);
     if (storedTheme === "system" || storedTheme === "light" || storedTheme === "dark") {
       setThemePreference(storedTheme);
+      applyThemePreference(storedTheme);
     }
-  }, []);
+    if (session.preferences?.language) {
+      saveLanguagePreference(session.preferences.language);
+    }
+  }, [session.preferences?.language, session.preferences?.theme]);
 
   useEffect(() => {
     if (themePreference !== "system") {
@@ -262,6 +364,17 @@ export function AccountMenu({
   useEffect(() => {
     setDraftWatermarkLabel(watermarkLabel ?? session.watermarkLabel ?? "");
   }, [session.watermarkLabel, watermarkLabel]);
+
+  useEffect(() => {
+    const nextProviders = getSessionModelProviders(session);
+    setDraftModelProviders(nextProviders);
+    if (providerView === "list") {
+      const selectedProvider = nextProviders.find((provider) => provider.selected) ?? nextProviders[0];
+      setDraftModelProvider(selectedProvider?.type || "newapi");
+      setDraftModelBaseUrl(selectedProvider?.baseUrl || "");
+    }
+    setDraftModelApiKey("");
+  }, [providerView, session.modelBaseUrl, session.modelProvider, session.modelProviders]);
 
   const handleSaveWatermarkLabel = async () => {
     if (!onSaveWatermarkLabel) {
@@ -279,6 +392,92 @@ export function AccountMenu({
     }
   };
 
+  const toProviderPayload = (providers: StoredModelProvider[], apiKeyById: Record<string, string> = {}) =>
+    providers.map((provider) => ({
+      id: provider.id,
+      type: provider.type,
+      base_url: provider.baseUrl,
+      api_key_configured: Boolean(provider.apiKeyConfigured),
+      selected: Boolean(provider.selected),
+      ...(apiKeyById[provider.id]?.trim() ? { api_key: apiKeyById[provider.id].trim() } : {}),
+    }));
+
+  const openProviderForm = (provider?: StoredModelProvider) => {
+    setEditingProviderId(provider?.id ?? null);
+    setDraftModelProvider(provider?.type || "newapi");
+    setDraftModelBaseUrl(provider?.baseUrl || "");
+    setDraftModelApiKey("");
+    setProviderView("form");
+  };
+
+  const syncProviderSession = async (providers: StoredModelProvider[], apiKeyById: Record<string, string> = {}) => {
+    const data = await updateUserProfile({
+      model_providers: toProviderPayload(providers, apiKeyById),
+    });
+    const nextSession = buildSessionFromProfileResponse(session, data, providers);
+    await setStoredAuthSession(nextSession);
+    onSessionUpdate?.(nextSession);
+    const nextProviders = getSessionModelProviders(nextSession);
+    setDraftModelProviders(nextProviders);
+    return nextSession;
+  };
+
+  const handleSaveProvider = async () => {
+    const nextProvider = draftModelProvider.trim() || "newapi";
+    const nextBaseUrl = draftModelBaseUrl.trim().replace(/\/+$/, "");
+    if (!nextBaseUrl) {
+      toast.error(`${copy.provider.baseUrl} 不能为空`);
+      return;
+    }
+    if (!nextBaseUrl.startsWith("http://") && !nextBaseUrl.startsWith("https://")) {
+      toast.error(`${copy.provider.baseUrl} 必须以 http:// 或 https:// 开头`);
+      return;
+    }
+    const providerId = editingProviderId || createProviderId();
+    const existingProvider = draftModelProviders.find((provider) => provider.id === providerId);
+    const nextProviders = [
+      ...draftModelProviders.filter((provider) => provider.id !== providerId).map((provider) => ({
+        ...provider,
+        selected: false,
+      })),
+      {
+        id: providerId,
+        type: nextProvider,
+        baseUrl: nextBaseUrl,
+        apiKeyConfigured: Boolean(draftModelApiKey.trim() || existingProvider?.apiKeyConfigured),
+        selected: true,
+      },
+    ];
+    setIsSavingProvider(true);
+    try {
+      await syncProviderSession(nextProviders, draftModelApiKey.trim() ? { [providerId]: draftModelApiKey.trim() } : {});
+      setProviderView("list");
+      setEditingProviderId(null);
+      setDraftModelApiKey("");
+      toast.success(copy.provider.saved);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : copy.provider.failed);
+    } finally {
+      setIsSavingProvider(false);
+    }
+  };
+
+  const handleSelectProvider = async (providerId: string) => {
+    const nextProviders = draftModelProviders.map((provider) => ({
+      ...provider,
+      selected: provider.id === providerId,
+    }));
+    setIsSavingProvider(true);
+    try {
+      await syncProviderSession(nextProviders);
+      toast.success(copy.provider.saved);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : copy.provider.failed);
+    } finally {
+      setIsSavingProvider(false);
+    }
+  };
+
   const handleCopy = async (value: string, label: string) => {
     try {
       await navigator.clipboard.writeText(value);
@@ -289,14 +488,29 @@ export function AccountMenu({
   };
 
   const handleLanguageChange = (value: LanguagePreference) => {
-    setLanguage(value);
-    window.localStorage.setItem(LANGUAGE_STORAGE_KEY, value);
+    saveLanguagePreference(value);
+    const nextPreferences = { ...(session.preferences ?? {}), language: value };
+    void updateUserProfile({ preferences: toPreferencePayload(nextPreferences) })
+      .then(async (data) => {
+        const nextSession = buildSessionFromProfileResponse(session, data, getSessionModelProviders(session));
+        await setStoredAuthSession(nextSession);
+        onSessionUpdate?.(nextSession);
+      })
+      .catch(() => undefined);
     toast.success(settingsCopy[resolveLanguage(value)].appearance.languageSaved);
   };
 
   const handleThemeChange = (value: ThemePreference) => {
     setThemePreference(value);
     applyThemePreference(value);
+    const nextPreferences = { ...(session.preferences ?? {}), theme: value };
+    void updateUserProfile({ preferences: toPreferencePayload(nextPreferences) })
+      .then(async (data) => {
+        const nextSession = buildSessionFromProfileResponse(session, data, getSessionModelProviders(session));
+        await setStoredAuthSession(nextSession);
+        onSessionUpdate?.(nextSession);
+      })
+      .catch(() => undefined);
     toast.success(copy.appearance.themeSaved);
   };
 
@@ -305,6 +519,7 @@ export function AccountMenu({
   const sections = [
     { id: "account", label: copy.nav.account, icon: UserRound },
     { id: "appearance", label: copy.nav.appearance, icon: Palette },
+    ...(session.role === "user" ? [{ id: "provider" as const, label: copy.nav.provider, icon: ServerCog }] : []),
     ...(onSaveWatermarkLabel ? [{ id: "watermark" as const, label: copy.nav.watermark, icon: Stamp }] : []),
     { id: "contact", label: copy.nav.contact, icon: MessageCircle },
     { id: "about", label: copy.nav.about, icon: Info },
@@ -334,13 +549,6 @@ export function AccountMenu({
                 <div className="truncate text-sm font-semibold text-stone-950 dark:text-stone-50">{displayName}</div>
                 <div className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">{copy.account.current}</div>
               </div>
-            </div>
-          </div>
-          <div className="mt-3 rounded-2xl border border-stone-200/80 bg-white p-4 dark:border-white/10 dark:bg-white/[0.03]">
-            <div className="text-xs font-medium text-stone-500 dark:text-stone-400">{copy.account.quota}</div>
-            <div className="mt-2 flex items-end gap-2">
-              <div className="text-3xl font-semibold tracking-tight text-stone-950 dark:text-stone-50">{quotaLabel}</div>
-              {session.role !== "admin" ? <div className="pb-1 text-xs text-stone-400">{copy.account.quotaUnit}</div> : null}
             </div>
           </div>
           {usageStats ? (
@@ -433,6 +641,150 @@ export function AccountMenu({
       );
     }
 
+    if (activeSection === "provider") {
+      if (providerView === "form") {
+        const editingProvider = editingProviderId ? draftModelProviders.find((provider) => provider.id === editingProviderId) : null;
+        return (
+          <section>
+            <div className="flex items-center justify-between gap-3 px-3 pb-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setProviderView("list");
+                  setEditingProviderId(null);
+                  setDraftModelApiKey("");
+                }}
+                className="inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-stone-400 transition hover:text-stone-700 dark:text-stone-500 dark:hover:text-stone-200"
+              >
+                <ArrowLeft className="size-3.5" />
+                {copy.provider.back}
+              </button>
+            </div>
+            <div className="rounded-2xl border border-stone-200/80 bg-stone-50/70 p-4 dark:border-white/10 dark:bg-white/5">
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-stone-500 dark:text-stone-400">{copy.provider.type}</label>
+                  <input
+                    value={draftModelProvider}
+                    onChange={(event) => setDraftModelProvider(event.target.value.slice(0, 32))}
+                    placeholder="newapi"
+                    className="h-9 w-full rounded-xl border border-stone-200 bg-white px-3 text-sm text-stone-800 outline-none transition focus:border-stone-400 dark:border-white/10 dark:bg-white/8 dark:text-stone-100"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-stone-500 dark:text-stone-400">{copy.provider.baseUrl}</label>
+                  <input
+                    value={draftModelBaseUrl}
+                    onChange={(event) => setDraftModelBaseUrl(event.target.value)}
+                    placeholder="https://new-api.example.com/v1"
+                    className="h-9 w-full rounded-xl border border-stone-200 bg-white px-3 text-sm text-stone-800 outline-none transition focus:border-stone-400 dark:border-white/10 dark:bg-white/8 dark:text-stone-100"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="text-xs font-medium text-stone-500 dark:text-stone-400">{copy.provider.apiKey}</label>
+                    <span className="text-[11px] text-stone-400">
+                      {editingProvider?.apiKeyConfigured ? copy.provider.configured : copy.provider.notConfigured}
+                    </span>
+                  </div>
+                  <input
+                    value={draftModelApiKey}
+                    onChange={(event) => setDraftModelApiKey(event.target.value)}
+                    type="password"
+                    placeholder={copy.provider.apiKeyPlaceholder}
+                    className="h-9 w-full rounded-xl border border-stone-200 bg-white px-3 font-mono text-sm text-stone-800 outline-none transition focus:border-stone-400 dark:border-white/10 dark:bg-white/8 dark:text-stone-100"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handleSaveProvider()}
+                  disabled={isSavingProvider}
+                  className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-xl bg-zinc-900 px-3 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200"
+                >
+                  {isSavingProvider ? <LoaderCircle className="size-4 animate-spin" /> : <Save className="size-4" />}
+                  {copy.provider.save}
+                </button>
+              </div>
+            </div>
+          </section>
+        );
+      }
+
+      return (
+        <section>
+          <div className={sectionTitleClass}>{copy.provider.title}</div>
+          <div className="grid gap-2">
+            {draftModelProviders.length > 0 ? (
+              draftModelProviders.map((provider) => (
+                <div
+                  key={provider.id}
+                  className={cn(
+                    "flex items-center gap-3 rounded-2xl border bg-white p-3 transition dark:bg-white/[0.03]",
+                    provider.selected
+                      ? "border-stone-300 shadow-sm dark:border-white/20"
+                      : "border-stone-200/80 dark:border-white/10",
+                  )}
+                >
+                  <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-stone-100 text-stone-600 dark:bg-white/10 dark:text-stone-300">
+                    <ServerCog className="size-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-sm font-semibold text-stone-900 dark:text-stone-100">{provider.type}</span>
+                      {provider.selected ? (
+                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-stone-900 px-2 py-0.5 text-[10px] font-medium text-white dark:bg-stone-100 dark:text-stone-950">
+                          <Check className="size-3" />
+                          {copy.provider.active}
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="mt-0.5 truncate text-xs text-stone-500 dark:text-stone-400">{provider.baseUrl}</div>
+                    <div className="mt-1 text-[11px] text-stone-400">
+                      {provider.apiKeyConfigured ? copy.provider.configured : copy.provider.notConfigured}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => openProviderForm(provider)}
+                      className="inline-flex size-8 items-center justify-center rounded-lg text-stone-500 transition hover:bg-stone-100 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-white/10 dark:hover:text-white"
+                      aria-label={copy.provider.edit}
+                      title={copy.provider.edit}
+                    >
+                      <Pencil className="size-4" />
+                    </button>
+                    {!provider.selected ? (
+                      <button
+                        type="button"
+                        onClick={() => void handleSelectProvider(provider.id)}
+                        disabled={isSavingProvider}
+                        className="inline-flex h-8 items-center justify-center rounded-lg bg-stone-900 px-3 text-xs font-medium text-white transition hover:bg-stone-700 disabled:opacity-60 dark:bg-stone-100 dark:text-stone-950 dark:hover:bg-stone-200"
+                      >
+                        {isSavingProvider ? <LoaderCircle className="size-3.5 animate-spin" /> : copy.provider.use}
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-2xl border border-dashed border-stone-200/90 bg-stone-50/70 px-4 py-6 text-center text-sm text-stone-500 dark:border-white/10 dark:bg-white/5 dark:text-stone-400">
+                {copy.provider.empty}
+              </div>
+            )}
+              <button
+                type="button"
+              onClick={() => openProviderForm()}
+                disabled={isSavingProvider}
+              className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 text-sm font-medium text-stone-800 transition hover:bg-stone-50 disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.03] dark:text-stone-100 dark:hover:bg-white/10"
+              >
+              <Plus className="size-4" />
+              {copy.provider.add}
+              </button>
+          </div>
+        </section>
+      );
+    }
+
     if (activeSection === "watermark" && onSaveWatermarkLabel) {
       return (
         <section>
@@ -464,10 +816,10 @@ export function AccountMenu({
               <div className="mb-2 text-xs font-medium text-stone-500 dark:text-stone-400">{copy.watermark.previewTitle}</div>
               <div className="relative overflow-hidden rounded-2xl border border-stone-200 bg-white p-6 dark:border-white/10 dark:bg-stone-900">
                 <div className="flex aspect-[4/3] items-center justify-center rounded-xl bg-gradient-to-br from-amber-50 via-white to-stone-100 dark:from-stone-800 dark:via-stone-900 dark:to-zinc-950">
-                  <img src="/happyimage-logo.svg" alt={copy.watermark.previewAlt} className="size-20 rounded-2xl shadow-sm" />
+                  <img src="/happy-token-logo.svg" alt={copy.watermark.previewAlt} className="size-20 rounded-2xl shadow-sm" />
                 </div>
                 <div className="absolute bottom-3 right-3 rounded-full bg-black/70 px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm backdrop-blur">
-                  @HappyImage
+                  @Happy Token
                 </div>
               </div>
               <p className="mt-2 text-xs leading-5 text-stone-500 dark:text-stone-400">{copy.watermark.previewCaption}</p>
@@ -518,7 +870,7 @@ export function AccountMenu({
         <div className="rounded-2xl border border-stone-200/80 bg-stone-50/70 p-4 text-sm text-stone-700 dark:border-white/10 dark:bg-white/5 dark:text-stone-300">
           <div className="flex items-center gap-2">
             <Info className="size-4 text-stone-400" />
-            HappyImage
+            Happy Token
             <span className="ml-auto text-xs text-stone-400">v{webConfig.appVersion}</span>
           </div>
           <p className="mt-2 text-xs leading-5 text-stone-500 dark:text-stone-400">{copy.about.description}</p>

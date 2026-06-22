@@ -83,12 +83,12 @@ describe("middleware proxy helpers", () => {
       "/v1/models",
       new Headers({
         "accept-language": "en-US",
-        "x-happyimage-auth": "product-secret",
+        "x-happytoken-auth": "product-secret",
       }),
     );
 
     expect(modelHeaders.get("accept-language")).toBe("en-US");
-    expect(modelHeaders.get("x-happyimage-auth")).toBeNull();
+    expect(modelHeaders.get("x-happytoken-auth")).toBeNull();
     expect(modelHeaders.get("authorization")).toBe("Bearer sk-test");
   });
 

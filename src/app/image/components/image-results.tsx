@@ -41,7 +41,6 @@ type ImageResultsProps = {
   onRegenerateTurn: (conversationId: string, turnId: string) => void | Promise<void>;
   onRetryImage: (conversationId: string, turnId: string, imageId: string) => void | Promise<void>;
   onImageFeedback: (conversationId: string, turnId: string, imageId: string, taskId: string, vote: ImageFeedbackVote) => void | Promise<void>;
-  onTimeoutRetryContinue: (taskId: string) => void | Promise<void>;
   onDismissErrors: (conversationId: string, turnId: string) => void | Promise<void>;
   formatConversationTime: (value: string) => string;
 };
@@ -56,6 +55,15 @@ type FileSavePicker = {
     close: () => Promise<void>;
   }>;
 };
+
+function getSaveFilePicker() {
+  return (window as Window & {
+    showSaveFilePicker?: (options?: {
+      suggestedName?: string;
+      types?: Array<{ description: string; accept: Record<string, string[]> }>;
+    }) => Promise<FileSavePicker>;
+  }).showSaveFilePicker;
+}
 
 // Blob URL 缓存：避免 base64 超长字符串在 DOM 中，改用短小的 blob: URL
 const b64BlobUrlCache = new Map<string, string>();
@@ -110,19 +118,13 @@ async function getStoredImageBlob(image: StoredImage) {
   return fetchAuthenticatedImageBlob(image.url);
 }
 
-async function saveBlobToChosenLocation(blob: Blob, filename: string) {
-  const picker = (window as Window & {
-    showSaveFilePicker?: (options?: {
-      suggestedName?: string;
-      types?: Array<{ description: string; accept: Record<string, string[]> }>;
-    }) => Promise<FileSavePicker>;
-  }).showSaveFilePicker;
-
+async function pickSaveLocation(filename: string) {
+  const picker = getSaveFilePicker();
   if (!picker) {
     throw new Error("当前浏览器不支持选择保存位置，将使用默认下载目录。");
   }
 
-  const handle = await picker({
+  return picker({
     suggestedName: filename,
     types: [
       {
@@ -131,9 +133,24 @@ async function saveBlobToChosenLocation(blob: Blob, filename: string) {
       },
     ],
   });
+}
+
+async function writeBlobToChosenLocation(handle: FileSavePicker, blob: Blob) {
   const writable = await handle.createWritable();
   await writable.write(blob);
   await writable.close();
+}
+
+function getSavePickerErrorMessage(err: unknown, fallback = "当前浏览器不支持选择保存位置，请使用默认下载目录。") {
+  const message = err instanceof Error ? err.message : "";
+  if (
+    message.includes("showSaveFilePicker") ||
+    message.includes("user gesture") ||
+    message.includes("file picker")
+  ) {
+    return "当前浏览器没有打开保存窗口，请使用默认下载目录。";
+  }
+  return message || fallback;
 }
 
 function showDownloadStartedToast(filename: string, location: DownloadLocation) {
@@ -142,13 +159,14 @@ function showDownloadStartedToast(filename: string, location: DownloadLocation) 
   });
 }
 
-function buildUserWatermarkText(watermarkLabel: string, currentUserId: string) {
+function buildUserWatermarkText(watermarkLabel: string) {
   const label = watermarkLabel.trim();
-  const userId = currentUserId.trim();
-  if (!label && (!userId || userId === "guest" || userId.startsWith("guest:"))) {
-    return "HappyImage";
-  }
-  return label && userId ? `${label} · ${userId}` : label;
+  return label;
+}
+
+function buildDownloadFilename(index: number, choice: DownloadChoice) {
+  const baseFilename = `image-${index + 1}.png`;
+  return choice === "watermark" ? buildWatermarkedFilename(baseFilename) : baseFilename;
 }
 
 async function prepareDownloadBlob(
@@ -156,30 +174,21 @@ async function prepareDownloadBlob(
   index: number,
   choice: DownloadChoice,
   watermarkLabel: string,
-  currentUserId: string,
 ) {
-  const baseFilename = `image-${index + 1}.png`;
+  const filename = buildDownloadFilename(index, choice);
   const blob = await getStoredImageBlob(image);
   if (!blob) {
     return null;
   }
   if (choice === "original") {
-    return { blob, filename: baseFilename };
+    return { blob, filename };
   }
-  const watermarkText = buildUserWatermarkText(watermarkLabel, currentUserId);
+  const watermarkText = buildUserWatermarkText(watermarkLabel);
   if (!watermarkText) {
-    throw new Error("请先在左下角“我的”里设置水印标签，或登录后使用无水印导出。");
+    throw new Error("请先在左下角“我的”里设置水印标签。");
   }
   const watermarkedBlob = await createTextWatermarkedBlob(blob, watermarkText);
-  return { blob: watermarkedBlob, filename: buildWatermarkedFilename(baseFilename) };
-}
-
-async function savePreparedDownload(blob: Blob, filename: string, location: DownloadLocation) {
-  if (location === "choose") {
-    await saveBlobToChosenLocation(blob, filename);
-    return;
-  }
-  triggerBlobDownload(blob, filename);
+  return { blob: watermarkedBlob, filename };
 }
 
 async function copyTextToClipboard(value: string) {
@@ -211,7 +220,7 @@ async function copyImageToClipboard(
 ) {
   const choice: DownloadChoice = watermarkUnlocked ? "original" : "watermark";
   try {
-    const prepared = await prepareDownloadBlob(image, index, choice, watermarkLabel, currentUserId);
+    const prepared = await prepareDownloadBlob(image, index, choice, watermarkLabel);
     if (!prepared) {
       toast.error("图片还没有准备好");
       return;
@@ -255,7 +264,6 @@ export function ImageResults({
   onRegenerateTurn,
   onRetryImage,
   onImageFeedback,
-  onTimeoutRetryContinue,
   onDismissErrors,
   formatConversationTime,
 }: ImageResultsProps) {
@@ -264,9 +272,9 @@ export function ImageResults({
   const [currentTime, setCurrentTime] = useState(() => Date.now());
   const [pendingDownload, setPendingDownload] = useState<PendingDownload>(null);
   const [downloadChoice, setDownloadChoice] = useState<DownloadChoice>(watermarkUnlocked ? "original" : "watermark");
-  const [downloadLocation, setDownloadLocation] = useState<DownloadLocation>("default");
   const [isDownloading, setIsDownloading] = useState(false);
-  
+  const supportsChosenSaveLocation = typeof window !== "undefined" && Boolean(getSaveFilePicker());
+
   // 仅在存在 loading 图片时启动定时器，避免空闲时无谓重渲染
   const hasLoadingImages = selectedConversation?.turns.some(
     (turn) => !turn.resultsDeleted && turn.images.some((image) => image.status === "loading"),
@@ -287,10 +295,13 @@ export function ImageResults({
   const openDownloadDialog = (image: StoredImage, index: number) => {
     setPendingDownload({ image, index });
     setDownloadChoice(watermarkUnlocked ? "original" : "watermark");
-    setDownloadLocation("default");
   };
 
-  const handleConfirmDownload = async () => {
+  const closeDownloadDialog = () => {
+    setPendingDownload(null);
+  };
+
+  const handleDownload = async (location: DownloadLocation) => {
     if (!pendingDownload) {
       return;
     }
@@ -301,6 +312,20 @@ export function ImageResults({
       return;
     }
 
+    let saveHandle: FileSavePicker | null = null;
+    if (location === "choose") {
+      try {
+        saveHandle = await pickSaveLocation(buildDownloadFilename(pendingDownload.index, downloadChoice));
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          return;
+        }
+        const message = getSavePickerErrorMessage(err, "当前浏览器不支持另存为，请使用默认下载。");
+        toast.warning(message);
+        return;
+      }
+    }
+
     setIsDownloading(true);
     try {
       const prepared = await prepareDownloadBlob(
@@ -308,22 +333,24 @@ export function ImageResults({
         pendingDownload.index,
         downloadChoice,
         watermarkLabel,
-        currentUserId,
       );
       if (!prepared) {
         return;
       }
-      await savePreparedDownload(prepared.blob, prepared.filename, downloadLocation);
-      showDownloadStartedToast(prepared.filename, downloadLocation);
-      setPendingDownload(null);
+      if (saveHandle) {
+        await writeBlobToChosenLocation(saveHandle, prepared.blob);
+      } else {
+        triggerBlobDownload(prepared.blob, prepared.filename);
+      }
+      showDownloadStartedToast(prepared.filename, location);
+      closeDownloadDialog();
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
         return;
       }
       const message = err instanceof Error ? err.message : "下载失败";
-      if (downloadLocation === "choose" && message.includes("不支持选择保存位置")) {
+      if (location === "choose" && message.includes("不支持选择保存位置")) {
         toast.warning(message);
-        setDownloadLocation("default");
       } else {
         toast.error(message);
       }
@@ -359,31 +386,38 @@ export function ImageResults({
 
   return (
     <div className="mx-auto flex w-full max-w-[920px] flex-col gap-6 sm:gap-9">
-      <Dialog open={Boolean(pendingDownload)} onOpenChange={(open) => (!open ? setPendingDownload(null) : null)}>
-        <DialogContent className="rounded-2xl border-white/80 bg-white p-5 dark:border-zinc-800 dark:bg-[#171717] sm:p-6">
+      <Dialog open={Boolean(pendingDownload)} onOpenChange={(open) => (!open ? closeDownloadDialog() : null)}>
+        <DialogContent className="overflow-hidden rounded-[28px] border-zinc-200 bg-zinc-50 p-0 text-left shadow-xl dark:border-zinc-800 dark:bg-[#171717] sm:max-w-[390px]">
           <DialogHeader>
-            <DialogTitle>下载图片</DialogTitle>
-            <DialogDescription>选择下载版本和保存位置。</DialogDescription>
+            <div className="px-5 pt-5 pb-2">
+              <DialogTitle className="text-[18px] font-bold tracking-tight text-zinc-950 dark:text-zinc-50">下载图片</DialogTitle>
+              <DialogDescription className="mt-1 max-w-full truncate text-xs text-zinc-500">
+                {buildDownloadFilename(pendingDownload?.index ?? 0, downloadChoice)}
+              </DialogDescription>
+            </div>
           </DialogHeader>
 
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <div className="px-5 py-3">
+            <div className="space-y-1.5">
+              <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">版本</div>
               <button
                 type="button"
-                onClick={() => setDownloadChoice("original")}
+                onClick={() => {
+                  setDownloadChoice("original");
+                }}
                 disabled={!watermarkUnlocked}
                 className={cn(
-                  "flex min-h-20 items-start gap-3 rounded-xl border px-4 py-3 text-left transition",
+                  "flex min-h-12 w-full items-center gap-2.5 rounded-2xl border px-3 py-2.5 text-left transition",
                   downloadChoice === "original"
-                    ? "border-zinc-300 bg-zinc-100 text-zinc-950 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-50"
-                    : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800",
+                    ? "border-zinc-900 bg-zinc-950 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-950"
+                    : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-700 dark:hover:bg-zinc-800",
                   !watermarkUnlocked && "cursor-not-allowed opacity-55",
                 )}
               >
-                <Download className="mt-0.5 size-4 shrink-0" />
+                <Download className="size-4 shrink-0" />
                 <span className="min-w-0">
                   <span className="block text-sm font-semibold">原图下载</span>
-                  <span className={cn("mt-1 block text-xs leading-5", downloadChoice === "original" ? "text-zinc-600 dark:text-zinc-400" : "text-zinc-500")}>
+                  <span className={cn("mt-0.5 block text-xs", downloadChoice === "original" ? "text-zinc-300 dark:text-zinc-600" : "text-zinc-500")}>
                     {watermarkUnlocked ? "下载无水印版本" : "登录后可用"}
                   </span>
                 </span>
@@ -392,73 +426,58 @@ export function ImageResults({
 
               <button
                 type="button"
-                onClick={() => setDownloadChoice("watermark")}
+                onClick={() => {
+                  setDownloadChoice("watermark");
+                }}
                 className={cn(
-                  "flex min-h-20 items-start gap-3 rounded-xl border px-4 py-3 text-left transition",
+                  "flex min-h-12 w-full items-center gap-2.5 rounded-2xl border px-3 py-2.5 text-left transition",
                   downloadChoice === "watermark"
-                    ? "border-zinc-300 bg-zinc-100 text-zinc-950 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-50"
-                    : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800",
+                    ? "border-zinc-900 bg-zinc-950 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-950"
+                    : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-700 dark:hover:bg-zinc-800",
                 )}
               >
-                <Stamp className="mt-0.5 size-4 shrink-0" />
+                <Stamp className="size-4 shrink-0" />
                 <span className="min-w-0">
                   <span className="block text-sm font-semibold">带水印下载</span>
-                  <span className={cn("mt-1 block text-xs leading-5", downloadChoice === "watermark" ? "text-zinc-600 dark:text-zinc-400" : "text-zinc-500")}>
-                    使用水印标签和用户 ID
+                  <span className={cn("mt-0.5 block text-xs", downloadChoice === "watermark" ? "text-zinc-300 dark:text-zinc-600" : "text-zinc-500")}>
+                    使用水印标签
                   </span>
                 </span>
                 {downloadChoice === "watermark" ? <Check className="ml-auto size-4 shrink-0" /> : null}
               </button>
             </div>
 
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={() => setDownloadLocation("default")}
-                className={cn(
-                  "flex h-12 items-center gap-2 rounded-xl border px-4 text-sm font-medium transition",
-                  downloadLocation === "default"
-                    ? "border-zinc-300 bg-zinc-100 text-zinc-950 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-50"
-                    : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800",
-                )}
-              >
-                <Download className="size-4" />
-                默认下载目录
-              </button>
-              <button
-                type="button"
-                onClick={() => setDownloadLocation("choose")}
-                className={cn(
-                  "flex h-12 items-center gap-2 rounded-xl border px-4 text-sm font-medium transition",
-                  downloadLocation === "choose"
-                    ? "border-zinc-300 bg-zinc-100 text-zinc-950 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-50"
-                    : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800",
-                )}
-              >
-                <FolderOpen className="size-4" />
-                选择保存位置
-              </button>
-            </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="flex-row flex-wrap justify-end gap-2 px-5 pt-1 pb-5 sm:flex-row sm:justify-end">
             <Button
               type="button"
               variant="secondary"
-              className="h-10 rounded-xl bg-zinc-100 px-5 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
-              onClick={() => setPendingDownload(null)}
+              className="h-9 rounded-full bg-white px-4 text-zinc-700 hover:bg-zinc-100 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+              onClick={closeDownloadDialog}
               disabled={isDownloading}
             >
               取消
             </Button>
             <Button
               type="button"
-              className="h-10 rounded-xl bg-zinc-900 px-5 text-white shadow-sm hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200"
-              onClick={() => void handleConfirmDownload()}
+              variant="secondary"
+              className="h-9 rounded-full bg-white px-4 text-zinc-700 hover:bg-zinc-100 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+              onClick={() => void handleDownload("choose")}
+              disabled={isDownloading}
+              title={supportsChosenSaveLocation ? undefined : "当前浏览器不支持另存为"}
+            >
+              {isDownloading ? <LoaderCircle className="size-4 animate-spin" /> : <FolderOpen className="size-4" />}
+              另存为
+            </Button>
+            <Button
+              type="button"
+              className="h-9 rounded-full bg-zinc-900 px-4 text-white shadow-sm hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200"
+              onClick={() => void handleDownload("default")}
               disabled={isDownloading}
             >
               {isDownloading ? <LoaderCircle className="size-4 animate-spin" /> : <Download className="size-4" />}
-              下载
+              {downloadChoice === "watermark" ? "下载带水印图" : "下载原图"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -472,7 +491,7 @@ export function ImageResults({
         const successfulTurnImages = turn.images.flatMap((image) => {
           const src = image.status === "success" ? getStoredImageSrc(image) : "";
           const resolvedSrc = resolvedImageSrcById[image.id] || src;
-          const watermarkText = !watermarkUnlocked ? buildUserWatermarkText(watermarkLabel, currentUserId) : undefined;
+          const watermarkText = !watermarkUnlocked ? buildUserWatermarkText(watermarkLabel) : undefined;
           return src
             ? [
                 {
@@ -490,11 +509,11 @@ export function ImageResults({
           <div key={turn.id} className="flex flex-col gap-4 sm:gap-5">
             {!turn.promptDeleted ? (
               <div className="group/prompt flex justify-end">
-                <div className="max-w-[92%] sm:max-w-[78%]">
-                  <div className="rounded-[22px] border border-zinc-200 bg-zinc-100 px-4 py-3 text-[14px] leading-6 text-zinc-900 shadow-sm dark:border-zinc-800 dark:bg-[#242426] dark:text-zinc-100 sm:px-5 sm:py-3.5 sm:text-[15px] sm:leading-7">
-                    <div className="text-right">{turn.prompt}</div>
+                <div className="flex max-w-[92%] flex-col items-end sm:max-w-[78%]">
+                  <div className="w-fit max-w-full rounded-[28px] bg-zinc-100 px-4 py-2.5 text-left text-[15px] font-semibold leading-6 text-zinc-950 shadow-sm dark:bg-[#242426] dark:text-zinc-100 sm:px-5 sm:py-3 sm:text-[16px]">
+                    <div className="whitespace-pre-wrap break-words">{turn.prompt}</div>
                   </div>
-                  <div className="mt-2 flex flex-wrap items-center justify-end gap-2 text-[12px] text-zinc-400 opacity-100 transition sm:opacity-0 sm:group-hover/prompt:opacity-100 sm:group-focus-within/prompt:opacity-100">
+                  <div className="mt-1.5 flex flex-wrap items-center justify-end gap-2 text-[12px] text-zinc-400 opacity-100 transition sm:opacity-0 sm:group-hover/prompt:opacity-100 sm:group-focus-within/prompt:opacity-100">
                     <span>{formatConversationTime(turn.createdAt)}</span>
                     <span className="hidden sm:inline">·</span>
                     <span>{turn.mode === "edit" ? "编辑图" : "文生图"}</span>
@@ -613,8 +632,8 @@ export function ImageResults({
                                 onOpen={() => onOpenLightbox(successfulTurnImages, currentIndex)}
                               />
                               {!watermarkUnlocked ? (
-                                <div className="pointer-events-none absolute right-4 bottom-4 rounded-xl border border-white/25 bg-zinc-950/55 px-3 py-1.5 text-xs font-semibold text-white shadow-lg backdrop-blur-sm sm:right-6 sm:bottom-6 sm:px-4 sm:py-2 sm:text-sm">
-                                  {buildUserWatermarkText(watermarkLabel, currentUserId)}
+                                <div className="pointer-events-none absolute right-4 bottom-4 text-xs font-semibold text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.75)] [-webkit-text-stroke:0.4px_rgba(0,0,0,0.45)] sm:right-6 sm:bottom-6 sm:text-sm">
+                                  {buildUserWatermarkText(watermarkLabel)}
                                 </div>
                               ) : null}
                             </div>
@@ -727,7 +746,6 @@ export function ImageResults({
                       }
 
                       if (image.status === "error") {
-                        const isTimeoutError = image.error?.includes("超时") && image.taskId;
                         return (
                           <div key={image.id} className="break-inside-avoid">
                             <div
@@ -745,15 +763,6 @@ export function ImageResults({
                               <p className="font-medium">图片 {index + 1}/{turn.images.length}</p>
                               <span className="line-clamp-2 sm:line-clamp-none">{image.error || "生成失败"}</span>
                               <div className="flex items-center gap-2">
-                                {isTimeoutError && (
-                                  <button
-                                    type="button"
-                                    onClick={() => void onTimeoutRetryContinue(image.taskId!)}
-                                    className="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-medium text-emerald-600 shadow-sm transition hover:bg-emerald-200 sm:px-3 sm:text-xs"
-                                  >
-                                    继续等待
-                                  </button>
-                                )}
                                 <button
                                   type="button"
                                   onClick={() => void onRetryImage(selectedConversation.id, turn.id, image.id)}

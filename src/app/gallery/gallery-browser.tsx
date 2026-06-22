@@ -261,7 +261,7 @@ export function GalleryBrowser({ embedded = false, onUsePrompt }: GalleryBrowser
           <div className="max-w-3xl space-y-2">
             <div className="flex items-center gap-2 text-xs font-medium text-stone-500 dark:text-stone-400">
               <ImageIcon className="size-4" />
-              HappyImage 灵感图库
+              Happy Token 灵感图库
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-stone-950 dark:text-stone-50 sm:text-3xl">
               从好看的图开始生成

@@ -1,4 +1,4 @@
-export const GALLERY_PROMPT_STORAGE_KEY = "happyimage:seed-gallery:selected-prompt";
+export const GALLERY_PROMPT_STORAGE_KEY = "happytoken:seed-gallery:selected-prompt";
 
 export type GalleryPromptSourceKind = "official" | "user" | "seed";
 

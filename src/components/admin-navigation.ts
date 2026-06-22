@@ -1,6 +1,6 @@
-import { Bug, FileText, ImageIcon, KeyRound, Settings, Users, type LucideIcon } from "lucide-react";
+import { FileText, ImageIcon, KeyRound, Settings, type LucideIcon } from "lucide-react";
 
-import { externalModelAdminEnabled } from "@/lib/model-admin";
+import type { EffectiveLanguage } from "@/lib/language";
 
 export type AdminNavigationItem = {
   href: string;
@@ -8,15 +8,17 @@ export type AdminNavigationItem = {
   icon: LucideIcon;
 };
 
-const allAdminNavigationItems: AdminNavigationItem[] = [
-  { href: "/accounts", label: "号池管理", icon: Users },
-  { href: "/users", label: "用户管理", icon: KeyRound },
-  { href: "/image-manager", label: "图片管理", icon: ImageIcon },
-  { href: "/logs", label: "日志管理", icon: FileText },
-  { href: "/debug", label: "调试", icon: Bug },
-  { href: "/settings", label: "系统设置", icon: Settings },
+const adminNavigationItems = [
+  { href: "/users", label: { "zh-CN": "用户管理", "en-US": "Users" }, icon: KeyRound },
+  { href: "/image-manager", label: { "zh-CN": "图片管理", "en-US": "Images" }, icon: ImageIcon },
+  { href: "/logs", label: { "zh-CN": "日志管理", "en-US": "Logs" }, icon: FileText },
+  { href: "/settings", label: { "zh-CN": "系统设置", "en-US": "Settings" }, icon: Settings },
 ];
 
-export const adminNavigationItems: AdminNavigationItem[] = externalModelAdminEnabled
-  ? allAdminNavigationItems.filter((item) => item.href !== "/accounts" && item.href !== "/debug")
-  : allAdminNavigationItems;
+export function getAdminNavigationItems(language: EffectiveLanguage): AdminNavigationItem[] {
+  return adminNavigationItems.map((item) => ({
+    href: item.href,
+    label: item.label[language],
+    icon: item.icon,
+  }));
+}

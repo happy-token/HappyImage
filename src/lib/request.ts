@@ -28,6 +28,36 @@ function errorMessageFromValue(value: unknown): string {
     return errorMessageFromValue(item.error);
 }
 
+export function humanizeRequestError(message: unknown): string {
+    const text = String(message || "").trim();
+    const lowered = text.toLowerCase();
+    if (!text) {
+        return "请求失败，请稍后重试。";
+    }
+    if (lowered.includes("model gateway is not configured") || lowered.includes("模型供应商 base url 和 api key")) {
+        return "请先在用户设置中配置模型供应商 Base URL 和 API Key。";
+    }
+    if (/(insufficient_quota|quota|credit|credits|balance|billing|payment required|recharge|余额|额度|欠费)/i.test(text)) {
+        return "模型供应商额度不足，请先充值或更换供应商后再试。";
+    }
+    if (/(401|unauthorized|invalid api key|incorrect api key|invalid token|api key is invalid|apikey)/i.test(text)) {
+        return "模型供应商 API Key 无效或已过期，请在用户设置里更新 API Key。";
+    }
+    if (/(model not found|invalid model|does not exist|unsupported model)/i.test(text)) {
+        return "当前模型不可用，请在生图页面切换可用模型后再试。";
+    }
+    if (/(timeout|timed out|read timed out)/i.test(text)) {
+        return "模型供应商响应超时，请稍后重试。";
+    }
+    if (/(curl:|tls connect error|openssl|connection closed abruptly|connection reset|empty reply from server|server disconnected|connection aborted)/i.test(text)) {
+        return "连接模型供应商失败，请稍后重试；如果持续出现，请检查 Base URL 或网络代理。";
+    }
+    if (/(no image|no data|returned empty|没有返回图片)/i.test(text)) {
+        return "模型供应商没有返回图片结果，请换个提示词或稍后重试。";
+    }
+    return text;
+}
+
 export const request = axios.create({
     baseURL: webConfig.apiUrl.replace(/\/$/, ""),
     withCredentials: true,
@@ -70,7 +100,7 @@ request.interceptors.response.use(
             payload?.message ||
             error.message ||
             `请求失败 (${status || 500})`;
-        return Promise.reject(new Error(message));
+        return Promise.reject(new Error(humanizeRequestError(message)));
     },
 );
 

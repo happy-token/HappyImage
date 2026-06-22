@@ -2,24 +2,26 @@
 
 import { useRouter } from "next/navigation";
 import { type ReactNode, useMemo, useState } from "react";
-import { Eye, EyeOff, KeyRound, LoaderCircle, LockKeyhole, Mail, UserPlus } from "lucide-react";
+import { Eye, EyeOff, LoaderCircle, LockKeyhole, Mail, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
 import { HeaderActions } from "@/components/header-actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { loginWithAccessKey, loginWithPassword, registerWithPassword, startOIDCLogin, type LoginResponse } from "@/lib/api";
+import { loginWithPassword, registerWithPassword, startOIDCLogin, type LoginResponse } from "@/lib/api";
 import { useRedirectIfAuthenticated } from "@/lib/use-auth-guard";
 import { cn } from "@/lib/utils";
 import {
   getDefaultRouteForRole,
   normalizePostAuthRedirectPath,
+  normalizeModelProviders,
+  normalizeUserPreferences,
   setStoredAuthSession,
   type StoredAuthSession,
 } from "@/store/auth";
 
-type LoginMode = "password" | "register" | "access_key";
+type LoginMode = "password" | "register";
 
 function getNextPathFromLocation() {
   if (typeof window === "undefined") {
@@ -34,9 +36,14 @@ function buildStoredSession(response: LoginResponse, fallbackKey: string): Store
     role: response.user?.role || response.role,
     subjectId: response.user?.id || response.subject_id,
     name: response.user?.name || response.name,
-    imageQuota: response.user?.image_quota ?? response.image_quota ?? null,
     watermarkLabel: response.user?.watermark_label ?? response.watermark_label ?? "",
     watermarkUnlocked: response.user?.watermark_unlocked ?? response.watermark_unlocked ?? response.role === "admin",
+    modelProvider: response.user?.model_provider ?? response.model_provider ?? "",
+    modelBaseUrl: response.user?.model_base_url ?? response.model_base_url ?? "",
+    modelApiKeyConfigured: response.user?.model_api_key_configured ?? response.model_api_key_configured ?? false,
+    modelGatewayEnabled: response.user?.model_gateway_enabled ?? response.model_gateway_enabled ?? false,
+    modelProviders: normalizeModelProviders(response.user?.model_providers ?? response.model_providers),
+    preferences: normalizeUserPreferences(response.user?.preferences ?? response.preferences),
   };
 }
 
@@ -56,7 +63,6 @@ export default function LoginPage() {
   const [registerName, setRegisterName] = useState("");
   const [registerPassword, setRegisterPassword] = useState("");
   const [registerConfirmPassword, setRegisterConfirmPassword] = useState("");
-  const [authKey, setAuthKey] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showRegisterPassword, setShowRegisterPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -64,18 +70,16 @@ export default function LoginPage() {
 
   const title = useMemo(() => {
     if (mode === "register") {
-      return "注册 HappyImage";
+      return "注册 Happy Token";
     }
-    return mode === "password" ? "登录 HappyImage" : "使用访问密钥登录";
+    return "登录 Happy Token";
   }, [mode]);
 
   const description = useMemo(() => {
     if (mode === "register") {
       return "创建普通用户账号，注册完成后可直接进入创作工作区。";
     }
-    return mode === "password"
-      ? "使用 HappyImage 账户进入 Studio，管理创作、图库和历史会话。"
-      : "使用服务访问密钥进入工作区，兼容当前部署方式。";
+    return "使用 Happy Token 账户进入 Studio，管理创作、图库和历史会话。";
   }, [mode]);
 
   const finishLogin = async (data: LoginResponse, fallbackKey: string) => {
@@ -99,24 +103,6 @@ export default function LoginPage() {
         password: normalizedPassword,
       });
       await finishLogin(data, data.access_token || normalizedPassword);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "登录失败");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleAccessKeyLogin = async () => {
-    const normalizedAuthKey = authKey.trim();
-    if (!normalizedAuthKey) {
-      toast.error("请输入访问密钥");
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      const data = await loginWithAccessKey(normalizedAuthKey);
-      await finishLogin(data, data.access_token || normalizedAuthKey);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "登录失败");
     } finally {
@@ -172,9 +158,7 @@ export default function LoginPage() {
     }
     if (mode === "register") {
       void handleRegister();
-      return;
     }
-    void handleAccessKeyLogin();
   };
 
   if (isCheckingAuth) {
@@ -200,11 +184,10 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 rounded-lg bg-stone-100 p-1">
+          <div className="grid grid-cols-2 gap-2 rounded-lg bg-stone-100 p-1">
             {[
               { value: "password" as const, label: "账号密码" },
               { value: "register" as const, label: "注册账号" },
-              { value: "access_key" as const, label: "访问密钥" },
             ].map((item) => (
               <button
                 key={item.value}
@@ -357,28 +340,7 @@ export default function LoginPage() {
                   </div>
                 </div>
               </>
-            ) : (
-              <div className="space-y-2">
-                <label htmlFor="auth-key" className="block text-sm font-medium text-stone-700">
-                  访问密钥
-                </label>
-                <div className="relative">
-                  <LoginFieldIcon>
-                    <KeyRound className="size-4" />
-                  </LoginFieldIcon>
-                  <Input
-                    id="auth-key"
-                    type="password"
-                    value={authKey}
-                    onChange={(event) => setAuthKey(event.target.value)}
-                    autoComplete="current-password"
-                    placeholder="请输入访问密钥"
-                    className="h-12 rounded-lg border-stone-200 bg-white pl-10"
-                    disabled={isSubmitting}
-                  />
-                </div>
-              </div>
-            )}
+            ) : null}
 
             <Button
               type="submit"

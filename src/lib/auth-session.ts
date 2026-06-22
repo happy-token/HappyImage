@@ -1,7 +1,14 @@
 "use client";
 
-import { fetchSession } from "@/lib/api";
-import { clearStoredAuthSession, getStoredAuthSession, setStoredAuthSession, type StoredAuthSession } from "@/store/auth";
+import { fetchSession, logoutSession } from "@/lib/api";
+import {
+  clearStoredAuthSession,
+  getStoredAuthSession,
+  normalizeModelProviders,
+  normalizeUserPreferences,
+  setStoredAuthSession,
+  type StoredAuthSession,
+} from "@/store/auth";
 
 export async function getValidatedAuthSession(): Promise<StoredAuthSession | null> {
   const storedSession = await getStoredAuthSession();
@@ -14,31 +21,20 @@ export async function getValidatedAuthSession(): Promise<StoredAuthSession | nul
         role: data.role,
         subjectId: data.subject_id,
         name: data.name,
-        imageQuota: data.user?.image_quota ?? data.image_quota ?? null,
         watermarkLabel: data.user?.watermark_label ?? data.watermark_label ?? "",
         watermarkUnlocked: data.user?.watermark_unlocked ?? data.watermark_unlocked ?? data.role === "admin",
+        modelProvider: data.user?.model_provider ?? data.model_provider ?? "",
+        modelBaseUrl: data.user?.model_base_url ?? data.model_base_url ?? "",
+        modelApiKeyConfigured: data.user?.model_api_key_configured ?? data.model_api_key_configured ?? false,
+        modelGatewayEnabled: data.user?.model_gateway_enabled ?? data.model_gateway_enabled ?? false,
+        modelProviders: normalizeModelProviders(data.user?.model_providers ?? data.model_providers),
+        preferences: normalizeUserPreferences(data.user?.preferences ?? data.preferences),
       };
       await setStoredAuthSession(nextSession);
       return nextSession;
     } catch {
-      try {
-        const { loginWithAccessKey } = await import("@/lib/api");
-        const data = await loginWithAccessKey(storedSession.key);
-        const nextSession: StoredAuthSession = {
-          key: data.access_token || storedSession.key,
-          role: data.role,
-          subjectId: data.subject_id,
-          name: data.name,
-          imageQuota: data.user?.image_quota ?? data.image_quota ?? null,
-          watermarkLabel: data.user?.watermark_label ?? data.watermark_label ?? "",
-          watermarkUnlocked: data.user?.watermark_unlocked ?? data.watermark_unlocked ?? data.role === "admin",
-        };
-        await setStoredAuthSession(nextSession);
-        return nextSession;
-      } catch {
-        await clearStoredAuthSession();
-        return null;
-      }
+      await clearStoredAuthSession();
+      return null;
     }
   }
 
@@ -52,13 +48,27 @@ export async function getValidatedAuthSession(): Promise<StoredAuthSession | nul
       role: data.user.role,
       subjectId: data.user.id,
       name: data.user.name,
-      imageQuota: data.user.image_quota ?? data.image_quota ?? null,
       watermarkLabel: data.user.watermark_label ?? data.watermark_label ?? "",
       watermarkUnlocked: data.user.watermark_unlocked ?? data.watermark_unlocked ?? data.user.role === "admin",
+      modelProvider: data.user.model_provider ?? data.model_provider ?? "",
+      modelBaseUrl: data.user.model_base_url ?? data.model_base_url ?? "",
+      modelApiKeyConfigured: data.user.model_api_key_configured ?? data.model_api_key_configured ?? false,
+      modelGatewayEnabled: data.user.model_gateway_enabled ?? data.model_gateway_enabled ?? false,
+      modelProviders: normalizeModelProviders(data.user.model_providers ?? data.model_providers),
+      preferences: normalizeUserPreferences(data.user.preferences ?? data.preferences),
     };
     await setStoredAuthSession(nextSession);
     return nextSession;
   } catch {
     return null;
   }
+}
+
+export async function logoutCurrentSession(): Promise<void> {
+  try {
+    await logoutSession();
+  } catch {
+    // Local logout should still complete if the API is temporarily unreachable.
+  }
+  await clearStoredAuthSession();
 }

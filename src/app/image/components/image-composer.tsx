@@ -1,5 +1,5 @@
 "use client";
-import { ArrowUp, ChevronDown, ImagePlus, Info, LoaderCircle, RectangleHorizontal, RectangleVertical, Square, TicketPlus, X } from "lucide-react";
+import { ArrowUp, ChevronDown, ImagePlus, Info, LoaderCircle, RectangleHorizontal, RectangleVertical, Square, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type RefObject } from "react";
 
 import { ImageLightbox } from "@/components/image-lightbox";
@@ -20,7 +20,6 @@ type ImageComposerProps = {
   imageQuality: string;
   imageModel: ImageModel;
   imageModels: ImageModel[];
-  availableQuota: string;
   activeTaskCount: number;
   referenceImages: Array<{ name: string; dataUrl: string }>;
   textareaRef: RefObject<HTMLTextAreaElement | null>;
@@ -34,7 +33,6 @@ type ImageComposerProps = {
   onImageQualityChange: (value: string) => void;
   onImageModelChange: (value: ImageModel) => void;
   onSubmit: () => void | Promise<void>;
-  onOpenRecharge: () => void;
   onPickReferenceImage: () => void;
   onReferenceImageChange: (files: File[]) => void | Promise<void>;
   onRemoveReferenceImage: (index: number) => void;
@@ -91,7 +89,6 @@ export function ImageComposer({
   imageQuality,
   imageModel,
   imageModels,
-  availableQuota,
   activeTaskCount,
   referenceImages,
   textareaRef,
@@ -105,7 +102,6 @@ export function ImageComposer({
   onImageQualityChange,
   onImageModelChange,
   onSubmit,
-  onOpenRecharge,
   onPickReferenceImage,
   onReferenceImageChange,
   onRemoveReferenceImage,
@@ -318,18 +314,6 @@ export function ImageComposer({
                   >
                     <ImagePlus className="size-3.5 sm:size-4" />
                     <span className="hidden sm:inline">{referenceImages.length > 0 ? "添加参考图" : "上传"}</span>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-9 shrink-0 rounded-full border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-700 shadow-none hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 sm:h-9 sm:px-3 sm:text-sm"
-                    onClick={onOpenRecharge}
-                    title="查看额度与充值"
-                    aria-label="查看额度与充值"
-                  >
-                    <TicketPlus className="size-3.5 sm:size-4" />
-                    <span className="hidden sm:inline">剩余额度 </span>
-                    {availableQuota}
                   </Button>
                   {activeTaskCount > 0 && (
                     <div className="flex shrink-0 items-center gap-1 rounded-full bg-zinc-100 px-2 py-1 text-[10px] font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 sm:gap-1.5 sm:px-3 sm:py-1.5 sm:text-xs">

@@ -65,7 +65,7 @@ export type ImageConversationStats = {
 };
 
 const imageConversationStorage = localforage.createInstance({
-  name: "happyimage",
+  name: "happytoken",
   storeName: "image_conversations",
 });
 

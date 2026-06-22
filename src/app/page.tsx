@@ -1544,14 +1544,14 @@ export default function HomePage() {
           className="flex shrink-0 items-center gap-2 text-base font-bold tracking-tight text-stone-950 transition hover:text-stone-700 dark:text-stone-50 dark:hover:text-white"
         >
           <Image
-            src="/happyimage-logo.svg"
-            alt="HappyImage"
+            src="/happy-token-logo.svg"
+            alt="Happy Token"
             width={30}
             height={30}
             priority
             className="size-7 rounded-md shadow-[0_8px_20px_-14px_rgba(161,98,7,0.8)] sm:size-[30px]"
           />
-          <span>HappyImage</span>
+          <span>Happy Token</span>
         </Link>
         <div className="flex items-center gap-2">
           <HeaderActions />
@@ -1581,7 +1581,7 @@ export default function HomePage() {
           </div>
           <div className="max-w-4xl space-y-4 text-white">
             <h1 className="text-5xl font-bold tracking-normal sm:text-6xl lg:text-7xl">
-              HappyImage Studio
+              Happy Token Studio
             </h1>
             <p className="max-w-2xl text-base leading-8 text-white/86 sm:text-lg">
               从好看的图开始生成。先浏览图片和提示词，选中灵感后继续创作。

@@ -5,8 +5,15 @@ import { AppShell } from "@/components/app-shell";
 import { ThemeScript } from "@/components/theme-script";
 
 export const metadata: Metadata = {
-  title: "HappyImage Studio",
-  description: "HappyImage image creation workspace",
+  title: "Happy Token Studio",
+  description: "Happy Token image creation workspace",
+  icons: {
+    icon: [
+      { url: "/icon.png", type: "image/png", sizes: "1024x1024" },
+      { url: "/happy-token-logo.svg", type: "image/svg+xml" },
+    ],
+    apple: [{ url: "/apple-icon.png", type: "image/png", sizes: "180x180" }],
+  },
 };
 
 export const viewport: Viewport = {

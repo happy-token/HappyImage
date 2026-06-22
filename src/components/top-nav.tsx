@@ -7,11 +7,19 @@ import { usePathname, useRouter } from "next/navigation";
 
 import { AccountMenu } from "@/components/account-menu";
 
-import { getValidatedAuthSession } from "@/lib/auth-session";
+import { getValidatedAuthSession, logoutCurrentSession } from "@/lib/auth-session";
 import { cn } from "@/lib/utils";
-import { clearStoredAuthSession, type StoredAuthSession } from "@/store/auth";
+import { type StoredAuthSession } from "@/store/auth";
 
-export function TopNav({ session: providedSession }: { session?: StoredAuthSession | null }) {
+export function TopNav({
+  session: providedSession,
+  hideAccountMenu = false,
+  onSessionUpdate,
+}: {
+  session?: StoredAuthSession | null;
+  hideAccountMenu?: boolean;
+  onSessionUpdate?: (session: StoredAuthSession) => void;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const [session, setSession] = useState<StoredAuthSession | null | undefined>(undefined);
@@ -46,11 +54,17 @@ export function TopNav({ session: providedSession }: { session?: StoredAuthSessi
   }, [pathname, providedSession]);
 
   const handleLogout = async () => {
-    await clearStoredAuthSession();
+    await logoutCurrentSession();
     router.replace("/login");
   };
 
   const currentSession = providedSession !== undefined ? providedSession : session;
+  const handleSessionUpdate = (nextSession: StoredAuthSession) => {
+    if (providedSession === undefined) {
+      setSession(nextSession);
+    }
+    onSessionUpdate?.(nextSession);
+  };
 
   if (pathname === "/" || pathname === "/login" || currentSession === undefined || !currentSession) {
     return null;
@@ -72,8 +86,8 @@ export function TopNav({ session: providedSession }: { session?: StoredAuthSessi
             className="flex shrink-0 items-center gap-2 py-1 text-[15px] font-bold tracking-tight text-stone-950 transition hover:text-stone-700 dark:text-stone-50 dark:hover:text-white"
           >
             <Image
-              src="/happyimage-logo.svg"
-              alt="HappyImage"
+              src="/happy-token-logo.svg"
+              alt="Happy Token"
               width={isImageWorkspace ? 24 : 28}
               height={isImageWorkspace ? 24 : 28}
               priority
@@ -82,13 +96,13 @@ export function TopNav({ session: providedSession }: { session?: StoredAuthSessi
                 isImageWorkspace ? "size-6" : "size-7",
               )}
             />
-            <span>HappyImage</span>
+            <span>Happy Token</span>
           </Link>
         </div>
         <div className="hidden min-w-0 flex-1 sm:block" />
-        {isImageWorkspace ? null : (
+        {isImageWorkspace || hideAccountMenu ? null : (
           <div className="flex items-center justify-end gap-2 sm:gap-3">
-            <AccountMenu session={currentSession} onLogout={handleLogout} />
+            <AccountMenu session={currentSession} onLogout={handleLogout} onSessionUpdate={handleSessionUpdate} />
           </div>
         )}
       </div>

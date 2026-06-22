@@ -6,12 +6,38 @@ import type { ReactNode } from "react";
 import { LoaderCircle, PanelLeftClose, PanelLeftOpen, Pencil, Trash2 } from "lucide-react";
 import Link from "next/link";
 
-import { adminNavigationItems } from "@/components/admin-navigation";
+import { getAdminNavigationItems } from "@/components/admin-navigation";
 import { ImageWorkspaceNav, type ImageWorkspaceMode } from "@/components/image-workspace-nav";
+import { useEffectiveLanguage } from "@/lib/language";
 import { cn } from "@/lib/utils";
 import { getImageConversationStats, type ImageConversation } from "@/store/image-conversations";
 
 export type { ImageWorkspaceMode };
+
+const sidebarCopy = {
+  "zh-CN": {
+    expand: "展开侧边栏",
+    collapse: "折叠侧边栏",
+    loadingHistory: "正在读取会话记录",
+    emptyHistory: "还没有图片记录，输入提示词后会在这里显示。",
+    turnUnit: "轮",
+    running: "处理中",
+    queued: "排队",
+    rename: "重命名会话",
+    delete: "删除会话",
+  },
+  "en-US": {
+    expand: "Expand sidebar",
+    collapse: "Collapse sidebar",
+    loadingHistory: "Loading chat history",
+    emptyHistory: "No image history yet. Enter a prompt and it will appear here.",
+    turnUnit: "turns",
+    running: "Running",
+    queued: "Queued",
+    rename: "Rename chat",
+    delete: "Delete chat",
+  },
+};
 
 type ImageSidebarProps = {
   conversations: ImageConversation[];
@@ -48,6 +74,9 @@ export function ImageSidebar({
   collapsed = false,
   onToggleCollapsed,
 }: ImageSidebarProps) {
+  const language = useEffectiveLanguage();
+  const copy = sidebarCopy[language];
+  const adminNavigationItems = getAdminNavigationItems(language);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const editInputRef = useRef<HTMLInputElement>(null);
@@ -87,8 +116,8 @@ export function ImageSidebar({
             <div className={cn("flex items-center gap-2 px-2 pt-1 pb-2", collapsed && "justify-center px-0")}>
               {collapsed ? null : (
                 <Image
-                  src="/happyimage-logo.svg"
-                  alt="HappyImage"
+                  src="/happy-token-logo.svg"
+                  alt="Happy Token"
                   width={28}
                   height={28}
                   priority
@@ -97,7 +126,7 @@ export function ImageSidebar({
               )}
               {collapsed ? null : (
                 <span className="min-w-0 flex-1 truncate text-[15px] font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-                  HappyImage
+                  Happy Token
                 </span>
               )}
               {onToggleCollapsed ? (
@@ -105,8 +134,8 @@ export function ImageSidebar({
                   type="button"
                   onClick={onToggleCollapsed}
                   className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-white/70 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-50"
-                  aria-label={collapsed ? "展开侧边栏" : "折叠侧边栏"}
-                  title={collapsed ? "展开侧边栏" : "折叠侧边栏"}
+                  aria-label={collapsed ? copy.expand : copy.collapse}
+                  title={collapsed ? copy.expand : copy.collapse}
                 >
                   {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
                 </button>
@@ -149,10 +178,10 @@ export function ImageSidebar({
           {collapsed && !hideActionButtons ? null : isLoadingHistory ? (
             <div className="flex items-center gap-2 px-2 py-3 text-sm text-zinc-500 dark:text-zinc-400">
               <LoaderCircle className="size-4 animate-spin" />
-              正在读取会话记录
+              {copy.loadingHistory}
             </div>
           ) : conversations.length === 0 ? (
-            <div className="px-2 py-3 text-sm leading-6 text-zinc-500 dark:text-zinc-400">还没有图片记录，输入提示词后会在这里显示。</div>
+            <div className="px-2 py-3 text-sm leading-6 text-zinc-500 dark:text-zinc-400">{copy.emptyHistory}</div>
           ) : (
             conversations.map((conversation) => {
               const active = conversation.id === selectedConversationId;
@@ -192,15 +221,19 @@ export function ImageSidebar({
                       )}
                     </div>
                     <div className={cn("mt-1 text-xs", active ? "text-zinc-500 dark:text-zinc-400" : "text-zinc-400 dark:text-zinc-500")}>
-                      {conversation.turns.length} 轮 · {formatConversationTime(conversation.updatedAt)}
+                      {conversation.turns.length} {copy.turnUnit} · {formatConversationTime(conversation.updatedAt)}
                     </div>
                     {stats.running > 0 || stats.queued > 0 ? (
                       <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
                         {stats.running > 0 ? (
-                          <span className="rounded-full bg-blue-50 px-2 py-1 text-blue-600">处理中 {stats.running}</span>
+                          <span className="rounded-full bg-blue-50 px-2 py-1 text-blue-600">
+                            {copy.running} {stats.running}
+                          </span>
                         ) : null}
                         {stats.queued > 0 ? (
-                          <span className="rounded-full bg-zinc-100 px-2 py-1 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">排队 {stats.queued}</span>
+                          <span className="rounded-full bg-zinc-100 px-2 py-1 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                            {copy.queued} {stats.queued}
+                          </span>
                         ) : null}
                       </div>
                     ) : null}
@@ -210,7 +243,7 @@ export function ImageSidebar({
                       type="button"
                       onClick={(e) => startRename(conversation, e)}
                       className="inline-flex size-7 items-center justify-center rounded-md text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-white/10 dark:hover:text-zinc-100"
-                      aria-label="重命名会话"
+                      aria-label={copy.rename}
                     >
                       <Pencil className="size-3.5" />
                     </button>
@@ -218,7 +251,7 @@ export function ImageSidebar({
                       type="button"
                       onClick={() => void onDeleteConversation(conversation.id)}
                       className="inline-flex size-7 items-center justify-center rounded-md text-zinc-400 hover:bg-zinc-100 hover:text-rose-500 dark:hover:bg-white/10"
-                      aria-label="删除会话"
+                      aria-label={copy.delete}
                     >
                       <Trash2 className="size-4" />
                     </button>

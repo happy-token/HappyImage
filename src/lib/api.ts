@@ -2,9 +2,8 @@ import localforage from "localforage";
 
 import { httpRequest, request } from "@/lib/request";
 import { getStoredAuthKey } from "@/store/auth";
+import type { ImageConversation, ImageTurn } from "@/store/image-conversations";
 
-export type AccountType = string;
-export type AccountStatus = "正常" | "限流" | "异常" | "禁用";
 export type ImageModel = string;
 export type AuthRole = "admin" | "user";
 export type ImageStorageMode = "local" | "webdav" | "both";
@@ -19,37 +18,6 @@ export type ImageStorageSettings = {
   public_base_url: string;
 };
 
-export type Account = {
-  access_token: string;
-  type: AccountType;
-  source_type?: string | null;
-  status: AccountStatus;
-  quota: number;
-  image_quota_unknown?: boolean;
-  email?: string | null;
-  user_id?: string | null;
-  limits_progress?: Array<{
-    feature_name?: string;
-    remaining?: number;
-    reset_after?: string;
-  }>;
-  default_model_slug?: string | null;
-  restore_at?: string | null;
-  success: number;
-  fail: number;
-  last_used_at?: string | null;
-  proxy?: string | null;
-};
-
-export type AccountImportPayload = {
-  access_token: string;
-  accessToken?: string;
-  type?: string;
-  export_type?: string;
-  source_type?: string;
-  [key: string]: unknown;
-};
-
 export type Model = {
   id: string;
   object: string;
@@ -60,46 +28,9 @@ export type Model = {
   parent: string | null;
 };
 
-type AccountListResponse = {
-  items: Account[];
-};
-
 type ModelListResponse = {
   object: string;
   data: Model[];
-};
-
-type AccountMutationResponse = {
-  items: Account[];
-  added?: number;
-  skipped?: number;
-  removed?: number;
-  refreshed?: number;
-  relogined?: number;
-  errors?: Array<{ access_token: string; error: string }>;
-};
-
-export type AccountRefreshResponse = {
-  items: Account[];
-  refreshed: number;
-  relogined?: number;
-  errors: Array<{ access_token: string; error: string }>;
-};
-
-export type RefreshProgressResponse = {
-  total: number;
-  processed: number;
-  done: boolean;
-  error: string | null;
-  status_counts?: Record<string, number>;
-  total_quota?: number;
-  result?: AccountRefreshResponse | null;
-  results?: Array<{ token: string; status: string; error?: string | null }>;
-};
-
-type AccountUpdateResponse = {
-  item: Account;
-  items: Account[];
 };
 
 export type OIDCSettings = {
@@ -110,30 +41,9 @@ export type OIDCSettings = {
   client_secret_configured?: boolean;
   scopes: string;
   allowed_email_domains: string;
-  default_image_quota: number | string;
-};
-
-export type RechargeSettings = {
-  enabled: boolean;
-  provider: "contact" | "newapi" | string;
-  newapi_base_url: string;
-  newapi_console_topup_path: string;
-  webhook_secret?: string;
-  webhook_secret_configured?: boolean;
-  quota_per_unit: number | string;
-};
-
-export type RechargeSession = {
-  enabled: boolean;
-  provider: "contact" | "newapi" | string;
-  mode: "contact" | "redirect" | string;
-  quota?: number | null;
-  recharge_url?: string;
-  message?: string;
 };
 
 export type SettingsConfig = {
-  proxy: string;
   base_url?: string;
   frontend_base_url?: string;
   api_base_url?: string;
@@ -150,93 +60,16 @@ export type SettingsConfig = {
     model?: string;
     prompt?: string;
   };
-  refresh_account_interval_minute?: number | string;
   image_retention_days?: number | string;
   image_poll_timeout_secs?: number | string;
-  image_account_concurrency?: number | string;
-  default_user_image_quota?: number | string;
-  model_gateway_base_url?: string;
-  model_gateway_api_key?: string;
-  model_gateway_api_key_configured?: boolean;
   image_parallel_generation?: boolean;
   image_settle_enabled?: boolean;
   image_check_before_hit_enabled?: boolean;
   image_settle_secs?: number | string;
-  image_timeout_retry_secs?: number | string;
-  auto_remove_invalid_accounts?: boolean;
-  auto_remove_rate_limited_accounts?: boolean;
-  auto_relogin_after_refresh?: boolean;
   log_levels?: string[];
   oidc?: OIDCSettings;
-  recharge?: RechargeSettings;
   image_storage?: ImageStorageSettings;
-  backup?: BackupSettings;
-  backup_state?: BackupState;
   [key: string]: unknown;
-};
-
-export type BackupInclude = {
-  config: boolean;
-  cpa: boolean;
-  sub2api: boolean;
-  logs: boolean;
-  image_tasks: boolean;
-  accounts_snapshot: boolean;
-  auth_keys_snapshot: boolean;
-  images: boolean;
-};
-
-export type BackupSettings = {
-  enabled: boolean;
-  provider: "cloudflare_r2" | string;
-  account_id: string;
-  access_key_id: string;
-  secret_access_key: string;
-  bucket: string;
-  prefix: string;
-  interval_minutes: number | string;
-  rotation_keep: number | string;
-  encrypt: boolean;
-  passphrase: string;
-  include: BackupInclude;
-};
-
-export type BackupState = {
-  running: boolean;
-  last_started_at?: string | null;
-  last_finished_at?: string | null;
-  last_status?: string;
-  last_error?: string | null;
-  last_object_key?: string | null;
-};
-
-export type BackupItem = {
-  key: string;
-  name: string;
-  size: number;
-  updated_at?: string | null;
-  encrypted: boolean;
-};
-
-export type BackupDetail = {
-  key: string;
-  name: string;
-  encrypted: boolean;
-  created_at?: string | null;
-  trigger?: string | null;
-  app_version?: string | null;
-  storage_backend?: Record<string, unknown> | null;
-  files: Array<{
-    name: string;
-    exists: boolean;
-    content_type?: string;
-    size: number;
-    sha256?: string;
-  }>;
-  snapshots: Array<{
-    name: string;
-    count: number;
-  }>;
 };
 
 export type ManagedImage = {
@@ -342,25 +175,6 @@ export type SystemLog = {
   [key: string]: unknown;
 };
 
-export type UserQuotaLog = {
-  id: string;
-  time: string;
-  type: "user_quota";
-  summary?: string;
-  detail?: {
-    action?: string;
-    user_id?: string;
-    user_name?: string;
-    operator_id?: string;
-    operator_name?: string;
-    amount?: number | null;
-    before_quota?: number | null;
-    after_quota?: number | null;
-    enabled_before?: boolean;
-    enabled_after?: boolean;
-  };
-};
-
 export type ImageResponse = {
   created: number;
   data: Array<{ b64_json?: string; url?: string; revised_prompt?: string }>;
@@ -379,12 +193,15 @@ export type ImageTask = {
   id: string;
   status: "queued" | "running" | "success" | "error";
   mode: "generate" | "edit";
+  prompt?: string;
   model?: ImageModel;
   size?: string;
   quality?: string;
   created_at: string;
   updated_at: string;
   conversation_id?: string;
+  client_conversation_id?: string;
+  client_turn_id?: string;
   data?: Array<{ b64_json?: string; url?: string; revised_prompt?: string; feedback?: ImageFeedbackSummary }>;
   error?: string;
   progress?: string;
@@ -397,13 +214,37 @@ type ImageTaskListResponse = {
   missing_ids: string[];
 };
 
+type ImageConversationListResponse = {
+  items: ImageConversation[];
+};
+
+type ImageConversationItemResponse = {
+  item: ImageConversation;
+};
+
+export type ImageConversationTurnPayload = ImageTurn;
+export type ImageConversationTurnPatch = Partial<
+  Pick<ImageTurn, "prompt" | "status" | "error" | "promptDeleted" | "resultsDeleted">
+>;
+export type ImageConversationResultPatch = {
+  taskId?: string;
+  status?: "loading" | "success" | "error";
+  taskStatus?: "queued" | "running" | null;
+  progress?: string | null;
+  url?: string | null;
+  revised_prompt?: string | null;
+  error?: string | null;
+  durationMs?: number | null;
+  feedback?: ImageFeedbackSummary | null;
+};
+
 type LocalApiCacheRecord<T> = {
   createdAt: number;
   data: T;
 };
 
 const seedGalleryApiCacheVersion = "v9-simple-gallery-categories";
-const seedGalleryLocalCachePrefix = `happyimage:seed-gallery-api-cache:${seedGalleryApiCacheVersion}:`;
+const seedGalleryLocalCachePrefix = `happytoken:seed-gallery-api-cache:${seedGalleryApiCacheVersion}:`;
 const seedGalleryLocalCacheIndexKey = "__index";
 const seedGalleryStaticItemsPath = "/seed-gallery/static/items.json";
 const seedGalleryListCacheMaxAgeMs = 10 * 60 * 1000;
@@ -413,7 +254,7 @@ const seedGalleryLocalCacheMaxEntries = 180;
 const seedGalleryLocalCacheMaxPayloadLength = 900_000;
 
 const seedGalleryApiCache = localforage.createInstance({
-  name: "happyimage",
+  name: "happytoken",
   storeName: "seed_gallery_api_cache",
 });
 const seedGalleryMemoryCache = new Map<string, LocalApiCacheRecord<unknown>>();
@@ -602,9 +443,14 @@ export type LoginResponse = {
   role: AuthRole;
   subject_id: string;
   name: string;
-  image_quota?: number | null;
   watermark_label?: string;
   watermark_unlocked?: boolean;
+  model_provider?: string;
+  model_base_url?: string;
+  model_api_key_configured?: boolean;
+  model_gateway_enabled?: boolean;
+  model_providers?: UserModelProvider[];
+  preferences?: UserPreferences;
   auth_provider?: string;
   auth_subject?: string;
   email?: string;
@@ -615,13 +461,46 @@ export type LoginResponse = {
     id: string;
     name: string;
     role: AuthRole;
-    image_quota?: number | null;
     watermark_label?: string;
     watermark_unlocked?: boolean;
+    model_provider?: string;
+    model_base_url?: string;
+    model_api_key_configured?: boolean;
+    model_gateway_enabled?: boolean;
+    model_providers?: UserModelProvider[];
+    preferences?: UserPreferences;
     auth_provider?: string;
     auth_subject?: string;
     email?: string;
   };
+};
+
+export type UserPreferences = {
+  theme?: "system" | "light" | "dark";
+  language?: "system" | "zh-CN" | "en-US";
+  image_ratio?: string;
+  image_tier?: string;
+  image_quality?: string;
+  image_model?: string;
+  sidebar_collapsed?: boolean;
+  sidebar_width?: number;
+};
+
+export type UserModelProvider = {
+  id: string;
+  type: string;
+  base_url: string;
+  api_key_configured?: boolean;
+  selected?: boolean;
+};
+
+export type UserModelProviderUpdate = {
+  id?: string;
+  type?: string;
+  base_url?: string;
+  api_key?: string;
+  api_key_configured?: boolean;
+  selected?: boolean;
 };
 
 export type UserKey = {
@@ -629,25 +508,11 @@ export type UserKey = {
   name: string;
   role: "user";
   enabled: boolean;
-  image_quota?: number | null;
   watermark_label?: string;
   watermark_unlocked?: boolean;
   created_at: string | null;
   last_used_at: string | null;
 };
-
-export async function login(authKey: string) {
-  return loginWithAccessKey(authKey);
-}
-
-export async function loginWithAccessKey(authKey: string) {
-  const normalizedAuthKey = String(authKey || "").trim();
-  return httpRequest<LoginResponse>("/api/auth/login", {
-    method: "POST",
-    body: { access_key: normalizedAuthKey },
-    redirectOnUnauthorized: false,
-  });
-}
 
 export async function loginWithPassword(credentials: { email: string; password: string }) {
   return httpRequest<LoginResponse>("/api/auth/login", {
@@ -672,40 +537,8 @@ export async function registerWithPassword(credentials: { name: string; password
   });
 }
 
-export async function fetchAccounts() {
-  return httpRequest<AccountListResponse>("/api/accounts");
-}
-
 export async function fetchModels() {
   return httpRequest<ModelListResponse>("/v1/models", { redirectOnUnauthorized: false });
-}
-
-export async function createAccounts(tokens: string[], accounts: AccountImportPayload[] = []) {
-  return httpRequest<AccountMutationResponse>("/api/accounts", {
-    method: "POST",
-    body: { tokens, accounts },
-  });
-}
-
-export type OAuthLoginStartResponse = {
-  session_id: string;
-  authorize_url: string;
-  expires_in: string;
-  redirect_uri_prefix: string;
-};
-
-export async function startOAuthLogin(emailHint?: string) {
-  return httpRequest<OAuthLoginStartResponse>("/api/accounts/oauth/start", {
-    method: "POST",
-    body: { email_hint: emailHint ?? "" },
-  });
-}
-
-export async function finishOAuthLogin(sessionId: string, callback: string) {
-  return httpRequest<AccountMutationResponse>("/api/accounts/oauth/finish", {
-    method: "POST",
-    body: { session_id: sessionId, callback },
-  });
 }
 
 // ── OIDC Web Login ──────────────────────────────────────────────────
@@ -721,9 +554,14 @@ export type SessionResponse = {
   role: AuthRole;
   subject_id: string;
   name: string;
-  image_quota?: number | null;
   watermark_label?: string;
   watermark_unlocked?: boolean;
+  model_provider?: string;
+  model_base_url?: string;
+  model_api_key_configured?: boolean;
+  model_gateway_enabled?: boolean;
+  model_providers?: UserModelProvider[];
+  preferences?: UserPreferences;
   auth_provider?: string;
   auth_subject?: string;
   email?: string;
@@ -731,9 +569,14 @@ export type SessionResponse = {
     id: string;
     name: string;
     role: AuthRole;
-    image_quota?: number | null;
     watermark_label?: string;
     watermark_unlocked?: boolean;
+    model_provider?: string;
+    model_base_url?: string;
+    model_api_key_configured?: boolean;
+    model_gateway_enabled?: boolean;
+    model_providers?: UserModelProvider[];
+    preferences?: UserPreferences;
     auth_provider?: string;
     auth_subject?: string;
     email?: string;
@@ -762,7 +605,14 @@ export async function fetchUserProfile() {
   });
 }
 
-export async function updateUserProfile(updates: { watermark_label?: string }) {
+export async function updateUserProfile(updates: {
+  watermark_label?: string;
+  model_provider?: string;
+  model_base_url?: string;
+  model_api_key?: string;
+  model_providers?: UserModelProviderUpdate[];
+  preferences?: UserPreferences;
+}) {
   return httpRequest<UserProfileResponse>("/api/auth/profile", {
     method: "PATCH",
     body: updates,
@@ -774,53 +624,6 @@ export async function logoutSession() {
   return httpRequest<{ ok: boolean }>("/api/auth/logout", {
     method: "POST",
     redirectOnUnauthorized: false,
-  });
-}
-
-export async function deleteAccounts(tokens: string[]) {
-  return httpRequest<AccountMutationResponse>("/api/accounts", {
-    method: "DELETE",
-    body: { tokens },
-  });
-}
-
-export async function refreshAccounts(accessTokens: string[]) {
-  return httpRequest<{ progress_id: string }>("/api/accounts/refresh", {
-    method: "POST",
-    body: { access_tokens: accessTokens },
-  });
-}
-
-export async function fetchRefreshProgress(progressId: string) {
-  return httpRequest<RefreshProgressResponse>(`/api/accounts/refresh/progress/${progressId}`);
-}
-
-export async function reLoginAccounts(accessTokens: string[]) {
-  return httpRequest<{ progress_id: string }>("/api/accounts/re-login", {
-    method: "POST",
-    body: { access_tokens: accessTokens },
-  });
-}
-
-export async function fetchReLoginProgress(progressId: string) {
-  return httpRequest<RefreshProgressResponse>(`/api/accounts/re-login/progress/${progressId}`);
-}
-
-export async function updateAccount(
-  accessToken: string,
-  updates: {
-    type?: AccountType;
-    status?: AccountStatus;
-    quota?: number;
-    proxy?: string;
-  },
-) {
-  return httpRequest<AccountUpdateResponse>("/api/accounts/update", {
-    method: "POST",
-    body: {
-      access_token: accessToken,
-      ...updates,
-    },
   });
 }
 
@@ -867,7 +670,14 @@ export async function editImage(files: File | File[], prompt: string, model?: Im
   );
 }
 
-export async function createImageGenerationTask(clientTaskId: string, prompt: string, model?: ImageModel, size?: string, quality = "auto") {
+export async function createImageGenerationTask(
+  clientTaskId: string,
+  prompt: string,
+  model?: ImageModel,
+  size?: string,
+  quality = "auto",
+  metadata: { conversationId?: string; turnId?: string; imageId?: string } = {},
+) {
   return httpRequest<ImageTask>("/api/image-tasks/generations", {
     method: "POST",
     redirectOnUnauthorized: false,
@@ -877,6 +687,9 @@ export async function createImageGenerationTask(clientTaskId: string, prompt: st
       ...(model ? { model } : {}),
       ...(size ? { size } : {}),
       quality,
+      ...(metadata.conversationId ? { client_conversation_id: metadata.conversationId } : {}),
+      ...(metadata.turnId ? { client_turn_id: metadata.turnId } : {}),
+      ...(metadata.imageId ? { client_image_id: metadata.imageId } : {}),
     },
   });
 }
@@ -888,6 +701,7 @@ export async function createImageEditTask(
   model?: ImageModel,
   size?: string,
   quality = "auto",
+  metadata: { conversationId?: string; turnId?: string; imageId?: string } = {},
 ) {
   const formData = new FormData();
   const uploadFiles = Array.isArray(files) ? files : [files];
@@ -904,6 +718,15 @@ export async function createImageEditTask(
     formData.append("size", size);
   }
   formData.append("quality", quality);
+  if (metadata.conversationId) {
+    formData.append("client_conversation_id", metadata.conversationId);
+  }
+  if (metadata.turnId) {
+    formData.append("client_turn_id", metadata.turnId);
+  }
+  if (metadata.imageId) {
+    formData.append("client_image_id", metadata.imageId);
+  }
 
   return httpRequest<ImageTask>("/api/image-tasks/edits", {
     method: "POST",
@@ -923,13 +746,6 @@ export async function fetchImageTasks(ids: string[]) {
   });
 }
 
-export async function resumeImagePoll(taskId: string, extraTimeoutSecs = 30) {
-  return httpRequest<ImageTask>(`/api/image-tasks/${encodeURIComponent(taskId)}/resume-poll`, {
-    method: "POST",
-    body: { extra_timeout_secs: extraTimeoutSecs },
-  });
-}
-
 export async function updateImageTaskFeedback(taskId: string, imageIndex: number, vote: ImageFeedbackVote | null) {
   return httpRequest<ImageTask>(`/api/image-tasks/${encodeURIComponent(taskId)}/feedback`, {
     method: "POST",
@@ -938,6 +754,68 @@ export async function updateImageTaskFeedback(taskId: string, imageIndex: number
       image_index: imageIndex,
       vote,
     },
+  });
+}
+
+export async function fetchImageConversations() {
+  return httpRequest<ImageConversationListResponse>(`/api/image-conversations?_t=${Date.now()}`, {
+    redirectOnUnauthorized: false,
+  });
+}
+
+export async function upsertImageConversation(conversationId: string, title: string) {
+  return httpRequest<ImageConversationItemResponse>(`/api/image-conversations/${encodeURIComponent(conversationId)}`, {
+    method: "PUT",
+    redirectOnUnauthorized: false,
+    body: { title },
+  });
+}
+
+export async function createImageConversationTurn(conversationId: string, turn: ImageConversationTurnPayload) {
+  return httpRequest<ImageConversationItemResponse>(
+    `/api/image-conversations/${encodeURIComponent(conversationId)}/turns`,
+    {
+      method: "POST",
+      redirectOnUnauthorized: false,
+      body: turn,
+    },
+  );
+}
+
+export async function updateImageConversationTurn(
+  conversationId: string,
+  turnId: string,
+  updates: ImageConversationTurnPatch,
+) {
+  return httpRequest<ImageConversationItemResponse>(
+    `/api/image-conversations/${encodeURIComponent(conversationId)}/turns/${encodeURIComponent(turnId)}`,
+    {
+      method: "PATCH",
+      redirectOnUnauthorized: false,
+      body: updates,
+    },
+  );
+}
+
+export async function updateImageConversationResult(
+  conversationId: string,
+  imageId: string,
+  updates: ImageConversationResultPatch,
+) {
+  return httpRequest<ImageConversationItemResponse>(
+    `/api/image-conversations/${encodeURIComponent(conversationId)}/results/${encodeURIComponent(imageId)}`,
+    {
+      method: "PATCH",
+      redirectOnUnauthorized: false,
+      body: updates,
+    },
+  );
+}
+
+export async function deleteServerImageConversation(conversationId: string) {
+  return httpRequest<{ ok: boolean }>(`/api/image-conversations/${encodeURIComponent(conversationId)}`, {
+    method: "DELETE",
+    redirectOnUnauthorized: false,
   });
 }
 
@@ -1043,10 +921,6 @@ export async function fetchShareDrafts() {
   return httpRequest<{ items: ShareDraft[] }>("/api/share-drafts");
 }
 
-export async function fetchRechargeSession() {
-  return httpRequest<RechargeSession>("/api/recharge/session");
-}
-
 export async function fetchSettingsConfig() {
   return httpRequest<{ config: SettingsConfig }>("/api/settings");
 }
@@ -1055,13 +929,6 @@ export async function updateSettingsConfig(settings: SettingsConfig) {
   return httpRequest<{ config: SettingsConfig }>("/api/settings", {
     method: "POST",
     body: settings,
-  });
-}
-
-export async function testBackupConnection() {
-  return httpRequest<{ result: { ok: boolean; status: number } }>("/api/backup/test", {
-    method: "POST",
-    body: {},
   });
 }
 
@@ -1077,36 +944,6 @@ export async function syncImageStorage() {
     method: "POST",
     body: {},
   });
-}
-
-export async function fetchBackups() {
-  return httpRequest<{ items: BackupItem[]; state: BackupState; settings: BackupSettings }>("/api/backups");
-}
-
-export async function runBackupNow() {
-  return httpRequest<{ result: { key: string; size: number; encrypted: boolean } }>("/api/backups/run", {
-    method: "POST",
-    body: {},
-  });
-}
-
-export async function deleteBackup(key: string) {
-  return httpRequest<{ ok: boolean }>("/api/backups/delete", {
-    method: "POST",
-    body: { key },
-  });
-}
-
-export async function fetchBackupDetail(key: string) {
-  const params = new URLSearchParams();
-  params.set("key", key);
-  return httpRequest<{ item: BackupDetail }>(`/api/backups/detail?${params.toString()}`);
-}
-
-export function getBackupDownloadUrl(key: string) {
-  const params = new URLSearchParams();
-  params.set("key", key);
-  return `/api/backups/download?${params.toString()}`;
 }
 
 export async function fetchManagedImages(filters: { start_date?: string; end_date?: string }) {
@@ -1246,13 +1083,6 @@ export async function fetchSystemLogs(filters: { type?: string; start_date?: str
   return httpRequest<{ items: SystemLog[] }>(`/api/logs${params.toString() ? `?${params.toString()}` : ""}`);
 }
 
-export async function fetchUserQuotaLogs(filters: { user_id?: string; limit?: number } = {}) {
-  const params = new URLSearchParams();
-  if (filters.user_id) params.set("user_id", filters.user_id);
-  if (typeof filters.limit === "number") params.set("limit", String(filters.limit));
-  return httpRequest<{ items: UserQuotaLog[] }>(`/api/auth/user-quota-logs${params.toString() ? `?${params.toString()}` : ""}`);
-}
-
 export async function deleteSystemLogs(ids: string[]) {
   return httpRequest<{ removed: number }>("/api/logs/delete", {
     method: "POST",
@@ -1271,21 +1101,19 @@ export async function createUserKey(name: string) {
 export async function createUserKeyWithOptions({
   name,
   key,
-  image_quota,
 }: {
   name: string;
   key?: string;
-  image_quota?: number;
 }) {
   return httpRequest<{ item: UserKey; key: string; items: UserKey[] }>("/api/auth/users", {
     method: "POST",
-    body: { name, key, image_quota },
+    body: { name, key },
   });
 }
 
 export async function updateUserKey(
   keyId: string,
-  updates: { enabled?: boolean; name?: string; key?: string; image_quota?: number; watermark_unlocked?: boolean },
+  updates: { enabled?: boolean; name?: string; key?: string; watermark_unlocked?: boolean },
 ) {
   return httpRequest<{ item: UserKey; items: UserKey[] }>(`/api/auth/users/${keyId}`, {
     method: "POST",
@@ -1296,203 +1124,5 @@ export async function updateUserKey(
 export async function deleteUserKey(keyId: string) {
   return httpRequest<{ items: UserKey[] }>(`/api/auth/users/${keyId}`, {
     method: "DELETE",
-  });
-}
-
-// ── CPA (CLIProxyAPI) ──────────────────────────────────────────────
-
-export type CPAPool = {
-  id: string;
-  name: string;
-  base_url: string;
-  import_job?: CPAImportJob | null;
-};
-
-export type CPARemoteFile = {
-  name: string;
-  email: string;
-};
-
-export type CPAImportJob = {
-  job_id: string;
-  status: "pending" | "running" | "completed" | "failed";
-  created_at: string;
-  updated_at: string;
-  total: number;
-  completed: number;
-  added: number;
-  skipped: number;
-  refreshed: number;
-  failed: number;
-  errors: Array<{ name: string; error: string }>;
-};
-
-export async function fetchCPAPools() {
-  return httpRequest<{ pools: CPAPool[] }>("/api/cpa/pools");
-}
-
-export async function createCPAPool(pool: { name: string; base_url: string; secret_key: string }) {
-  return httpRequest<{ pool: CPAPool; pools: CPAPool[] }>("/api/cpa/pools", {
-    method: "POST",
-    body: pool,
-  });
-}
-
-export async function updateCPAPool(
-  poolId: string,
-  updates: { name?: string; base_url?: string; secret_key?: string },
-) {
-  return httpRequest<{ pool: CPAPool; pools: CPAPool[] }>(`/api/cpa/pools/${poolId}`, {
-    method: "POST",
-    body: updates,
-  });
-}
-
-export async function deleteCPAPool(poolId: string) {
-  return httpRequest<{ pools: CPAPool[] }>(`/api/cpa/pools/${poolId}`, {
-    method: "DELETE",
-  });
-}
-
-export async function fetchCPAPoolFiles(poolId: string) {
-  return httpRequest<{ pool_id: string; files: CPARemoteFile[] }>(`/api/cpa/pools/${poolId}/files`);
-}
-
-export async function startCPAImport(poolId: string, names: string[]) {
-  return httpRequest<{ import_job: CPAImportJob | null }>(`/api/cpa/pools/${poolId}/import`, {
-    method: "POST",
-    body: { names },
-  });
-}
-
-export async function fetchCPAPoolImportJob(poolId: string) {
-  return httpRequest<{ import_job: CPAImportJob | null }>(`/api/cpa/pools/${poolId}/import`);
-}
-
-// ── Sub2API ────────────────────────────────────────────────────────
-
-export type Sub2APIServer = {
-  id: string;
-  name: string;
-  base_url: string;
-  email: string;
-  has_api_key: boolean;
-  group_id: string;
-  import_job?: CPAImportJob | null;
-};
-
-export type Sub2APIRemoteAccount = {
-  id: string;
-  name: string;
-  email: string;
-  plan_type: string;
-  status: string;
-  expires_at: string;
-  has_refresh_token: boolean;
-};
-
-export type Sub2APIRemoteGroup = {
-  id: string;
-  name: string;
-  description: string;
-  platform: string;
-  status: string;
-  account_count: number;
-  active_account_count: number;
-};
-
-export async function fetchSub2APIServers() {
-  return httpRequest<{ servers: Sub2APIServer[] }>("/api/sub2api/servers");
-}
-
-export async function createSub2APIServer(server: {
-  name: string;
-  base_url: string;
-  email: string;
-  password: string;
-  api_key: string;
-  group_id: string;
-}) {
-  return httpRequest<{ server: Sub2APIServer; servers: Sub2APIServer[] }>("/api/sub2api/servers", {
-    method: "POST",
-    body: server,
-  });
-}
-
-export async function updateSub2APIServer(
-  serverId: string,
-  updates: {
-    name?: string;
-    base_url?: string;
-    email?: string;
-    password?: string;
-    api_key?: string;
-    group_id?: string;
-  },
-) {
-  return httpRequest<{ server: Sub2APIServer; servers: Sub2APIServer[] }>(`/api/sub2api/servers/${serverId}`, {
-    method: "POST",
-    body: updates,
-  });
-}
-
-export async function fetchSub2APIServerGroups(serverId: string) {
-  return httpRequest<{ server_id: string; groups: Sub2APIRemoteGroup[] }>(
-    `/api/sub2api/servers/${serverId}/groups`,
-  );
-}
-
-export async function deleteSub2APIServer(serverId: string) {
-  return httpRequest<{ servers: Sub2APIServer[] }>(`/api/sub2api/servers/${serverId}`, {
-    method: "DELETE",
-  });
-}
-
-export async function fetchSub2APIServerAccounts(serverId: string) {
-  return httpRequest<{ server_id: string; accounts: Sub2APIRemoteAccount[] }>(
-    `/api/sub2api/servers/${serverId}/accounts`,
-  );
-}
-
-export async function startSub2APIImport(serverId: string, accountIds: string[]) {
-  return httpRequest<{ import_job: CPAImportJob | null }>(`/api/sub2api/servers/${serverId}/import`, {
-    method: "POST",
-    body: { account_ids: accountIds },
-  });
-}
-
-export async function fetchSub2APIImportJob(serverId: string) {
-  return httpRequest<{ import_job: CPAImportJob | null }>(`/api/sub2api/servers/${serverId}/import`);
-}
-
-// ── Upstream proxy ────────────────────────────────────────────────
-
-export type ProxySettings = {
-  enabled: boolean;
-  url: string;
-};
-
-export type ProxyTestResult = {
-  ok: boolean;
-  status: number;
-  latency_ms: number;
-  error: string | null;
-};
-
-export async function fetchProxy() {
-  return httpRequest<{ proxy: ProxySettings }>("/api/proxy");
-}
-
-export async function updateProxy(updates: { enabled?: boolean; url?: string }) {
-  return httpRequest<{ proxy: ProxySettings }>("/api/proxy", {
-    method: "POST",
-    body: updates,
-  });
-}
-
-export async function testProxy(url?: string) {
-  return httpRequest<{ result: ProxyTestResult }>("/api/proxy/test", {
-    method: "POST",
-    body: { url: url ?? "" },
   });
 }

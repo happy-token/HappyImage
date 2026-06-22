@@ -44,15 +44,12 @@ ENV NODE_ENV=production \
     HOSTNAME=0.0.0.0 \
     PORT=3000 \
     NEXT_PUBLIC_API_BASE_URL="" \
-    BACKEND_URL=http://happyimage-api:80 \
-    MODEL_BACKEND_URL=http://happyimage-api:80
+    BACKEND_URL=http://happytoken-api:80 \
+    MODEL_BACKEND_URL=http://happytoken-api:80
 
-COPY --from=build /app/web/package.json ./package.json
-COPY --from=build /app/web/node_modules ./node_modules
-COPY --from=build /app/web/.next ./.next
+COPY --from=build /app/web/.next/standalone ./
+COPY --from=build /app/web/.next/static ./.next/static
 COPY --from=build /app/web/public ./public
-COPY --from=build /app/web/next.config.ts ./next.config.ts
-COPY --from=build /app/web/src/lib/release.ts ./src/lib/release.ts
 
 RUN mkdir -p /app/web/public/seed-gallery
 
@@ -61,4 +58,4 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD wget -qO- http://127.0.0.1:3000/ >/dev/null || exit 1
 
-CMD ["node", "node_modules/next/dist/bin/next", "start", "-H", "0.0.0.0", "-p", "3000"]
+CMD ["node", "server.js"]

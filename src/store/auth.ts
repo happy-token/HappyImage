@@ -2,27 +2,82 @@
 
 import localforage from "localforage";
 
-import { externalModelAdminEnabled } from "@/lib/model-admin";
-
 export type AuthRole = "admin" | "user";
+
+export type StoredModelProvider = {
+  id: string;
+  type: string;
+  baseUrl: string;
+  apiKeyConfigured?: boolean;
+  selected?: boolean;
+};
+
+export type StoredUserPreferences = {
+  theme?: "system" | "light" | "dark";
+  language?: "system" | "zh-CN" | "en-US";
+  imageRatio?: string;
+  imageTier?: string;
+  imageQuality?: string;
+  imageModel?: string;
+  sidebarCollapsed?: boolean;
+  sidebarWidth?: number;
+};
 
 export type StoredAuthSession = {
   key: string;
   role: AuthRole;
   subjectId: string;
   name: string;
-  imageQuota?: number | null;
   watermarkLabel?: string;
   watermarkUnlocked?: boolean;
+  modelProvider?: string;
+  modelBaseUrl?: string;
+  modelApiKeyConfigured?: boolean;
+  modelGatewayEnabled?: boolean;
+  modelProviders?: StoredModelProvider[];
+  preferences?: StoredUserPreferences;
 };
 
-export const AUTH_KEY_STORAGE_KEY = "happyimage_auth_key";
-export const AUTH_SESSION_STORAGE_KEY = "happyimage_auth_session";
+export const AUTH_KEY_STORAGE_KEY = "happytoken_auth_key";
+export const AUTH_SESSION_STORAGE_KEY = "happytoken_auth_session";
 
 const authStorage = localforage.createInstance({
-  name: "happyimage",
+  name: "happytoken",
   storeName: "auth",
 });
+
+export function normalizeModelProviders(value: unknown): StoredModelProvider[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const providers: StoredModelProvider[] = [];
+  value.forEach((item, index) => {
+    if (!item || typeof item !== "object") {
+      return;
+    }
+    const candidate = item as Partial<StoredModelProvider> & {
+      base_url?: unknown;
+      api_key_configured?: unknown;
+    };
+    const id = String(candidate.id || `provider-${index + 1}`).trim();
+    const type = String(candidate.type || "newapi").trim() || "newapi";
+    const baseUrl = String(candidate.baseUrl ?? candidate.base_url ?? "").trim().replace(/\/+$/, "");
+    if (!id || !baseUrl) {
+      return;
+    }
+    providers.push({
+      id,
+      type,
+      baseUrl,
+      apiKeyConfigured: Boolean(candidate.apiKeyConfigured ?? candidate.api_key_configured),
+      selected: Boolean(candidate.selected),
+    });
+  });
+  if (!providers.some((item) => item.selected) && providers.length > 0) {
+    return providers.map((item, index) => ({ ...item, selected: index === 0 }));
+  }
+  return providers.map((item, index) => ({ ...item, selected: item.selected && providers.findIndex((provider) => provider.selected) === index }));
+}
 
 function normalizeSession(value: unknown, fallbackKey = ""): StoredAuthSession | null {
   if (!value || typeof value !== "object") {
@@ -30,6 +85,7 @@ function normalizeSession(value: unknown, fallbackKey = ""): StoredAuthSession |
   }
 
   const candidate = value as Partial<StoredAuthSession>;
+  const modelProviders = normalizeModelProviders(candidate.modelProviders);
   const key = String(candidate.key || fallbackKey || "").trim();
   const role = candidate.role === "admin" || candidate.role === "user" ? candidate.role : null;
   if (!role) {
@@ -41,14 +97,55 @@ function normalizeSession(value: unknown, fallbackKey = ""): StoredAuthSession |
     role,
     subjectId: String(candidate.subjectId || "").trim(),
     name: String(candidate.name || "").trim(),
-    imageQuota: typeof candidate.imageQuota === "number" ? candidate.imageQuota : null,
     watermarkLabel: String(candidate.watermarkLabel || "").trim(),
     watermarkUnlocked: Boolean(candidate.watermarkUnlocked),
+    modelProvider: String(candidate.modelProvider || "").trim(),
+    modelBaseUrl: String(candidate.modelBaseUrl || "").trim(),
+    modelApiKeyConfigured: Boolean(candidate.modelApiKeyConfigured),
+    modelGatewayEnabled: Boolean(candidate.modelGatewayEnabled),
+    modelProviders,
+    preferences: normalizeUserPreferences(candidate.preferences),
   };
 }
 
+export function normalizeUserPreferences(value: unknown): StoredUserPreferences {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+  const candidate = value as Partial<StoredUserPreferences> & {
+    image_ratio?: unknown;
+    image_tier?: unknown;
+    image_quality?: unknown;
+    image_model?: unknown;
+    sidebar_collapsed?: unknown;
+    sidebar_width?: unknown;
+  };
+  const preferences: StoredUserPreferences = {};
+  const theme = String(candidate.theme || "");
+  if (theme === "system" || theme === "light" || theme === "dark") {
+    preferences.theme = theme;
+  }
+  const language = String(candidate.language || "");
+  if (language === "system" || language === "zh-CN" || language === "en-US") {
+    preferences.language = language;
+  }
+  const imageRatio = String(candidate.imageRatio ?? candidate.image_ratio ?? "").trim();
+  if (imageRatio) preferences.imageRatio = imageRatio;
+  const imageTier = String(candidate.imageTier ?? candidate.image_tier ?? "").trim();
+  if (imageTier) preferences.imageTier = imageTier;
+  const imageQuality = String(candidate.imageQuality ?? candidate.image_quality ?? "").trim();
+  if (imageQuality) preferences.imageQuality = imageQuality;
+  const imageModel = String(candidate.imageModel ?? candidate.image_model ?? "").trim();
+  if (imageModel) preferences.imageModel = imageModel;
+  const sidebarCollapsed = candidate.sidebarCollapsed ?? candidate.sidebar_collapsed;
+  if (typeof sidebarCollapsed === "boolean") preferences.sidebarCollapsed = sidebarCollapsed;
+  const sidebarWidth = Number(candidate.sidebarWidth ?? candidate.sidebar_width);
+  if (Number.isFinite(sidebarWidth) && sidebarWidth > 0) preferences.sidebarWidth = sidebarWidth;
+  return preferences;
+}
+
 export function getDefaultRouteForRole(role: AuthRole) {
-  return role === "admin" ? (externalModelAdminEnabled ? "/image-manager" : "/accounts") : "/image";
+  return role === "admin" ? "/image-manager" : "/image";
 }
 
 export function normalizePostAuthRedirectPath(value: string | null | undefined) {

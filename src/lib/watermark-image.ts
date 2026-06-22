@@ -1,4 +1,4 @@
-const DEFAULT_WATERMARK_TEXT = "HappyImage";
+const DEFAULT_WATERMARK_TEXT = "Happy Token";
 
 function loadImageFromBlob(blob: Blob): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -39,33 +39,22 @@ export function buildWatermarkedFilename(filename: string) {
 function drawWatermark(ctx: CanvasRenderingContext2D, width: number, height: number, text: string) {
   const shortSide = Math.max(1, Math.min(width, height));
   const fontSize = Math.max(18, Math.round(shortSide * 0.032));
-  const paddingX = Math.max(18, Math.round(fontSize * 0.9));
-  const paddingY = Math.max(12, Math.round(fontSize * 0.55));
   const margin = Math.max(18, Math.round(shortSide * 0.035));
-  const radius = Math.max(10, Math.round(fontSize * 0.55));
   const safeText = text.trim() || DEFAULT_WATERMARK_TEXT;
 
   ctx.save();
   ctx.font = `600 ${fontSize}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
-  const metrics = ctx.measureText(safeText);
-  const boxWidth = Math.min(width - margin * 2, Math.ceil(metrics.width + paddingX * 2));
-  const boxHeight = Math.ceil(fontSize + paddingY * 2);
-  const boxX = Math.max(margin, width - margin - boxWidth);
-  const boxY = Math.max(margin, height - margin - boxHeight);
-  const textX = boxX + boxWidth - paddingX;
-  const textY = boxY + boxHeight / 2;
-
-  ctx.beginPath();
-  ctx.roundRect(boxX, boxY, boxWidth, boxHeight, radius);
-  ctx.fillStyle = "rgba(17, 24, 39, 0.58)";
-  ctx.fill();
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.26)";
-  ctx.lineWidth = Math.max(1, Math.round(fontSize * 0.05));
-  ctx.stroke();
-
   ctx.textAlign = "right";
   ctx.textBaseline = "middle";
-  ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+  ctx.lineWidth = Math.max(2, Math.round(fontSize * 0.09));
+  ctx.strokeStyle = "rgba(0, 0, 0, 0.45)";
+  ctx.shadowColor = "rgba(0, 0, 0, 0.45)";
+  ctx.shadowBlur = Math.max(2, Math.round(fontSize * 0.16));
+  ctx.shadowOffsetY = Math.max(1, Math.round(fontSize * 0.05));
+  const textX = width - margin;
+  const textY = height - margin - fontSize / 2;
+  ctx.strokeText(safeText, textX, textY);
+  ctx.fillStyle = "rgba(255, 255, 255, 0.92)";
   ctx.fillText(safeText, textX, textY);
 
   ctx.restore();
