@@ -1,10 +1,9 @@
 "use client";
 
 import { ExternalLink, LoaderCircle } from "lucide-react";
-import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { getValidatedAuthSession } from "@/lib/auth-session";
+import { useAuthGuard } from "@/lib/use-auth-guard";
 
 const DEFAULT_NEWAPI_URL = "https://gateway.happy-token.cn";
 const ALLOWED_NEWAPI_MANAGEMENT_ORIGINS = new Set(["https://gateway.happy-token.cn"]);
@@ -27,25 +26,10 @@ function normalizeManagementUrl(value: unknown) {
 }
 
 export default function NewAPISettingsPage() {
-  const [managementUrl, setManagementUrl] = useState(DEFAULT_NEWAPI_URL);
-  const [isChecking, setIsChecking] = useState(true);
+  const { isCheckingAuth, session } = useAuthGuard(["user"]);
+  const managementUrl = normalizeManagementUrl(session?.newapiManagementUrl);
 
-  useEffect(() => {
-    let cancelled = false;
-    void getValidatedAuthSession()
-      .then((session) => {
-        if (cancelled) return;
-        setManagementUrl(normalizeManagementUrl(session?.newapiManagementUrl));
-      })
-      .finally(() => {
-        if (!cancelled) setIsChecking(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  if (isChecking) {
+  if (isCheckingAuth || !session) {
     return (
       <div className="grid min-h-[calc(100vh-1rem)] place-items-center">
         <LoaderCircle className="size-5 animate-spin text-stone-400" />
