@@ -10,6 +10,7 @@ import {
   Heart,
   ImageIcon,
   Info,
+  KeyRound,
   LoaderCircle,
   LogOut,
   Mail,
@@ -51,7 +52,7 @@ import {
 } from "@/store/auth";
 
 type ThemePreference = "system" | "light" | "dark";
-type SettingsSection = "account" | "appearance" | "provider" | "watermark" | "contact" | "about";
+type SettingsSection = "account" | "appearance" | "provider" | "newapi" | "watermark" | "contact" | "about";
 
 export type AccountUsageStats = {
   conversationCount: number;
@@ -80,6 +81,7 @@ const settingsCopy = {
       contact: "联系我们",
       about: "关于",
       provider: "供应商",
+      newapi: "NewAPI",
     },
     account: {
       current: "当前登录账户",
@@ -111,6 +113,15 @@ const settingsCopy = {
       saved: "供应商配置已保存",
       failed: "保存供应商配置失败",
       hint: "配置后，当前账户发起的图片生成会优先使用这个 OpenAI 兼容网关。",
+    },
+    newapi: {
+      title: "NewAPI 管理",
+      status: "绑定状态",
+      configured: "已自动绑定",
+      pending: "等待绑定",
+      failed: "绑定失败",
+      open: "打开 NewAPI 管理",
+      hint: "令牌、额度和用量由 NewAPI 管理。",
     },
     appearance: {
       theme: "主题",
@@ -162,6 +173,7 @@ const settingsCopy = {
       contact: "Contact",
       about: "About",
       provider: "Provider",
+      newapi: "NewAPI",
     },
     account: {
       current: "Current signed-in account",
@@ -193,6 +205,15 @@ const settingsCopy = {
       saved: "Provider settings saved",
       failed: "Failed to save provider settings",
       hint: "When configured, image generation from this account uses this OpenAI-compatible gateway first.",
+    },
+    newapi: {
+      title: "NewAPI Management",
+      status: "Binding status",
+      configured: "Configured",
+      pending: "Pending",
+      failed: "Failed",
+      open: "Open NewAPI management",
+      hint: "Tokens, quota, and usage are managed by NewAPI.",
     },
     appearance: {
       theme: "Theme",
@@ -523,6 +544,7 @@ export function AccountMenu({
     { id: "account", label: copy.nav.account, icon: UserRound },
     { id: "appearance", label: copy.nav.appearance, icon: Palette },
     ...(session.role === "user" ? [{ id: "provider" as const, label: copy.nav.provider, icon: ServerCog }] : []),
+    ...(session.role === "user" ? [{ id: "newapi" as const, label: copy.nav.newapi, icon: KeyRound }] : []),
     ...(onSaveWatermarkLabel ? [{ id: "watermark" as const, label: copy.nav.watermark, icon: Stamp }] : []),
     { id: "contact", label: copy.nav.contact, icon: MessageCircle },
     { id: "about", label: copy.nav.about, icon: Info },
@@ -783,6 +805,34 @@ export function AccountMenu({
               <Plus className="size-4" />
               {copy.provider.add}
               </button>
+          </div>
+        </section>
+      );
+    }
+
+    if (activeSection === "newapi") {
+      const status = session.newapiBindingStatus || (session.modelApiKeyConfigured ? "configured" : "pending");
+      const statusLabel =
+        status === "configured" ? copy.newapi.configured : status === "failed" ? copy.newapi.failed : copy.newapi.pending;
+      return (
+        <section>
+          <div className={sectionTitleClass}>{copy.newapi.title}</div>
+          <div className="rounded-2xl border border-stone-200/80 bg-stone-50/70 p-4 dark:border-white/10 dark:bg-white/5">
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <span className="text-stone-500 dark:text-stone-400">{copy.newapi.status}</span>
+              <span className="font-medium text-stone-900 dark:text-stone-100">{statusLabel}</span>
+            </div>
+            {session.newapiBindingMessage ? (
+              <p className="mt-2 text-xs leading-5 text-stone-500 dark:text-stone-400">{session.newapiBindingMessage}</p>
+            ) : null}
+            <p className="mt-2 text-xs leading-5 text-stone-500 dark:text-stone-400">{copy.newapi.hint}</p>
+            <a
+              href="/settings/newapi"
+              className="mt-3 inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-xl bg-zinc-900 px-3 text-sm font-medium text-white transition hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200"
+            >
+              <KeyRound className="size-4" />
+              {copy.newapi.open}
+            </a>
           </div>
         </section>
       );
