@@ -208,3 +208,9 @@ docker run -p 3000:3000 \
 | NewAPI / 模型网关 | 外部模型渠道、账号池、上游调试和 token 管理 |
 
 部署编排见后端的 `docker-compose.yml`；Web Docker 镜像运行 Next.js server，官方图库静态包通过 volume/CDN/对象存储提供。
+
+## NewAPI Management
+
+HappyImage exposes `/settings/newapi` as the product entry for NewAPI management. The page embeds `newapiManagementUrl` from the authenticated session, defaulting to `https://gateway.happy-token.cn`.
+
+Browser verification must confirm that the embedded NewAPI page can use Casdoor/NewAPI session cookies in Chrome and Safari. If iframe loading is blocked, users can open NewAPI in a new window from the same page.
