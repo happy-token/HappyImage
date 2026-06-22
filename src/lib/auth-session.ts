@@ -10,6 +10,18 @@ import {
   type StoredAuthSession,
 } from "@/store/auth";
 
+function getNewAPIBindingSessionFields(
+  data: Awaited<ReturnType<typeof fetchSession>>,
+  fallback?: StoredAuthSession | null,
+): Pick<StoredAuthSession, "newapiBindingStatus" | "newapiBindingMessage" | "newapiManagementUrl"> {
+  return {
+    newapiBindingStatus: data.user?.newapi_binding_status ?? data.newapi_binding_status ?? fallback?.newapiBindingStatus,
+    newapiBindingMessage:
+      data.user?.newapi_binding_message ?? data.newapi_binding_message ?? fallback?.newapiBindingMessage,
+    newapiManagementUrl: data.user?.newapi_management_url ?? data.newapi_management_url ?? fallback?.newapiManagementUrl,
+  };
+}
+
 export async function getValidatedAuthSession(): Promise<StoredAuthSession | null> {
   const storedSession = await getStoredAuthSession();
 
@@ -27,9 +39,7 @@ export async function getValidatedAuthSession(): Promise<StoredAuthSession | nul
         modelBaseUrl: data.user?.model_base_url ?? data.model_base_url ?? "",
         modelApiKeyConfigured: data.user?.model_api_key_configured ?? data.model_api_key_configured ?? false,
         modelGatewayEnabled: data.user?.model_gateway_enabled ?? data.model_gateway_enabled ?? false,
-        newapiBindingStatus: data.user?.newapi_binding_status ?? data.newapi_binding_status,
-        newapiBindingMessage: data.user?.newapi_binding_message ?? data.newapi_binding_message,
-        newapiManagementUrl: data.user?.newapi_management_url ?? data.newapi_management_url,
+        ...getNewAPIBindingSessionFields(data, storedSession),
         modelProviders: normalizeModelProviders(data.user?.model_providers ?? data.model_providers),
         preferences: normalizeUserPreferences(data.user?.preferences ?? data.preferences),
       };
@@ -57,9 +67,7 @@ export async function getValidatedAuthSession(): Promise<StoredAuthSession | nul
       modelBaseUrl: data.user.model_base_url ?? data.model_base_url ?? "",
       modelApiKeyConfigured: data.user.model_api_key_configured ?? data.model_api_key_configured ?? false,
       modelGatewayEnabled: data.user.model_gateway_enabled ?? data.model_gateway_enabled ?? false,
-      newapiBindingStatus: data.user.newapi_binding_status ?? data.newapi_binding_status,
-      newapiBindingMessage: data.user.newapi_binding_message ?? data.newapi_binding_message,
-      newapiManagementUrl: data.user.newapi_management_url ?? data.newapi_management_url,
+      ...getNewAPIBindingSessionFields(data, storedSession),
       modelProviders: normalizeModelProviders(data.user.model_providers ?? data.model_providers),
       preferences: normalizeUserPreferences(data.user.preferences ?? data.preferences),
     };
