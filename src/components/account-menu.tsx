@@ -811,7 +811,7 @@ export function AccountMenu({
     }
 
     if (activeSection === "newapi") {
-      const status = session.newapiBindingStatus || (session.modelApiKeyConfigured ? "configured" : "pending");
+      const status = session.newapiBindingStatus || "pending";
       const statusLabel =
         status === "configured" ? copy.newapi.configured : status === "failed" ? copy.newapi.failed : copy.newapi.pending;
       return (

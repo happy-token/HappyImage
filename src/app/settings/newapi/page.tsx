@@ -7,6 +7,24 @@ import { Button } from "@/components/ui/button";
 import { getValidatedAuthSession } from "@/lib/auth-session";
 
 const DEFAULT_NEWAPI_URL = "https://gateway.happy-token.cn";
+const ALLOWED_NEWAPI_MANAGEMENT_ORIGINS = new Set(["https://gateway.happy-token.cn"]);
+
+function normalizeManagementUrl(value: unknown) {
+  const candidate = String(value || "").trim();
+  if (!candidate) {
+    return DEFAULT_NEWAPI_URL;
+  }
+  try {
+    const parsed = new URL(candidate);
+    if (parsed.protocol !== "https:" || !ALLOWED_NEWAPI_MANAGEMENT_ORIGINS.has(parsed.origin)) {
+      return DEFAULT_NEWAPI_URL;
+    }
+    parsed.hash = "";
+    return parsed.toString().replace(/\/$/, "");
+  } catch {
+    return DEFAULT_NEWAPI_URL;
+  }
+}
 
 export default function NewAPISettingsPage() {
   const [managementUrl, setManagementUrl] = useState(DEFAULT_NEWAPI_URL);
@@ -17,7 +35,7 @@ export default function NewAPISettingsPage() {
     void getValidatedAuthSession()
       .then((session) => {
         if (cancelled) return;
-        setManagementUrl(session?.newapiManagementUrl || DEFAULT_NEWAPI_URL);
+        setManagementUrl(normalizeManagementUrl(session?.newapiManagementUrl));
       })
       .finally(() => {
         if (!cancelled) setIsChecking(false);
@@ -53,6 +71,7 @@ export default function NewAPISettingsPage() {
         src={managementUrl}
         className="h-[calc(100%-3rem)] w-full border-0 bg-white"
         referrerPolicy="strict-origin-when-cross-origin"
+        sandbox="allow-forms allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox"
       />
     </main>
   );
