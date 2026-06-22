@@ -286,6 +286,9 @@ function buildSessionFromProfileResponse(
     modelBaseUrl: data.user?.model_base_url ?? data.model_base_url ?? session.modelBaseUrl ?? "",
     modelApiKeyConfigured: data.user?.model_api_key_configured ?? data.model_api_key_configured ?? session.modelApiKeyConfigured ?? false,
     modelGatewayEnabled: data.user?.model_gateway_enabled ?? data.model_gateway_enabled ?? session.modelGatewayEnabled ?? false,
+    newapiBindingStatus: data.user?.newapi_binding_status ?? data.newapi_binding_status ?? session.newapiBindingStatus,
+    newapiBindingMessage: data.user?.newapi_binding_message ?? data.newapi_binding_message ?? session.newapiBindingMessage,
+    newapiManagementUrl: data.user?.newapi_management_url ?? data.newapi_management_url ?? session.newapiManagementUrl,
     modelProviders,
     preferences: normalizeUserPreferences(data.user?.preferences ?? data.preferences ?? session.preferences),
   };

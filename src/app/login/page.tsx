@@ -42,6 +42,9 @@ function buildStoredSession(response: LoginResponse, fallbackKey: string): Store
     modelBaseUrl: response.user?.model_base_url ?? response.model_base_url ?? "",
     modelApiKeyConfigured: response.user?.model_api_key_configured ?? response.model_api_key_configured ?? false,
     modelGatewayEnabled: response.user?.model_gateway_enabled ?? response.model_gateway_enabled ?? false,
+    newapiBindingStatus: response.user?.newapi_binding_status ?? response.newapi_binding_status,
+    newapiBindingMessage: response.user?.newapi_binding_message ?? response.newapi_binding_message,
+    newapiManagementUrl: response.user?.newapi_management_url ?? response.newapi_management_url,
     modelProviders: normalizeModelProviders(response.user?.model_providers ?? response.model_providers),
     preferences: normalizeUserPreferences(response.user?.preferences ?? response.preferences),
   };

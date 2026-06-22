@@ -3,6 +3,7 @@
 import localforage from "localforage";
 
 export type AuthRole = "admin" | "user";
+export type NewAPIBindingStatus = "configured" | "pending" | "failed";
 
 export type StoredModelProvider = {
   id: string;
@@ -34,6 +35,9 @@ export type StoredAuthSession = {
   modelBaseUrl?: string;
   modelApiKeyConfigured?: boolean;
   modelGatewayEnabled?: boolean;
+  newapiBindingStatus?: NewAPIBindingStatus;
+  newapiBindingMessage?: string;
+  newapiManagementUrl?: string;
   modelProviders?: StoredModelProvider[];
   preferences?: StoredUserPreferences;
 };
@@ -79,6 +83,10 @@ export function normalizeModelProviders(value: unknown): StoredModelProvider[] {
   return providers.map((item, index) => ({ ...item, selected: item.selected && providers.findIndex((provider) => provider.selected) === index }));
 }
 
+function normalizeNewAPIBindingStatus(value: unknown): NewAPIBindingStatus | undefined {
+  return value === "configured" || value === "pending" || value === "failed" ? value : undefined;
+}
+
 function normalizeSession(value: unknown, fallbackKey = ""): StoredAuthSession | null {
   if (!value || typeof value !== "object") {
     return null;
@@ -103,6 +111,9 @@ function normalizeSession(value: unknown, fallbackKey = ""): StoredAuthSession |
     modelBaseUrl: String(candidate.modelBaseUrl || "").trim(),
     modelApiKeyConfigured: Boolean(candidate.modelApiKeyConfigured),
     modelGatewayEnabled: Boolean(candidate.modelGatewayEnabled),
+    newapiBindingStatus: normalizeNewAPIBindingStatus(candidate.newapiBindingStatus),
+    newapiBindingMessage: String(candidate.newapiBindingMessage || "").trim() || undefined,
+    newapiManagementUrl: String(candidate.newapiManagementUrl || "").trim() || undefined,
     modelProviders,
     preferences: normalizeUserPreferences(candidate.preferences),
   };

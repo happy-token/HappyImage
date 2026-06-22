@@ -7,6 +7,7 @@ import type { ImageConversation, ImageTurn } from "@/store/image-conversations";
 export type ImageModel = string;
 export type AuthRole = "admin" | "user";
 export type ImageStorageMode = "local" | "webdav" | "both";
+export type NewAPIBindingStatus = "configured" | "pending" | "failed";
 
 export type ImageStorageSettings = {
   enabled: boolean;
@@ -449,6 +450,9 @@ export type LoginResponse = {
   model_base_url?: string;
   model_api_key_configured?: boolean;
   model_gateway_enabled?: boolean;
+  newapi_binding_status?: NewAPIBindingStatus;
+  newapi_binding_message?: string;
+  newapi_management_url?: string;
   model_providers?: UserModelProvider[];
   preferences?: UserPreferences;
   auth_provider?: string;
@@ -467,6 +471,9 @@ export type LoginResponse = {
     model_base_url?: string;
     model_api_key_configured?: boolean;
     model_gateway_enabled?: boolean;
+    newapi_binding_status?: NewAPIBindingStatus;
+    newapi_binding_message?: string;
+    newapi_management_url?: string;
     model_providers?: UserModelProvider[];
     preferences?: UserPreferences;
     auth_provider?: string;
@@ -560,6 +567,9 @@ export type SessionResponse = {
   model_base_url?: string;
   model_api_key_configured?: boolean;
   model_gateway_enabled?: boolean;
+  newapi_binding_status?: NewAPIBindingStatus;
+  newapi_binding_message?: string;
+  newapi_management_url?: string;
   model_providers?: UserModelProvider[];
   preferences?: UserPreferences;
   auth_provider?: string;
@@ -575,6 +585,9 @@ export type SessionResponse = {
     model_base_url?: string;
     model_api_key_configured?: boolean;
     model_gateway_enabled?: boolean;
+    newapi_binding_status?: NewAPIBindingStatus;
+    newapi_binding_message?: string;
+    newapi_management_url?: string;
     model_providers?: UserModelProvider[];
     preferences?: UserPreferences;
     auth_provider?: string;
