@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { getValidatedAuthSession } from "@/lib/auth-session";
+import { getValidatedAuthSession, logoutCurrentSession } from "@/lib/auth-session";
 import {
   getDefaultRouteForRole,
   normalizePostAuthRedirectPath,
@@ -71,14 +71,23 @@ export function useAuthGuard(allowedRoles?: AuthRole[]): UseAuthGuardResult {
   return { isCheckingAuth, session };
 }
 
-export function useRedirectIfAuthenticated() {
+export function useRedirectIfAuthenticated(options?: { forceLogin?: boolean }) {
   const router = useRouter();
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const forceLogin = Boolean(options?.forceLogin);
 
   useEffect(() => {
     let active = true;
 
     const load = async () => {
+      if (forceLogin) {
+        await logoutCurrentSession();
+        if (active) {
+          setIsCheckingAuth(false);
+        }
+        return;
+      }
+
       const storedSession = await getValidatedAuthSession();
       if (!active) {
         return;
@@ -97,7 +106,7 @@ export function useRedirectIfAuthenticated() {
     return () => {
       active = false;
     };
-  }, [router]);
+  }, [forceLogin, router]);
 
   return { isCheckingAuth };
 }

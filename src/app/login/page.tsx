@@ -18,9 +18,18 @@ function getNextPathFromLocation() {
   return normalizePostAuthRedirectPath(new URLSearchParams(window.location.search).get("next"));
 }
 
+function shouldForceLoginFromLocation() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  return new URLSearchParams(window.location.search).get("force") === "1";
+}
+
 export default function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { isCheckingAuth } = useRedirectIfAuthenticated();
+  const { isCheckingAuth } = useRedirectIfAuthenticated({
+    forceLogin: shouldForceLoginFromLocation(),
+  });
 
   const content = useMemo(
     () => ({
