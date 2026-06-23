@@ -132,7 +132,11 @@ export type SeedGalleryFacetsResponse = {
   index_file: string;
 };
 
-export type ShareDraftStatus = "draft" | "pending_review" | "approved" | "rejected";
+export type ShareDraftStatus =
+  | "draft"
+  | "pending_review"
+  | "approved"
+  | "rejected";
 
 export type ShareDraft = {
   id: string;
@@ -152,7 +156,10 @@ export type ShareDraft = {
   updated_at: string;
 };
 
-export type SaveShareDraftPayload = Omit<ShareDraft, "id" | "created_at" | "updated_at"> & {
+export type SaveShareDraftPayload = Omit<
+  ShareDraft,
+  "id" | "created_at" | "updated_at"
+> & {
   id?: string;
 };
 
@@ -203,7 +210,12 @@ export type ImageTask = {
   conversation_id?: string;
   client_conversation_id?: string;
   client_turn_id?: string;
-  data?: Array<{ b64_json?: string; url?: string; revised_prompt?: string; feedback?: ImageFeedbackSummary }>;
+  data?: Array<{
+    b64_json?: string;
+    url?: string;
+    revised_prompt?: string;
+    feedback?: ImageFeedbackSummary;
+  }>;
   error?: string;
   progress?: string;
   elapsed_secs?: number;
@@ -225,7 +237,10 @@ type ImageConversationItemResponse = {
 
 export type ImageConversationTurnPayload = ImageTurn;
 export type ImageConversationTurnPatch = Partial<
-  Pick<ImageTurn, "prompt" | "status" | "error" | "promptDeleted" | "resultsDeleted">
+  Pick<
+    ImageTurn,
+    "prompt" | "status" | "error" | "promptDeleted" | "resultsDeleted"
+  >
 >;
 export type ImageConversationResultPatch = {
   taskId?: string;
@@ -259,7 +274,8 @@ const seedGalleryApiCache = localforage.createInstance({
   storeName: "seed_gallery_api_cache",
 });
 const seedGalleryMemoryCache = new Map<string, LocalApiCacheRecord<unknown>>();
-let seedGalleryStaticItemsPromise: Promise<SeedGalleryItem[] | null> | null = null;
+let seedGalleryStaticItemsPromise: Promise<SeedGalleryItem[] | null> | null =
+  null;
 
 function getLocalApiCacheKey(path: string) {
   return `${seedGalleryLocalCachePrefix}${path}`;
@@ -272,8 +288,12 @@ function appendSeedGalleryCacheVersion(path: string) {
 
 async function readLocalApiCacheIndex() {
   try {
-    const value = await seedGalleryApiCache.getItem<string[]>(seedGalleryLocalCacheIndexKey);
-    return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+    const value = await seedGalleryApiCache.getItem<string[]>(
+      seedGalleryLocalCacheIndexKey
+    );
+    return Array.isArray(value)
+      ? value.filter((item): item is string => typeof item === "string")
+      : [];
   } catch {
     return [];
   }
@@ -281,7 +301,10 @@ async function readLocalApiCacheIndex() {
 
 async function writeLocalApiCacheIndex(keys: string[]) {
   try {
-    await seedGalleryApiCache.setItem(seedGalleryLocalCacheIndexKey, keys.slice(-seedGalleryLocalCacheMaxEntries));
+    await seedGalleryApiCache.setItem(
+      seedGalleryLocalCacheIndexKey,
+      keys.slice(-seedGalleryLocalCacheMaxEntries)
+    );
   } catch {
     // Browser storage can be unavailable or full; memory and HTTP caching still cover the request.
   }
@@ -296,21 +319,31 @@ async function touchLocalApiCacheKey(key: string) {
       keys.slice(0, overflow).map(async (oldKey) => {
         seedGalleryMemoryCache.delete(oldKey);
         await seedGalleryApiCache.removeItem(oldKey);
-      }),
+      })
     );
   }
   await writeLocalApiCacheIndex(keys);
 }
 
-async function readLocalApiCache<T>(path: string, maxAgeMs: number): Promise<T | null> {
+async function readLocalApiCache<T>(
+  path: string,
+  maxAgeMs: number
+): Promise<T | null> {
   const key = getLocalApiCacheKey(path);
-  const memoryRecord = seedGalleryMemoryCache.get(key) as LocalApiCacheRecord<T> | undefined;
-  if (memoryRecord && Date.now() - Number(memoryRecord.createdAt || 0) <= maxAgeMs) {
+  const memoryRecord = seedGalleryMemoryCache.get(key) as
+    | LocalApiCacheRecord<T>
+    | undefined;
+  if (
+    memoryRecord &&
+    Date.now() - Number(memoryRecord.createdAt || 0) <= maxAgeMs
+  ) {
     return memoryRecord.data;
   }
 
   try {
-    const record = await seedGalleryApiCache.getItem<LocalApiCacheRecord<T>>(key);
+    const record = await seedGalleryApiCache.getItem<LocalApiCacheRecord<T>>(
+      key
+    );
     if (!record) {
       return null;
     }
@@ -331,7 +364,10 @@ async function readLocalApiCache<T>(path: string, maxAgeMs: number): Promise<T |
 
 async function writeLocalApiCache<T>(path: string, data: T) {
   const key = getLocalApiCacheKey(path);
-  const record = { createdAt: Date.now(), data } satisfies LocalApiCacheRecord<T>;
+  const record = {
+    createdAt: Date.now(),
+    data,
+  } satisfies LocalApiCacheRecord<T>;
   seedGalleryMemoryCache.set(key, record);
   try {
     const value = JSON.stringify(record);
@@ -360,16 +396,29 @@ async function fetchSeedGalleryStaticItems() {
   if (!seedGalleryStaticItemsPromise) {
     seedGalleryStaticItemsPromise = (async () => {
       try {
-        const response = await fetch(appendSeedGalleryCacheVersion(seedGalleryStaticItemsPath), {
-          cache: "force-cache",
-        });
+        const response = await fetch(
+          appendSeedGalleryCacheVersion(seedGalleryStaticItemsPath),
+          {
+            cache: "force-cache",
+          }
+        );
         if (!response.ok) {
           return null;
         }
-        const payload = (await response.json()) as { items?: unknown } | unknown[];
-        const items = Array.isArray(payload) ? payload : Array.isArray(payload?.items) ? payload.items : [];
+        const payload = (await response.json()) as
+          | { items?: unknown }
+          | unknown[];
+        const items = Array.isArray(payload)
+          ? payload
+          : Array.isArray(payload?.items)
+          ? payload.items
+          : [];
         return items.filter((item): item is SeedGalleryItem => {
-          return Boolean(item && typeof item === "object" && typeof (item as SeedGalleryItem).id === "string");
+          return Boolean(
+            item &&
+              typeof item === "object" &&
+              typeof (item as SeedGalleryItem).id === "string"
+          );
         });
       } catch {
         return null;
@@ -385,11 +434,17 @@ function filterSeedGalleryItems(
     query?: string;
     category?: string;
     watermark_status?: string;
-  },
+  }
 ) {
-  const query = String(params.query || "").trim().toLowerCase();
-  const category = String(params.category || "").trim().toLowerCase();
-  const watermark = String(params.watermark_status || "").trim().toLowerCase();
+  const query = String(params.query || "")
+    .trim()
+    .toLowerCase();
+  const category = String(params.category || "")
+    .trim()
+    .toLowerCase();
+  const watermark = String(params.watermark_status || "")
+    .trim()
+    .toLowerCase();
   return items.filter((item) => {
     if (category && item.category.toLowerCase() !== category) {
       return false;
@@ -408,9 +463,16 @@ function filterSeedGalleryItems(
   });
 }
 
-function paginateSeedGalleryItems(items: SeedGalleryItem[], limit = 60, offset = 0): SeedGalleryListResponse {
+function paginateSeedGalleryItems(
+  items: SeedGalleryItem[],
+  limit = 60,
+  offset = 0
+): SeedGalleryListResponse {
   const normalizedLimit = Math.min(Math.max(Number(limit) || 60, 1), 240);
-  const normalizedOffset = Math.min(Math.max(Number(offset) || 0, 0), items.length);
+  const normalizedOffset = Math.min(
+    Math.max(Number(offset) || 0, 0),
+    items.length
+  );
   return {
     items: items.slice(normalizedOffset, normalizedOffset + normalizedLimit),
     total: items.length,
@@ -420,7 +482,9 @@ function paginateSeedGalleryItems(items: SeedGalleryItem[], limit = 60, offset =
   };
 }
 
-function buildStaticSeedGalleryFacets(items: SeedGalleryItem[]): SeedGalleryFacetsResponse {
+function buildStaticSeedGalleryFacets(
+  items: SeedGalleryItem[]
+): SeedGalleryFacetsResponse {
   const categories: Record<string, number> = {};
   const watermark_statuses: Record<string, number> = {};
   for (const item of items) {
@@ -496,7 +560,9 @@ export type UserPreferences = {
 export type UserModelProvider = {
   id: string;
   type: string;
+  protocol?: string;
   base_url: string;
+  models?: string[];
   api_key_configured?: boolean;
   selected?: boolean;
 };
@@ -504,10 +570,47 @@ export type UserModelProvider = {
 export type UserModelProviderUpdate = {
   id?: string;
   type?: string;
+  protocol?: string;
   base_url?: string;
+  models?: string[];
   api_key?: string;
   api_key_configured?: boolean;
   selected?: boolean;
+};
+
+export type ProviderTestRequest = {
+  type: string;
+  protocol?: string;
+  base_url: string;
+  models?: string[];
+  api_key: string;
+};
+
+export type ProviderTestResponse = {
+  ok: boolean;
+  models?: string[];
+};
+
+export type NewAPIManagementToken = {
+  id: number;
+  key: string;
+  status: number;
+  name: string;
+  created_time: number;
+  accessed_time: number;
+  expired_time: number;
+  remain_quota: number;
+  unlimited_quota: boolean;
+  used_quota: number;
+};
+
+export type NewAPIManagementResponse = {
+  ok: boolean;
+  status: NewAPIBindingStatus;
+  message?: string;
+  management_url: string;
+  newapi_user_id: string;
+  tokens: NewAPIManagementToken[];
 };
 
 export type UserKey = {
@@ -521,7 +624,10 @@ export type UserKey = {
   last_used_at: string | null;
 };
 
-export async function loginWithPassword(credentials: { email: string; password: string }) {
+export async function loginWithPassword(credentials: {
+  email: string;
+  password: string;
+}) {
   return httpRequest<LoginResponse>("/api/auth/login", {
     method: "POST",
     body: {
@@ -532,7 +638,11 @@ export async function loginWithPassword(credentials: { email: string; password: 
   });
 }
 
-export async function registerWithPassword(credentials: { name: string; password: string; confirmPassword?: string }) {
+export async function registerWithPassword(credentials: {
+  name: string;
+  password: string;
+  confirmPassword?: string;
+}) {
   return httpRequest<LoginResponse>("/api/auth/register", {
     method: "POST",
     body: {
@@ -545,7 +655,9 @@ export async function registerWithPassword(credentials: { name: string; password
 }
 
 export async function fetchModels() {
-  return httpRequest<ModelListResponse>("/v1/models", { redirectOnUnauthorized: false });
+  return httpRequest<ModelListResponse>("/v1/models", {
+    redirectOnUnauthorized: false,
+  });
 }
 
 // ── OIDC Web Login ──────────────────────────────────────────────────
@@ -633,6 +745,20 @@ export async function updateUserProfile(updates: {
   });
 }
 
+export async function testModelProvider(body: ProviderTestRequest) {
+  return httpRequest<ProviderTestResponse>("/api/auth/provider-test", {
+    method: "POST",
+    body,
+    redirectOnUnauthorized: false,
+  });
+}
+
+export async function fetchNewAPIManagement() {
+  return httpRequest<NewAPIManagementResponse>("/api/auth/newapi-management", {
+    redirectOnUnauthorized: false,
+  });
+}
+
 export async function logoutSession() {
   return httpRequest<{ ok: boolean }>("/api/auth/logout", {
     method: "POST",
@@ -640,24 +766,32 @@ export async function logoutSession() {
   });
 }
 
-export async function generateImage(prompt: string, model?: ImageModel, size?: string, quality = "auto") {
-  return httpRequest<ImageResponse>(
-    "/v1/images/generations",
-    {
-      method: "POST",
-      body: {
-        prompt,
-        ...(model ? { model } : {}),
-        ...(size ? { size } : {}),
-        quality,
-        n: 1,
-        response_format: "b64_json",
-      },
+export async function generateImage(
+  prompt: string,
+  model?: ImageModel,
+  size?: string,
+  quality = "auto"
+) {
+  return httpRequest<ImageResponse>("/v1/images/generations", {
+    method: "POST",
+    body: {
+      prompt,
+      ...(model ? { model } : {}),
+      ...(size ? { size } : {}),
+      quality,
+      n: 1,
+      response_format: "b64_json",
     },
-  );
+  });
 }
 
-export async function editImage(files: File | File[], prompt: string, model?: ImageModel, size?: string, quality = "auto") {
+export async function editImage(
+  files: File | File[],
+  prompt: string,
+  model?: ImageModel,
+  size?: string,
+  quality = "auto"
+) {
   const formData = new FormData();
   const uploadFiles = Array.isArray(files) ? files : [files];
 
@@ -674,13 +808,10 @@ export async function editImage(files: File | File[], prompt: string, model?: Im
   formData.append("quality", quality);
   formData.append("n", "1");
 
-  return httpRequest<ImageResponse>(
-    "/v1/images/edits",
-    {
-      method: "POST",
-      body: formData,
-    },
-  );
+  return httpRequest<ImageResponse>("/v1/images/edits", {
+    method: "POST",
+    body: formData,
+  });
 }
 
 export async function createImageGenerationTask(
@@ -689,7 +820,7 @@ export async function createImageGenerationTask(
   model?: ImageModel,
   size?: string,
   quality = "auto",
-  metadata: { conversationId?: string; turnId?: string; imageId?: string } = {},
+  metadata: { conversationId?: string; turnId?: string; imageId?: string } = {}
 ) {
   return httpRequest<ImageTask>("/api/image-tasks/generations", {
     method: "POST",
@@ -700,7 +831,9 @@ export async function createImageGenerationTask(
       ...(model ? { model } : {}),
       ...(size ? { size } : {}),
       quality,
-      ...(metadata.conversationId ? { client_conversation_id: metadata.conversationId } : {}),
+      ...(metadata.conversationId
+        ? { client_conversation_id: metadata.conversationId }
+        : {}),
       ...(metadata.turnId ? { client_turn_id: metadata.turnId } : {}),
       ...(metadata.imageId ? { client_image_id: metadata.imageId } : {}),
     },
@@ -714,7 +847,7 @@ export async function createImageEditTask(
   model?: ImageModel,
   size?: string,
   quality = "auto",
-  metadata: { conversationId?: string; turnId?: string; imageId?: string } = {},
+  metadata: { conversationId?: string; turnId?: string; imageId?: string } = {}
 ) {
   const formData = new FormData();
   const uploadFiles = Array.isArray(files) ? files : [files];
@@ -754,105 +887,141 @@ export async function fetchImageTasks(ids: string[]) {
     params.set("ids", ids.join(","));
   }
   params.set("_t", String(Date.now()));
-  return httpRequest<ImageTaskListResponse>(`/api/image-tasks?${params.toString()}`, {
-    redirectOnUnauthorized: false,
-  });
+  return httpRequest<ImageTaskListResponse>(
+    `/api/image-tasks?${params.toString()}`,
+    {
+      redirectOnUnauthorized: false,
+    }
+  );
 }
 
-export async function updateImageTaskFeedback(taskId: string, imageIndex: number, vote: ImageFeedbackVote | null) {
-  return httpRequest<ImageTask>(`/api/image-tasks/${encodeURIComponent(taskId)}/feedback`, {
-    method: "POST",
-    redirectOnUnauthorized: false,
-    body: {
-      image_index: imageIndex,
-      vote,
-    },
-  });
+export async function updateImageTaskFeedback(
+  taskId: string,
+  imageIndex: number,
+  vote: ImageFeedbackVote | null
+) {
+  return httpRequest<ImageTask>(
+    `/api/image-tasks/${encodeURIComponent(taskId)}/feedback`,
+    {
+      method: "POST",
+      redirectOnUnauthorized: false,
+      body: {
+        image_index: imageIndex,
+        vote,
+      },
+    }
+  );
 }
 
 export async function fetchImageConversations() {
-  return httpRequest<ImageConversationListResponse>(`/api/image-conversations?_t=${Date.now()}`, {
-    redirectOnUnauthorized: false,
-  });
+  return httpRequest<ImageConversationListResponse>(
+    `/api/image-conversations?_t=${Date.now()}`,
+    {
+      redirectOnUnauthorized: false,
+    }
+  );
 }
 
-export async function upsertImageConversation(conversationId: string, title: string) {
-  return httpRequest<ImageConversationItemResponse>(`/api/image-conversations/${encodeURIComponent(conversationId)}`, {
-    method: "PUT",
-    redirectOnUnauthorized: false,
-    body: { title },
-  });
+export async function upsertImageConversation(
+  conversationId: string,
+  title: string
+) {
+  return httpRequest<ImageConversationItemResponse>(
+    `/api/image-conversations/${encodeURIComponent(conversationId)}`,
+    {
+      method: "PUT",
+      redirectOnUnauthorized: false,
+      body: { title },
+    }
+  );
 }
 
-export async function createImageConversationTurn(conversationId: string, turn: ImageConversationTurnPayload) {
+export async function createImageConversationTurn(
+  conversationId: string,
+  turn: ImageConversationTurnPayload
+) {
   return httpRequest<ImageConversationItemResponse>(
     `/api/image-conversations/${encodeURIComponent(conversationId)}/turns`,
     {
       method: "POST",
       redirectOnUnauthorized: false,
       body: turn,
-    },
+    }
   );
 }
 
 export async function updateImageConversationTurn(
   conversationId: string,
   turnId: string,
-  updates: ImageConversationTurnPatch,
+  updates: ImageConversationTurnPatch
 ) {
   return httpRequest<ImageConversationItemResponse>(
-    `/api/image-conversations/${encodeURIComponent(conversationId)}/turns/${encodeURIComponent(turnId)}`,
+    `/api/image-conversations/${encodeURIComponent(
+      conversationId
+    )}/turns/${encodeURIComponent(turnId)}`,
     {
       method: "PATCH",
       redirectOnUnauthorized: false,
       body: updates,
-    },
+    }
   );
 }
 
 export async function updateImageConversationResult(
   conversationId: string,
   imageId: string,
-  updates: ImageConversationResultPatch,
+  updates: ImageConversationResultPatch
 ) {
   return httpRequest<ImageConversationItemResponse>(
-    `/api/image-conversations/${encodeURIComponent(conversationId)}/results/${encodeURIComponent(imageId)}`,
+    `/api/image-conversations/${encodeURIComponent(
+      conversationId
+    )}/results/${encodeURIComponent(imageId)}`,
     {
       method: "PATCH",
       redirectOnUnauthorized: false,
       body: updates,
-    },
+    }
   );
 }
 
 export async function deleteServerImageConversation(conversationId: string) {
-  return httpRequest<{ ok: boolean }>(`/api/image-conversations/${encodeURIComponent(conversationId)}`, {
-    method: "DELETE",
-    redirectOnUnauthorized: false,
-  });
+  return httpRequest<{ ok: boolean }>(
+    `/api/image-conversations/${encodeURIComponent(conversationId)}`,
+    {
+      method: "DELETE",
+      redirectOnUnauthorized: false,
+    }
+  );
 }
 
-export async function fetchSeedGallery(params: {
-  query?: string;
-  category?: string;
-  watermark_status?: string;
-  limit?: number;
-  offset?: number;
-} = {}) {
+export async function fetchSeedGallery(
+  params: {
+    query?: string;
+    category?: string;
+    watermark_status?: string;
+    limit?: number;
+    offset?: number;
+  } = {}
+) {
   const staticItems = await fetchSeedGalleryStaticItems();
   if (staticItems) {
-    return paginateSeedGalleryItems(filterSeedGalleryItems(staticItems, params), params.limit || 60, params.offset || 0);
+    return paginateSeedGalleryItems(
+      filterSeedGalleryItems(staticItems, params),
+      params.limit || 60,
+      params.offset || 0
+    );
   }
 
   const search = new URLSearchParams();
   if (params.query) search.set("query", params.query);
   if (params.category) search.set("category", params.category);
-  if (params.watermark_status) search.set("watermark_status", params.watermark_status);
+  if (params.watermark_status)
+    search.set("watermark_status", params.watermark_status);
   search.set("limit", String(params.limit || 60));
   search.set("offset", String(params.offset || 0));
   return cachedSeedGalleryRequest<SeedGalleryListResponse>(
     `/api/seed-gallery?${search.toString()}`,
-    seedGalleryListCacheMaxAgeMs,
+    seedGalleryListCacheMaxAgeMs
   );
 }
 
@@ -862,7 +1031,10 @@ export async function fetchSeedGalleryFacets() {
     return buildStaticSeedGalleryFacets(staticItems);
   }
 
-  return cachedSeedGalleryRequest<SeedGalleryFacetsResponse>("/api/seed-gallery/facets", seedGalleryFacetCacheMaxAgeMs);
+  return cachedSeedGalleryRequest<SeedGalleryFacetsResponse>(
+    "/api/seed-gallery/facets",
+    seedGalleryFacetCacheMaxAgeMs
+  );
 }
 
 export async function fetchSeedGalleryItem(id: string) {
@@ -877,7 +1049,7 @@ export async function fetchSeedGalleryItem(id: string) {
 
   return cachedSeedGalleryRequest<{ item: SeedGalleryItem }>(
     `/api/seed-gallery/${encodeURIComponent(id)}`,
-    seedGalleryDetailCacheMaxAgeMs,
+    seedGalleryDetailCacheMaxAgeMs
   );
 }
 
@@ -893,7 +1065,10 @@ export async function fetchRelatedSeedGalleryItems(id: string, limit = 4) {
       .filter((candidate) => candidate.id !== id)
       .map((candidate, index) => {
         const categoryScore = candidate.category === item.category ? 100 : 0;
-        const tagScore = candidate.tags.reduce((score, tag) => score + (itemTags.has(tag.toLowerCase()) ? 10 : 0), 0);
+        const tagScore = candidate.tags.reduce(
+          (score, tag) => score + (itemTags.has(tag.toLowerCase()) ? 10 : 0),
+          0
+        );
         return { item: candidate, index, score: categoryScore + tagScore };
       })
       .sort((a, b) => b.score - a.score || a.index - b.index)
@@ -905,7 +1080,7 @@ export async function fetchRelatedSeedGalleryItems(id: string, limit = 4) {
   search.set("limit", String(limit));
   return cachedSeedGalleryRequest<SeedGalleryListResponse>(
     `/api/seed-gallery/${encodeURIComponent(id)}/related?${search.toString()}`,
-    seedGalleryDetailCacheMaxAgeMs,
+    seedGalleryDetailCacheMaxAgeMs
   );
 }
 
@@ -916,11 +1091,16 @@ export async function summarizeUserGalleryItem(payload: GalleryTextPayload) {
   });
 }
 
-export async function generateUserGallerySharePrompt(payload: GalleryTextPayload & { conversation_summary?: string }) {
-  return httpRequest<{ share_prompt: string }>("/api/user-gallery/generate-share-prompt", {
-    method: "POST",
-    body: payload,
-  });
+export async function generateUserGallerySharePrompt(
+  payload: GalleryTextPayload & { conversation_summary?: string }
+) {
+  return httpRequest<{ share_prompt: string }>(
+    "/api/user-gallery/generate-share-prompt",
+    {
+      method: "POST",
+      body: payload,
+    }
+  );
 }
 
 export async function saveShareDraft(payload: SaveShareDraftPayload) {
@@ -946,30 +1126,46 @@ export async function updateSettingsConfig(settings: SettingsConfig) {
 }
 
 export async function testImageStorageConnection() {
-  return httpRequest<{ result: { ok: boolean; status: number; error?: string } }>("/api/image-storage/test", {
+  return httpRequest<{
+    result: { ok: boolean; status: number; error?: string };
+  }>("/api/image-storage/test", {
     method: "POST",
     body: {},
   });
 }
 
 export async function syncImageStorage() {
-  return httpRequest<{ result: { uploaded: number; skipped: number; failed: number } }>("/api/image-storage/sync", {
+  return httpRequest<{
+    result: { uploaded: number; skipped: number; failed: number };
+  }>("/api/image-storage/sync", {
     method: "POST",
     body: {},
   });
 }
 
-export async function fetchManagedImages(filters: { start_date?: string; end_date?: string }) {
+export async function fetchManagedImages(filters: {
+  start_date?: string;
+  end_date?: string;
+}) {
   const params = new URLSearchParams();
   if (filters.start_date) params.set("start_date", filters.start_date);
   if (filters.end_date) params.set("end_date", filters.end_date);
-  return httpRequest<{ items: ManagedImage[]; groups: Array<{ date: string; items: ManagedImage[] }> }>(
-    `/api/images${params.toString() ? `?${params.toString()}` : ""}`,
-  );
+  return httpRequest<{
+    items: ManagedImage[];
+    groups: Array<{ date: string; items: ManagedImage[] }>;
+  }>(`/api/images${params.toString() ? `?${params.toString()}` : ""}`);
 }
 
-export async function deleteManagedImages(body: { paths?: string[]; start_date?: string; end_date?: string; all_matching?: boolean }) {
-  return httpRequest<{ removed: number }>("/api/images/delete", { method: "POST", body });
+export async function deleteManagedImages(body: {
+  paths?: string[];
+  start_date?: string;
+  end_date?: string;
+  all_matching?: boolean;
+}) {
+  return httpRequest<{ removed: number }>("/api/images/delete", {
+    method: "POST",
+    body,
+  });
 }
 
 export async function downloadImages(paths: string[]) {
@@ -985,7 +1181,11 @@ export async function downloadImages(paths: string[]) {
     return;
   }
 
-  const response = await request.post("/api/images/download", { paths }, { responseType: "blob" });
+  const response = await request.post(
+    "/api/images/download",
+    { paths },
+    { responseType: "blob" }
+  );
   const blob = response.data as Blob;
   triggerBlobDownload(blob, "images.zip");
 }
@@ -995,21 +1195,29 @@ export async function downloadSingleImage(path: string) {
   if (downloadToken) {
     const encodedPath = path.split("/").map(encodeURIComponent).join("/");
     const params = new URLSearchParams({ download_token: downloadToken });
-    triggerBrowserDownload(`/api/images/download/${encodedPath}?${params.toString()}`, path.split("/").pop() || "image.png");
+    triggerBrowserDownload(
+      `/api/images/download/${encodedPath}?${params.toString()}`,
+      path.split("/").pop() || "image.png"
+    );
     return;
   }
 
-  const response = await request.get(`/api/images/download/${path}`, { responseType: "blob" });
+  const response = await request.get(`/api/images/download/${path}`, {
+    responseType: "blob",
+  });
   const blob = response.data as Blob;
   triggerBlobDownload(blob, path.split("/").pop() || "image.png");
 }
 
 export async function createImageAccessLink(source: string) {
-  const data = await httpRequest<{ url: string; path: string }>("/api/images/access-link", {
-    method: "POST",
-    body: { url: source },
-    redirectOnUnauthorized: false,
-  });
+  const data = await httpRequest<{ url: string; path: string }>(
+    "/api/images/access-link",
+    {
+      method: "POST",
+      body: { url: source },
+      redirectOnUnauthorized: false,
+    }
+  );
   return String(data.url || "").trim();
 }
 
@@ -1019,11 +1227,14 @@ async function createImageDownloadToken(paths: string[]) {
     return "";
   }
   try {
-    const data = await httpRequest<{ token: string }>("/api/images/download-token", {
-      method: "POST",
-      body: { paths },
-      redirectOnUnauthorized: false,
-    });
+    const data = await httpRequest<{ token: string }>(
+      "/api/images/download-token",
+      {
+        method: "POST",
+        body: { paths },
+        redirectOnUnauthorized: false,
+      }
+    );
     return String(data.token || "").trim();
   } catch {
     return "";
@@ -1063,14 +1274,21 @@ export async function setImageTags(path: string, tags: string[]) {
 }
 
 export async function deleteImageTag(tag: string) {
-  return httpRequest<{ ok: boolean; removed_from: number }>(`/api/images/tags/${encodeURIComponent(tag)}`, {
-    method: "DELETE",
-  });
+  return httpRequest<{ ok: boolean; removed_from: number }>(
+    `/api/images/tags/${encodeURIComponent(tag)}`,
+    {
+      method: "DELETE",
+    }
+  );
 }
 
 export type ImageStorageStats = {
-  disk_total_mb: number; disk_used_mb: number; disk_free_mb: number;
-  image_count: number; image_size_mb: number; image_size_bytes: number;
+  disk_total_mb: number;
+  disk_used_mb: number;
+  disk_free_mb: number;
+  image_count: number;
+  image_size_mb: number;
+  image_size_bytes: number;
 };
 
 export async function fetchImageStorage() {
@@ -1078,22 +1296,32 @@ export async function fetchImageStorage() {
 }
 
 export async function compressAllImages() {
-  return httpRequest<{ compressed: number; saved_bytes: number; saved_mb: number }>("/api/images/storage/compress", { method: "POST" });
+  return httpRequest<{
+    compressed: number;
+    saved_bytes: number;
+    saved_mb: number;
+  }>("/api/images/storage/compress", { method: "POST" });
 }
 
 export async function deleteToTarget(targetFreeMb: number) {
   return httpRequest<{ removed: number; freed_mb: number; done: boolean }>(
     `/api/images/storage/cleanup-to-target?target_free_mb=${targetFreeMb}&dry_run=false`,
-    { method: "POST" },
+    { method: "POST" }
   );
 }
 
-export async function fetchSystemLogs(filters: { type?: string; start_date?: string; end_date?: string }) {
+export async function fetchSystemLogs(filters: {
+  type?: string;
+  start_date?: string;
+  end_date?: string;
+}) {
   const params = new URLSearchParams();
   if (filters.type) params.set("type", filters.type);
   if (filters.start_date) params.set("start_date", filters.start_date);
   if (filters.end_date) params.set("end_date", filters.end_date);
-  return httpRequest<{ items: SystemLog[] }>(`/api/logs${params.toString() ? `?${params.toString()}` : ""}`);
+  return httpRequest<{ items: SystemLog[] }>(
+    `/api/logs${params.toString() ? `?${params.toString()}` : ""}`
+  );
 }
 
 export async function deleteSystemLogs(ids: string[]) {
@@ -1118,20 +1346,31 @@ export async function createUserKeyWithOptions({
   name: string;
   key?: string;
 }) {
-  return httpRequest<{ item: UserKey; key: string; items: UserKey[] }>("/api/auth/users", {
-    method: "POST",
-    body: { name, key },
-  });
+  return httpRequest<{ item: UserKey; key: string; items: UserKey[] }>(
+    "/api/auth/users",
+    {
+      method: "POST",
+      body: { name, key },
+    }
+  );
 }
 
 export async function updateUserKey(
   keyId: string,
-  updates: { enabled?: boolean; name?: string; key?: string; watermark_unlocked?: boolean },
+  updates: {
+    enabled?: boolean;
+    name?: string;
+    key?: string;
+    watermark_unlocked?: boolean;
+  }
 ) {
-  return httpRequest<{ item: UserKey; items: UserKey[] }>(`/api/auth/users/${keyId}`, {
-    method: "POST",
-    body: updates,
-  });
+  return httpRequest<{ item: UserKey; items: UserKey[] }>(
+    `/api/auth/users/${keyId}`,
+    {
+      method: "POST",
+      body: updates,
+    }
+  );
 }
 
 export async function deleteUserKey(keyId: string) {

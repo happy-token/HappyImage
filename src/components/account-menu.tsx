@@ -6,11 +6,11 @@ import {
   BarChart3,
   Check,
   Copy,
+  ExternalLink,
   Globe2,
   Heart,
   ImageIcon,
   Info,
-  KeyRound,
   LoaderCircle,
   LogOut,
   Mail,
@@ -25,15 +25,24 @@ import {
   Stamp,
   Sun,
   ThumbsDown,
+  Trash2,
   UserRound,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import webConfig from "@/constants/common-env";
-import { updateUserProfile } from "@/lib/api";
-import { SUPPORT_EMAIL, SUPPORT_WECHAT, SUPPORT_WECHAT_QR } from "@/lib/contact";
+import { testModelProvider, updateUserProfile } from "@/lib/api";
+import {
+  SUPPORT_EMAIL,
+  SUPPORT_WECHAT,
+  SUPPORT_WECHAT_QR,
+} from "@/lib/contact";
 import {
   resolveLanguage,
   saveLanguagePreference,
@@ -52,7 +61,13 @@ import {
 } from "@/store/auth";
 
 type ThemePreference = "system" | "light" | "dark";
-type SettingsSection = "account" | "appearance" | "provider" | "newapi" | "watermark" | "contact" | "about";
+type SettingsSection =
+  | "account"
+  | "appearance"
+  | "provider"
+  | "watermark"
+  | "contact"
+  | "about";
 
 export type AccountUsageStats = {
   conversationCount: number;
@@ -65,6 +80,74 @@ export type AccountUsageStats = {
 };
 
 const THEME_STORAGE_KEY = "happytoken-theme";
+const HAPPYTOKEN_PROVIDER_ID = "newapi-default";
+const HAPPYTOKEN_MANAGEMENT_URL = "/settings/newapi";
+const HAPPYTOKEN_GATEWAY_URL = "https://gateway.happy-token.cn";
+const HAPPYTOKEN_MODEL_BASE_URL = `${HAPPYTOKEN_GATEWAY_URL}/v1`;
+const HAPPYTOKEN_MANAGEMENT_ORIGINS = new Set([HAPPYTOKEN_GATEWAY_URL]);
+const OPENAI_PROTOCOL = "openai";
+const PROVIDER_PRESETS = [
+  {
+    id: "openai",
+    name: "OpenAI",
+    protocol: OPENAI_PROTOCOL,
+    baseUrl: "https://api.openai.com/v1",
+    models: ["gpt-image-2", "gpt-image-1.5", "gpt-image-1"],
+  },
+  {
+    id: "volcengine",
+    name: "火山方舟",
+    protocol: OPENAI_PROTOCOL,
+    baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
+    models: ["doubao-seedream-3-0-t2i-250415", "seedream-4-0-250828"],
+  },
+  {
+    id: "byteplus",
+    name: "BytePlus ModelArk",
+    protocol: OPENAI_PROTOCOL,
+    baseUrl: "https://ark.ap-southeast.bytepluses.com/api/v3",
+    models: ["seedream-5-0-lite", "seedream-4-5", "seedream-4-0"],
+  },
+  {
+    id: "gemini",
+    name: "Gemini / Nano Banana",
+    protocol: OPENAI_PROTOCOL,
+    baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai/",
+    models: [
+      "gemini-3.1-flash-image",
+      "gemini-3-pro-image",
+      "gemini-2.5-flash-image",
+    ],
+  },
+  {
+    id: "alibaba",
+    name: "阿里云百炼",
+    protocol: OPENAI_PROTOCOL,
+    baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    models: [
+      "qwen-image-2.0-pro",
+      "qwen-image-2.0",
+      "qwen-image-max",
+      "wan2.7-image",
+    ],
+  },
+  {
+    id: "custom",
+    name: "自定义供应商",
+    protocol: OPENAI_PROTOCOL,
+    baseUrl: "",
+    models: ["gpt-image-2"],
+  },
+] as const;
+const GEMINI_IMAGE_MODEL_LABELS: Record<string, string> = {
+  "gemini-3.1-flash-image": "gemini-3.1-flash-image（Nano Banana 2）",
+  "gemini-3-pro-image": "gemini-3-pro-image（Nano Banana Pro）",
+  "gemini-2.5-flash-image": "gemini-2.5-flash-image（Nano Banana）",
+};
+
+function formatImageModelLabel(model: string) {
+  return GEMINI_IMAGE_MODEL_LABELS[model] || model;
+}
 
 const settingsCopy = {
   "zh-CN": {
@@ -81,7 +164,6 @@ const settingsCopy = {
       contact: "联系我们",
       about: "关于",
       provider: "供应商",
-      newapi: "NewAPI",
     },
     account: {
       current: "当前登录账户",
@@ -97,31 +179,45 @@ const settingsCopy = {
     },
     provider: {
       title: "模型供应商",
-      type: "供应商类型",
+      type: "供应商名称",
+      preset: "供应商",
       baseUrl: "Base URL",
+      models: "可用模型",
+      modelsPlaceholder: "每行一个模型 ID",
       apiKey: "API Key",
       apiKeyPlaceholder: "留空则保持现有 API Key",
       configured: "已保存 API Key",
       notConfigured: "尚未保存 API Key",
       save: "保存供应商",
       add: "添加供应商",
+      choose: "选择供应商",
+      configure: "配置供应商",
+      delete: "删除",
+      deleteConfirm: "确定删除这个供应商吗？",
       edit: "编辑",
       use: "使用",
       active: "使用中",
+      default: "默认",
       back: "返回列表",
+      backToProviders: "返回供应商",
       empty: "还没有供应商",
       saved: "供应商配置已保存",
+      deleted: "供应商已删除",
       failed: "保存供应商配置失败",
-      hint: "配置后，当前账户发起的图片生成会优先使用这个 OpenAI 兼容网关。",
-    },
-    newapi: {
-      title: "NewAPI 管理",
+      test: "测试连接",
+      testing: "测试中",
+      testSuccess: "连接测试通过",
+      testFailed: "连接测试失败",
+      apiKeyRequired: "请填写 API Key 后测试连接",
+      happyToken: "HappyToken",
+      happyTokenManagement: "HappyToken",
+      manageHappyToken: "管理",
+      openHappyToken: "打开 HappyToken 管理",
       status: "绑定状态",
-      configured: "已自动绑定",
+      bindingConfigured: "已自动绑定",
       pending: "等待绑定",
-      failed: "绑定失败",
-      open: "打开 NewAPI 管理",
-      hint: "令牌、额度和用量由 NewAPI 管理。",
+      bindingFailed: "绑定失败",
+      hint: "配置后，当前账户发起的图片生成会优先使用这个 OpenAI 兼容网关。",
     },
     appearance: {
       theme: "主题",
@@ -173,7 +269,6 @@ const settingsCopy = {
       contact: "Contact",
       about: "About",
       provider: "Provider",
-      newapi: "NewAPI",
     },
     account: {
       current: "Current signed-in account",
@@ -189,31 +284,45 @@ const settingsCopy = {
     },
     provider: {
       title: "Model provider",
-      type: "Provider type",
+      type: "Provider name",
+      preset: "Provider",
       baseUrl: "Base URL",
+      models: "Available models",
+      modelsPlaceholder: "One model ID per line",
       apiKey: "API Key",
       apiKeyPlaceholder: "Leave blank to keep the current API key",
       configured: "API key saved",
       notConfigured: "No API key saved",
       save: "Save provider",
       add: "Add provider",
+      choose: "Choose provider",
+      configure: "Configure provider",
+      delete: "Delete",
+      deleteConfirm: "Delete this provider?",
       edit: "Edit",
       use: "Use",
       active: "Active",
+      default: "Default",
       back: "Back",
+      backToProviders: "Back to providers",
       empty: "No providers yet",
       saved: "Provider settings saved",
+      deleted: "Provider deleted",
       failed: "Failed to save provider settings",
-      hint: "When configured, image generation from this account uses this OpenAI-compatible gateway first.",
-    },
-    newapi: {
-      title: "NewAPI Management",
+      test: "Test connection",
+      testing: "Testing",
+      testSuccess: "Connection test passed",
+      testFailed: "Connection test failed",
+      apiKeyRequired: "Enter an API key before testing",
+      happyToken: "HappyToken",
+      happyTokenManagement: "HappyToken",
+      manageHappyToken: "Manage",
+      openHappyToken: "Open HappyToken management",
       status: "Binding status",
-      configured: "Configured",
+      bindingConfigured: "Configured",
       pending: "Pending",
-      failed: "Failed",
-      open: "Open NewAPI management",
-      hint: "Tokens, quota, and usage are managed by NewAPI.",
+      bindingFailed: "Failed",
+      hint: "When configured, image generation from this account uses this OpenAI-compatible gateway first.",
     },
     appearance: {
       theme: "Theme",
@@ -235,7 +344,8 @@ const settingsCopy = {
       hint: "Watermarked downloads use “label · user ID”.",
       previewTitle: "Preview",
       previewAlt: "Happy Token watermark preview",
-      previewCaption: "The watermark usually appears in the lower-right corner.",
+      previewCaption:
+        "The watermark usually appears in the lower-right corner.",
     },
     contact: {
       email: "Email",
@@ -255,63 +365,197 @@ const settingsCopy = {
 
 function getSystemTheme(): "light" | "dark" {
   if (typeof window === "undefined") return "light";
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  return window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
 }
 
 function applyThemePreference(preference: ThemePreference) {
-  const effectiveTheme = preference === "system" ? getSystemTheme() : preference;
+  const effectiveTheme =
+    preference === "system" ? getSystemTheme() : preference;
   document.documentElement.classList.toggle("dark", effectiveTheme === "dark");
   document.documentElement.style.colorScheme = effectiveTheme;
   window.localStorage.setItem(THEME_STORAGE_KEY, preference);
 }
 
-function getSessionModelProviders(session: StoredAuthSession): StoredModelProvider[] {
-  const normalizedProviders = normalizeModelProviders(session.modelProviders);
-  if (normalizedProviders.length > 0) {
-    return normalizedProviders;
+function normalizeManagementUrl(value: unknown) {
+  const candidate = String(value || "").trim();
+  if (!candidate) {
+    return HAPPYTOKEN_MANAGEMENT_URL;
   }
-  const baseUrl = String(session.modelBaseUrl || "").trim().replace(/\/+$/, "");
+  try {
+    const parsed = new URL(candidate);
+    if (
+      parsed.protocol !== "https:" ||
+      !HAPPYTOKEN_MANAGEMENT_ORIGINS.has(parsed.origin)
+    ) {
+      return HAPPYTOKEN_MANAGEMENT_URL;
+    }
+    parsed.hash = "";
+    return parsed.toString().replace(/\/$/, "");
+  } catch {
+    return HAPPYTOKEN_MANAGEMENT_URL;
+  }
+}
+
+function isHappyTokenProvider(provider: StoredModelProvider) {
+  const type = provider.type.toLowerCase();
+  return (
+    provider.id === HAPPYTOKEN_PROVIDER_ID ||
+    type === "happytoken" ||
+    (type === "newapi" &&
+      provider.baseUrl.toLowerCase().includes("gateway.happy-token.cn"))
+  );
+}
+
+function ensureSelectedProvider(providers: StoredModelProvider[]) {
+  const selectedProvider =
+    providers.find((provider) => provider.selected) ??
+    providers.find((provider) => isHappyTokenProvider(provider)) ??
+    providers[0];
+  return providers.map((provider) => ({
+    ...provider,
+    selected: provider.id === selectedProvider?.id,
+  }));
+}
+
+function createHappyTokenProvider(
+  session: StoredAuthSession,
+  providers: StoredModelProvider[]
+): StoredModelProvider {
+  const existingProvider = providers.find((provider) =>
+    isHappyTokenProvider(provider)
+  );
+  const selectedCustomProvider = providers.find(
+    (provider) => !isHappyTokenProvider(provider) && provider.selected
+  );
+  const sessionBaseUrl = String(session.modelBaseUrl || "")
+    .trim()
+    .replace(/\/+$/, "");
+  const baseUrl = String(existingProvider?.baseUrl || sessionBaseUrl || "")
+    .trim()
+    .replace(/\/+$/, "");
+  return {
+    id: HAPPYTOKEN_PROVIDER_ID,
+    type: "happytoken",
+    protocol: OPENAI_PROTOCOL,
+    baseUrl: baseUrl.toLowerCase().includes("gateway.happy-token.cn")
+      ? baseUrl
+      : HAPPYTOKEN_MODEL_BASE_URL,
+    models: existingProvider?.models?.length
+      ? existingProvider.models
+      : ["gpt-image-2", "gpt-image-1.5", "gpt-image-1"],
+    apiKeyConfigured: Boolean(
+      existingProvider?.apiKeyConfigured ||
+        session.newapiBindingStatus === "configured" ||
+        session.modelApiKeyConfigured
+    ),
+    selected: existingProvider?.selected || !selectedCustomProvider,
+  };
+}
+
+function getSessionModelProviders(
+  session: StoredAuthSession
+): StoredModelProvider[] {
+  const normalizedProviders = normalizeModelProviders(session.modelProviders);
+  const happyTokenProvider = createHappyTokenProvider(
+    session,
+    normalizedProviders
+  );
+  const customProviders = normalizedProviders.filter(
+    (provider) => !isHappyTokenProvider(provider)
+  );
+  if (customProviders.length > 0 || happyTokenProvider.baseUrl) {
+    return ensureSelectedProvider([happyTokenProvider, ...customProviders]);
+  }
+  const baseUrl = String(session.modelBaseUrl || "")
+    .trim()
+    .replace(/\/+$/, "");
   if (!baseUrl) {
     return [];
   }
-  return [
+  return ensureSelectedProvider([
     {
       id: "default",
-      type: String(session.modelProvider || "newapi").trim() || "newapi",
+      type:
+        String(session.modelProvider || "happytoken").trim() || "happytoken",
       baseUrl,
+      protocol: OPENAI_PROTOCOL,
+      models: ["gpt-image-2"],
       apiKeyConfigured: Boolean(session.modelApiKeyConfigured),
       selected: true,
     },
-  ];
+  ]);
 }
 
 function createProviderId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();
   }
-  return `provider-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  return `provider-${Date.now().toString(36)}-${Math.random()
+    .toString(36)
+    .slice(2, 8)}`;
 }
 
 function buildSessionFromProfileResponse(
   session: StoredAuthSession,
   data: Awaited<ReturnType<typeof updateUserProfile>>,
-  fallbackProviders: StoredModelProvider[],
+  fallbackProviders: StoredModelProvider[]
 ): StoredAuthSession {
-  const modelProviders = normalizeModelProviders(data.user?.model_providers ?? data.model_providers ?? fallbackProviders);
+  const modelProviders = normalizeModelProviders(
+    data.user?.model_providers ?? data.model_providers ?? fallbackProviders
+  );
   return {
     ...session,
     name: data.user?.name || data.name || session.name,
-    watermarkLabel: data.user?.watermark_label ?? data.watermark_label ?? session.watermarkLabel ?? "",
-    watermarkUnlocked: data.user?.watermark_unlocked ?? data.watermark_unlocked ?? session.watermarkUnlocked,
-    modelProvider: data.user?.model_provider ?? data.model_provider ?? session.modelProvider ?? "",
-    modelBaseUrl: data.user?.model_base_url ?? data.model_base_url ?? session.modelBaseUrl ?? "",
-    modelApiKeyConfigured: data.user?.model_api_key_configured ?? data.model_api_key_configured ?? session.modelApiKeyConfigured ?? false,
-    modelGatewayEnabled: data.user?.model_gateway_enabled ?? data.model_gateway_enabled ?? session.modelGatewayEnabled ?? false,
-    newapiBindingStatus: data.user?.newapi_binding_status ?? data.newapi_binding_status ?? session.newapiBindingStatus,
-    newapiBindingMessage: data.user?.newapi_binding_message ?? data.newapi_binding_message ?? session.newapiBindingMessage,
-    newapiManagementUrl: data.user?.newapi_management_url ?? data.newapi_management_url ?? session.newapiManagementUrl,
+    watermarkLabel:
+      data.user?.watermark_label ??
+      data.watermark_label ??
+      session.watermarkLabel ??
+      "",
+    watermarkUnlocked:
+      data.user?.watermark_unlocked ??
+      data.watermark_unlocked ??
+      session.watermarkUnlocked,
+    modelProvider:
+      data.user?.model_provider ??
+      data.model_provider ??
+      session.modelProvider ??
+      "",
+    modelBaseUrl:
+      data.user?.model_base_url ??
+      data.model_base_url ??
+      session.modelBaseUrl ??
+      "",
+    modelApiKeyConfigured:
+      data.user?.model_api_key_configured ??
+      data.model_api_key_configured ??
+      session.modelApiKeyConfigured ??
+      false,
+    modelGatewayEnabled:
+      data.user?.model_gateway_enabled ??
+      data.model_gateway_enabled ??
+      session.modelGatewayEnabled ??
+      false,
+    newapiBindingStatus:
+      data.user?.newapi_binding_status ??
+      data.newapi_binding_status ??
+      session.newapiBindingStatus,
+    newapiBindingMessage:
+      (data.user?.newapi_binding_status ?? data.newapi_binding_status) ===
+      "configured"
+        ? undefined
+        : data.user?.newapi_binding_message ??
+          data.newapi_binding_message ??
+          session.newapiBindingMessage,
+    newapiManagementUrl:
+      data.user?.newapi_management_url ??
+      data.newapi_management_url ??
+      session.newapiManagementUrl,
     modelProviders,
-    preferences: normalizeUserPreferences(data.user?.preferences ?? data.preferences ?? session.preferences),
+    preferences: normalizeUserPreferences(
+      data.user?.preferences ?? data.preferences ?? session.preferences
+    ),
   };
 }
 
@@ -347,26 +591,48 @@ export function AccountMenu({
   onSessionUpdate?: (session: StoredAuthSession) => void;
   usageStats?: AccountUsageStats;
 }) {
-  const [draftWatermarkLabel, setDraftWatermarkLabel] = useState(watermarkLabel ?? session.watermarkLabel ?? "");
-  const [draftModelProviders, setDraftModelProviders] = useState<StoredModelProvider[]>(() => getSessionModelProviders(session));
-  const [providerView, setProviderView] = useState<"list" | "form">("list");
-  const [editingProviderId, setEditingProviderId] = useState<string | null>(null);
-  const [draftModelProvider, setDraftModelProvider] = useState("newapi");
+  const [draftWatermarkLabel, setDraftWatermarkLabel] = useState(
+    watermarkLabel ?? session.watermarkLabel ?? ""
+  );
+  const [draftModelProviders, setDraftModelProviders] = useState<
+    StoredModelProvider[]
+  >(() => getSessionModelProviders(session));
+  const [providerView, setProviderView] = useState<"list" | "picker" | "form">(
+    "list"
+  );
+  const [editingProviderId, setEditingProviderId] = useState<string | null>(
+    null
+  );
+  const [draftProviderPreset, setDraftProviderPreset] = useState("openai");
+  const [draftModelProvider, setDraftModelProvider] = useState("happytoken");
+  const [draftProviderProtocol, setDraftProviderProtocol] =
+    useState(OPENAI_PROTOCOL);
   const [draftModelBaseUrl, setDraftModelBaseUrl] = useState("");
+  const [draftProviderModels, setDraftProviderModels] = useState("");
   const [draftModelApiKey, setDraftModelApiKey] = useState("");
   const [isSavingWatermarkLabel, setIsSavingWatermarkLabel] = useState(false);
   const [isSavingProvider, setIsSavingProvider] = useState(false);
+  const [isTestingProvider, setIsTestingProvider] = useState(false);
   const language = useLanguagePreference();
-  const [themePreference, setThemePreference] = useState<ThemePreference>("system");
-  const [activeSection, setActiveSection] = useState<SettingsSection>("account");
+  const [themePreference, setThemePreference] =
+    useState<ThemePreference>("system");
+  const [activeSection, setActiveSection] =
+    useState<SettingsSection>("account");
   const effectiveLanguage = resolveLanguage(language);
   const copy = settingsCopy[effectiveLanguage];
   const displayName = session.name.trim() || copy.fallbackName;
-  const triggerLabel = session.role === "admin" ? copy.trigger.admin : copy.trigger.mine;
+  const triggerLabel =
+    session.role === "admin" ? copy.trigger.admin : copy.trigger.mine;
+  const happyTokenManagementUrl = HAPPYTOKEN_MANAGEMENT_URL;
   useEffect(() => {
     const accountTheme = session.preferences?.theme;
-    const storedTheme = accountTheme || window.localStorage.getItem(THEME_STORAGE_KEY);
-    if (storedTheme === "system" || storedTheme === "light" || storedTheme === "dark") {
+    const storedTheme =
+      accountTheme || window.localStorage.getItem(THEME_STORAGE_KEY);
+    if (
+      storedTheme === "system" ||
+      storedTheme === "light" ||
+      storedTheme === "dark"
+    ) {
       setThemePreference(storedTheme);
       applyThemePreference(storedTheme);
     }
@@ -393,12 +659,20 @@ export function AccountMenu({
     const nextProviders = getSessionModelProviders(session);
     setDraftModelProviders(nextProviders);
     if (providerView === "list") {
-      const selectedProvider = nextProviders.find((provider) => provider.selected) ?? nextProviders[0];
-      setDraftModelProvider(selectedProvider?.type || "newapi");
+      const selectedProvider =
+        nextProviders.find((provider) => provider.selected) ?? nextProviders[0];
+      setDraftModelProvider(selectedProvider?.type || "happytoken");
+      setDraftProviderProtocol(selectedProvider?.protocol || OPENAI_PROTOCOL);
       setDraftModelBaseUrl(selectedProvider?.baseUrl || "");
+      setDraftProviderModels((selectedProvider?.models || []).join("\n"));
     }
     setDraftModelApiKey("");
-  }, [providerView, session.modelBaseUrl, session.modelProvider, session.modelProviders]);
+  }, [
+    providerView,
+    session.modelBaseUrl,
+    session.modelProvider,
+    session.modelProviders,
+  ]);
 
   const handleSaveWatermarkLabel = async () => {
     if (!onSaveWatermarkLabel) {
@@ -410,35 +684,98 @@ export function AccountMenu({
       await onSaveWatermarkLabel(nextLabel);
       toast.success(copy.watermark.saved);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : copy.watermark.failed);
+      toast.error(
+        error instanceof Error ? error.message : copy.watermark.failed
+      );
     } finally {
       setIsSavingWatermarkLabel(false);
     }
   };
 
-  const toProviderPayload = (providers: StoredModelProvider[], apiKeyById: Record<string, string> = {}) =>
+  const toProviderPayload = (
+    providers: StoredModelProvider[],
+    apiKeyById: Record<string, string> = {}
+  ) =>
     providers.map((provider) => ({
       id: provider.id,
       type: provider.type,
+      protocol: provider.protocol || OPENAI_PROTOCOL,
       base_url: provider.baseUrl,
+      models: provider.models || [],
       api_key_configured: Boolean(provider.apiKeyConfigured),
       selected: Boolean(provider.selected),
-      ...(apiKeyById[provider.id]?.trim() ? { api_key: apiKeyById[provider.id].trim() } : {}),
+      ...(apiKeyById[provider.id]?.trim()
+        ? { api_key: apiKeyById[provider.id].trim() }
+        : {}),
     }));
 
+  const openProviderPicker = () => {
+    setEditingProviderId(null);
+    setDraftProviderPreset("");
+    setDraftModelApiKey("");
+    setProviderView("picker");
+  };
+
   const openProviderForm = (provider?: StoredModelProvider) => {
+    const matchingPreset = PROVIDER_PRESETS.find(
+      (preset) =>
+        preset.id !== "custom" &&
+        preset.name.toLowerCase() === String(provider?.type || "").toLowerCase()
+    );
+    const defaultPreset = PROVIDER_PRESETS[0];
     setEditingProviderId(provider?.id ?? null);
-    setDraftModelProvider(provider?.type || "newapi");
-    setDraftModelBaseUrl(provider?.baseUrl || "");
+    setDraftProviderPreset(
+      provider ? matchingPreset?.id || "custom" : defaultPreset.id
+    );
+    setDraftModelProvider(provider?.type || defaultPreset.name);
+    setDraftProviderProtocol(provider?.protocol || defaultPreset.protocol);
+    setDraftModelBaseUrl(provider?.baseUrl || defaultPreset.baseUrl);
+    setDraftProviderModels(
+      (provider?.models?.length ? provider.models : defaultPreset.models).join(
+        "\n"
+      )
+    );
     setDraftModelApiKey("");
     setProviderView("form");
   };
 
-  const syncProviderSession = async (providers: StoredModelProvider[], apiKeyById: Record<string, string> = {}) => {
+  const handleProviderPresetChange = (presetId: string) => {
+    const preset =
+      PROVIDER_PRESETS.find((item) => item.id === presetId) ||
+      PROVIDER_PRESETS[0];
+    setDraftProviderPreset(preset.id);
+    if (preset.id === "custom") {
+      setDraftModelProvider("");
+      setDraftProviderProtocol(OPENAI_PROTOCOL);
+      setDraftModelBaseUrl("");
+      setDraftProviderModels(preset.models.join("\n"));
+      return;
+    }
+    setDraftModelProvider(preset.name);
+    setDraftProviderProtocol(preset.protocol);
+    setDraftModelBaseUrl(preset.baseUrl);
+    setDraftProviderModels(preset.models.join("\n"));
+  };
+
+  const handleChooseProviderPreset = (presetId: string) => {
+    setEditingProviderId(null);
+    handleProviderPresetChange(presetId);
+    setDraftModelApiKey("");
+    setProviderView("form");
+  };
+
+  const syncProviderSession = async (
+    providers: StoredModelProvider[],
+    apiKeyById: Record<string, string> = {}
+  ) => {
     const data = await updateUserProfile({
       model_providers: toProviderPayload(providers, apiKeyById),
     });
-    const nextSession = buildSessionFromProfileResponse(session, data, providers);
+    const nextSession = buildSessionFromProfileResponse(
+      session,
+      data,
+      providers
+    );
     await setStoredAuthSession(nextSession);
     onSessionUpdate?.(nextSession);
     const nextProviders = getSessionModelProviders(nextSession);
@@ -447,42 +784,101 @@ export function AccountMenu({
   };
 
   const handleSaveProvider = async () => {
-    const nextProvider = draftModelProvider.trim() || "newapi";
+    const nextProvider = draftModelProvider.trim() || "custom";
+    const nextProtocol = draftProviderProtocol.trim() || OPENAI_PROTOCOL;
     const nextBaseUrl = draftModelBaseUrl.trim().replace(/\/+$/, "");
+    const nextModels = draftProviderModels
+      .split(/\r?\n|,/)
+      .map((model) => model.trim())
+      .filter((model, index, list) => model && list.indexOf(model) === index);
     if (!nextBaseUrl) {
       toast.error(`${copy.provider.baseUrl} 不能为空`);
       return;
     }
-    if (!nextBaseUrl.startsWith("http://") && !nextBaseUrl.startsWith("https://")) {
+    if (
+      !nextBaseUrl.startsWith("http://") &&
+      !nextBaseUrl.startsWith("https://")
+    ) {
       toast.error(`${copy.provider.baseUrl} 必须以 http:// 或 https:// 开头`);
       return;
     }
     const providerId = editingProviderId || createProviderId();
-    const existingProvider = draftModelProviders.find((provider) => provider.id === providerId);
-    const nextProviders = [
-      ...draftModelProviders.filter((provider) => provider.id !== providerId).map((provider) => ({
-        ...provider,
-        selected: false,
-      })),
+    const existingProvider = draftModelProviders.find(
+      (provider) => provider.id === providerId
+    );
+    const existingSelectedProvider =
+      draftModelProviders.find(
+        (provider) => provider.selected && provider.id !== providerId
+      ) ?? existingProvider;
+    const nextProviders = ensureSelectedProvider([
+      ...draftModelProviders.filter((provider) => provider.id !== providerId),
       {
         id: providerId,
         type: nextProvider,
+        protocol: nextProtocol,
         baseUrl: nextBaseUrl,
-        apiKeyConfigured: Boolean(draftModelApiKey.trim() || existingProvider?.apiKeyConfigured),
-        selected: true,
+        models: nextModels,
+        apiKeyConfigured: Boolean(
+          draftModelApiKey.trim() || existingProvider?.apiKeyConfigured
+        ),
+        selected: editingProviderId
+          ? Boolean(existingProvider?.selected)
+          : providerId === existingSelectedProvider?.id,
       },
-    ];
+    ]);
     setIsSavingProvider(true);
     try {
-      await syncProviderSession(nextProviders, draftModelApiKey.trim() ? { [providerId]: draftModelApiKey.trim() } : {});
+      await syncProviderSession(
+        nextProviders,
+        draftModelApiKey.trim() ? { [providerId]: draftModelApiKey.trim() } : {}
+      );
       setProviderView("list");
       setEditingProviderId(null);
       setDraftModelApiKey("");
       toast.success(copy.provider.saved);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : copy.provider.failed);
+      toast.error(
+        error instanceof Error ? error.message : copy.provider.failed
+      );
     } finally {
       setIsSavingProvider(false);
+    }
+  };
+
+  const handleTestProvider = async () => {
+    const nextProvider = draftModelProvider.trim() || "custom";
+    const nextBaseUrl = draftModelBaseUrl.trim().replace(/\/+$/, "");
+    const nextModels = draftProviderModels
+      .split(/\r?\n|,/)
+      .map((model) => model.trim())
+      .filter((model, index, list) => model && list.indexOf(model) === index);
+    if (!nextBaseUrl) {
+      toast.error(`${copy.provider.baseUrl} 不能为空`);
+      return;
+    }
+    if (!draftModelApiKey.trim()) {
+      toast.error(copy.provider.apiKeyRequired);
+      return;
+    }
+    setIsTestingProvider(true);
+    try {
+      const result = await testModelProvider({
+        type: nextProvider,
+        protocol: OPENAI_PROTOCOL,
+        base_url: nextBaseUrl,
+        models: nextModels,
+        api_key: draftModelApiKey.trim(),
+      });
+      if (Array.isArray(result.models) && result.models.length > 0) {
+        setDraftProviderModels(result.models.join("\n"));
+      }
+      toast.success(copy.provider.testSuccess);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : copy.provider.testFailed
+      );
+    } finally {
+      setIsTestingProvider(false);
     }
   };
 
@@ -496,7 +892,43 @@ export function AccountMenu({
       await syncProviderSession(nextProviders);
       toast.success(copy.provider.saved);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : copy.provider.failed);
+      toast.error(
+        error instanceof Error ? error.message : copy.provider.failed
+      );
+    } finally {
+      setIsSavingProvider(false);
+    }
+  };
+
+  const handleDeleteProvider = async (providerId: string) => {
+    const deletingProvider = draftModelProviders.find(
+      (provider) => provider.id === providerId
+    );
+    if (!deletingProvider || isHappyTokenProvider(deletingProvider)) {
+      return;
+    }
+    if (!window.confirm(copy.provider.deleteConfirm)) {
+      return;
+    }
+    const remainingProviders = draftModelProviders.filter(
+      (provider) => provider.id !== providerId
+    );
+    const selectedProvider =
+      remainingProviders.find((provider) => provider.selected) ??
+      remainingProviders.find((provider) => isHappyTokenProvider(provider)) ??
+      remainingProviders[0];
+    const nextProviders = remainingProviders.map((provider) => ({
+      ...provider,
+      selected: provider.id === selectedProvider?.id,
+    }));
+    setIsSavingProvider(true);
+    try {
+      await syncProviderSession(nextProviders);
+      toast.success(copy.provider.deleted);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : copy.provider.failed
+      );
     } finally {
       setIsSavingProvider(false);
     }
@@ -505,7 +937,13 @@ export function AccountMenu({
   const handleCopy = async (value: string, label: string) => {
     try {
       await navigator.clipboard.writeText(value);
-      toast.success(`${label}${effectiveLanguage === "zh-CN" ? copy.contact.copied : ` ${copy.contact.copied}`}`);
+      toast.success(
+        `${label}${
+          effectiveLanguage === "zh-CN"
+            ? copy.contact.copied
+            : ` ${copy.contact.copied}`
+        }`
+      );
     } catch {
       toast.error(copy.contact.copyFailed);
     }
@@ -514,23 +952,37 @@ export function AccountMenu({
   const handleLanguageChange = (value: LanguagePreference) => {
     saveLanguagePreference(value);
     const nextPreferences = { ...(session.preferences ?? {}), language: value };
-    void updateUserProfile({ preferences: toPreferencePayload(nextPreferences) })
+    void updateUserProfile({
+      preferences: toPreferencePayload(nextPreferences),
+    })
       .then(async (data) => {
-        const nextSession = buildSessionFromProfileResponse(session, data, getSessionModelProviders(session));
+        const nextSession = buildSessionFromProfileResponse(
+          session,
+          data,
+          getSessionModelProviders(session)
+        );
         await setStoredAuthSession(nextSession);
         onSessionUpdate?.(nextSession);
       })
       .catch(() => undefined);
-    toast.success(settingsCopy[resolveLanguage(value)].appearance.languageSaved);
+    toast.success(
+      settingsCopy[resolveLanguage(value)].appearance.languageSaved
+    );
   };
 
   const handleThemeChange = (value: ThemePreference) => {
     setThemePreference(value);
     applyThemePreference(value);
     const nextPreferences = { ...(session.preferences ?? {}), theme: value };
-    void updateUserProfile({ preferences: toPreferencePayload(nextPreferences) })
+    void updateUserProfile({
+      preferences: toPreferencePayload(nextPreferences),
+    })
       .then(async (data) => {
-        const nextSession = buildSessionFromProfileResponse(session, data, getSessionModelProviders(session));
+        const nextSession = buildSessionFromProfileResponse(
+          session,
+          data,
+          getSessionModelProviders(session)
+        );
         await setStoredAuthSession(nextSession);
         onSessionUpdate?.(nextSession);
       })
@@ -538,28 +990,61 @@ export function AccountMenu({
     toast.success(copy.appearance.themeSaved);
   };
 
-  const settingRowClass = "flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-sm";
-  const sectionTitleClass = "px-3 pb-2 text-[11px] font-medium uppercase tracking-wide text-stone-400 dark:text-stone-500";
+  const settingRowClass =
+    "flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-sm";
+  const sectionTitleClass =
+    "px-3 pb-2 text-[11px] font-medium uppercase tracking-wide text-stone-400 dark:text-stone-500";
   const sections = [
     { id: "account", label: copy.nav.account, icon: UserRound },
     { id: "appearance", label: copy.nav.appearance, icon: Palette },
-    ...(session.role === "user" ? [{ id: "provider" as const, label: copy.nav.provider, icon: ServerCog }] : []),
-    ...(session.role === "user" ? [{ id: "newapi" as const, label: copy.nav.newapi, icon: KeyRound }] : []),
-    ...(onSaveWatermarkLabel ? [{ id: "watermark" as const, label: copy.nav.watermark, icon: Stamp }] : []),
+    ...(session.role === "user"
+      ? [{ id: "provider" as const, label: copy.nav.provider, icon: ServerCog }]
+      : []),
+    ...(onSaveWatermarkLabel
+      ? [{ id: "watermark" as const, label: copy.nav.watermark, icon: Stamp }]
+      : []),
     { id: "contact", label: copy.nav.contact, icon: MessageCircle },
     { id: "about", label: copy.nav.about, icon: Info },
-  ] satisfies Array<{ id: SettingsSection; label: string; icon: typeof UserRound }>;
+  ] satisfies Array<{
+    id: SettingsSection;
+    label: string;
+    icon: typeof UserRound;
+  }>;
 
   const renderPanel = () => {
     if (activeSection === "account") {
       const statItems = usageStats
         ? [
-            { label: copy.account.conversations, value: usageStats.conversationCount, icon: MessageCircle },
-            { label: copy.account.turns, value: usageStats.turnCount, icon: BarChart3 },
-            { label: copy.account.images, value: usageStats.generatedImageCount, icon: ImageIcon },
-            { label: copy.account.activeTasks, value: usageStats.activeTaskCount, icon: Activity },
-            { label: copy.account.liked, value: usageStats.likedImageCount, icon: Heart },
-            { label: copy.account.disliked, value: usageStats.dislikedImageCount, icon: ThumbsDown },
+            {
+              label: copy.account.conversations,
+              value: usageStats.conversationCount,
+              icon: MessageCircle,
+            },
+            {
+              label: copy.account.turns,
+              value: usageStats.turnCount,
+              icon: BarChart3,
+            },
+            {
+              label: copy.account.images,
+              value: usageStats.generatedImageCount,
+              icon: ImageIcon,
+            },
+            {
+              label: copy.account.activeTasks,
+              value: usageStats.activeTaskCount,
+              icon: Activity,
+            },
+            {
+              label: copy.account.liked,
+              value: usageStats.likedImageCount,
+              icon: Heart,
+            },
+            {
+              label: copy.account.disliked,
+              value: usageStats.dislikedImageCount,
+              icon: ThumbsDown,
+            },
           ]
         : [];
       return (
@@ -571,8 +1056,12 @@ export function AccountMenu({
                 <UserRound className="size-5" />
               </div>
               <div className="min-w-0">
-                <div className="truncate text-sm font-semibold text-stone-950 dark:text-stone-50">{displayName}</div>
-                <div className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">{copy.account.current}</div>
+                <div className="truncate text-sm font-semibold text-stone-950 dark:text-stone-50">
+                  {displayName}
+                </div>
+                <div className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
+                  {copy.account.current}
+                </div>
               </div>
             </div>
           </div>
@@ -583,19 +1072,28 @@ export function AccountMenu({
                 {statItems.map((item) => {
                   const Icon = item.icon;
                   return (
-                    <div key={item.label} className="rounded-2xl border border-stone-200/80 bg-white p-3 dark:border-white/10 dark:bg-white/[0.03]">
+                    <div
+                      key={item.label}
+                      className="rounded-2xl border border-stone-200/80 bg-white p-3 dark:border-white/10 dark:bg-white/[0.03]"
+                    >
                       <div className="flex items-center justify-between gap-2 text-xs text-stone-500 dark:text-stone-400">
                         <span>{item.label}</span>
                         <Icon className="size-3.5" />
                       </div>
-                      <div className="mt-2 text-xl font-semibold text-stone-950 dark:text-stone-50">{item.value}</div>
+                      <div className="mt-2 text-xl font-semibold text-stone-950 dark:text-stone-50">
+                        {item.value}
+                      </div>
                     </div>
                   );
                 })}
               </div>
               <div className="mt-2 flex items-center justify-between gap-3 rounded-2xl border border-stone-200/80 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-white/[0.03]">
-                <span className="text-stone-500 dark:text-stone-400">{copy.account.lastActivity}</span>
-                <span className="font-medium text-stone-800 dark:text-stone-200">{usageStats.lastActivityLabel || copy.account.noActivity}</span>
+                <span className="text-stone-500 dark:text-stone-400">
+                  {copy.account.lastActivity}
+                </span>
+                <span className="font-medium text-stone-800 dark:text-stone-200">
+                  {usageStats.lastActivityLabel || copy.account.noActivity}
+                </span>
               </div>
             </div>
           ) : null}
@@ -609,13 +1107,17 @@ export function AccountMenu({
           <div className={sectionTitleClass}>{copy.nav.appearance}</div>
           <div className="grid gap-2">
             <div className={settingRowClass}>
-              <span className="text-stone-700 dark:text-stone-300">{copy.appearance.theme}</span>
+              <span className="text-stone-700 dark:text-stone-300">
+                {copy.appearance.theme}
+              </span>
               <div className="inline-flex rounded-lg bg-stone-100 p-0.5 text-xs dark:bg-white/10">
-                {([
-                  ["system", copy.appearance.system, Monitor],
-                  ["light", copy.appearance.light, Sun],
-                  ["dark", copy.appearance.dark, Moon],
-                ] as const).map(([value, label, Icon]) => (
+                {(
+                  [
+                    ["system", copy.appearance.system, Monitor],
+                    ["light", copy.appearance.light, Sun],
+                    ["dark", copy.appearance.dark, Moon],
+                  ] as const
+                ).map(([value, label, Icon]) => (
                   <button
                     key={value}
                     type="button"
@@ -624,7 +1126,7 @@ export function AccountMenu({
                       "inline-flex h-7 items-center gap-1 rounded-md px-2.5 font-medium transition",
                       themePreference === value
                         ? "bg-white text-stone-950 shadow-sm dark:bg-stone-800 dark:text-stone-50"
-                        : "text-stone-500 hover:text-stone-900 dark:text-stone-400 dark:hover:text-stone-100",
+                        : "text-stone-500 hover:text-stone-900 dark:text-stone-400 dark:hover:text-stone-100"
                     )}
                   >
                     <Icon className="size-3.5" />
@@ -639,11 +1141,13 @@ export function AccountMenu({
                 {copy.appearance.language}
               </span>
               <div className="inline-flex rounded-lg bg-stone-100 p-0.5 text-xs dark:bg-white/10">
-                {([
-                  ["system", copy.appearance.system],
-                  ["zh-CN", copy.appearance.chinese],
-                  ["en-US", copy.appearance.english],
-                ] as const).map(([value, label]) => (
+                {(
+                  [
+                    ["system", copy.appearance.system],
+                    ["zh-CN", copy.appearance.chinese],
+                    ["en-US", copy.appearance.english],
+                  ] as const
+                ).map(([value, label]) => (
                   <button
                     key={value}
                     type="button"
@@ -652,7 +1156,7 @@ export function AccountMenu({
                       "inline-flex h-7 items-center gap-1 rounded-md px-2.5 font-medium transition",
                       language === value
                         ? "bg-white text-stone-950 shadow-sm dark:bg-stone-800 dark:text-stone-50"
-                        : "text-stone-500 hover:text-stone-900 dark:text-stone-400 dark:hover:text-stone-100",
+                        : "text-stone-500 hover:text-stone-900 dark:text-stone-400 dark:hover:text-stone-100"
                     )}
                   >
                     {language === value ? <Check className="size-3" /> : null}
@@ -667,67 +1171,210 @@ export function AccountMenu({
     }
 
     if (activeSection === "provider") {
-      if (providerView === "form") {
-        const editingProvider = editingProviderId ? draftModelProviders.find((provider) => provider.id === editingProviderId) : null;
+      if (providerView === "picker") {
         return (
           <section>
             <div className="flex items-center justify-between gap-3 px-3 pb-2">
               <button
                 type="button"
-                onClick={() => {
-                  setProviderView("list");
-                  setEditingProviderId(null);
-                  setDraftModelApiKey("");
-                }}
+                onClick={() => setProviderView("list")}
                 className="inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-stone-400 transition hover:text-stone-700 dark:text-stone-500 dark:hover:text-stone-200"
               >
                 <ArrowLeft className="size-3.5" />
                 {copy.provider.back}
               </button>
             </div>
-            <div className="rounded-2xl border border-stone-200/80 bg-stone-50/70 p-4 dark:border-white/10 dark:bg-white/5">
-              <div className="space-y-3">
+            <div className="grid gap-2 sm:grid-cols-2">
+              {PROVIDER_PRESETS.map((preset) => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => handleChooseProviderPreset(preset.id)}
+                  className="rounded-2xl border border-stone-200/80 bg-white p-3 text-left transition hover:border-stone-300 hover:bg-stone-50 dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-white/20 dark:hover:bg-white/8"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-stone-100 text-stone-600 dark:bg-white/10 dark:text-stone-300">
+                      <ServerCog className="size-4" />
+                    </span>
+                    <span className="min-w-0 truncate text-sm font-semibold text-stone-900 dark:text-stone-100">
+                      {preset.name}
+                    </span>
+                  </div>
+                  <div className="mt-2 truncate text-[11px] text-stone-500 dark:text-stone-400">
+                    {preset.baseUrl || copy.provider.configure}
+                  </div>
+                  <div className="mt-1 truncate text-[11px] text-stone-400">
+                    {preset.models
+                      .slice(0, 2)
+                      .map(formatImageModelLabel)
+                      .join(", ")}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </section>
+        );
+      }
+
+      if (providerView === "form") {
+        const editingProvider = editingProviderId
+          ? draftModelProviders.find(
+              (provider) => provider.id === editingProviderId
+            )
+          : null;
+        const isCustomProvider = draftProviderPreset === "custom";
+        const modelSummary = draftProviderModels
+          .split(/\r?\n|,/)
+          .map((model) => model.trim())
+          .filter(Boolean)
+          .map(formatImageModelLabel)
+          .join(", ");
+        return (
+          <section className="flex min-h-full flex-col">
+            <div className="flex items-center justify-between gap-3 px-3 pb-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setProviderView(editingProviderId ? "list" : "picker");
+                  setEditingProviderId(null);
+                  setDraftModelApiKey("");
+                }}
+                className="inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-stone-400 transition hover:text-stone-700 dark:text-stone-500 dark:hover:text-stone-200"
+              >
+                <ArrowLeft className="size-3.5" />
+                {editingProviderId
+                  ? copy.provider.back
+                  : copy.provider.backToProviders}
+              </button>
+            </div>
+            <div className="flex-1 rounded-2xl border border-stone-200/80 bg-stone-50/70 p-4 dark:border-white/10 dark:bg-white/5">
+              <div className="space-y-3 pb-3">
+                <div className="flex items-center gap-2 text-sm font-semibold text-stone-900 dark:text-stone-100">
+                  <ServerCog className="size-4 text-stone-400" />
+                  {draftModelProvider || copy.provider.configure}
+                </div>
+                {isCustomProvider ? (
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-stone-500 dark:text-stone-400">
+                      {copy.provider.type}
+                    </label>
+                    <input
+                      value={draftModelProvider}
+                      onChange={(event) =>
+                        setDraftModelProvider(event.target.value.slice(0, 32))
+                      }
+                      placeholder="custom"
+                      className="h-9 w-full rounded-xl border border-stone-200 bg-white px-3 text-sm text-stone-800 outline-none transition focus:border-stone-400 dark:border-white/10 dark:bg-white/8 dark:text-stone-100"
+                    />
+                  </div>
+                ) : null}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-stone-500 dark:text-stone-400">{copy.provider.type}</label>
-                  <input
-                    value={draftModelProvider}
-                    onChange={(event) => setDraftModelProvider(event.target.value.slice(0, 32))}
-                    placeholder="newapi"
-                    className="h-9 w-full rounded-xl border border-stone-200 bg-white px-3 text-sm text-stone-800 outline-none transition focus:border-stone-400 dark:border-white/10 dark:bg-white/8 dark:text-stone-100"
-                  />
+                  {isCustomProvider ? (
+                    <>
+                      <label className="text-xs font-medium text-stone-500 dark:text-stone-400">
+                        {copy.provider.baseUrl}
+                      </label>
+                      <input
+                        value={draftModelBaseUrl}
+                        onChange={(event) =>
+                          setDraftModelBaseUrl(event.target.value)
+                        }
+                        placeholder="https://new-api.example.com/v1"
+                        className="h-9 w-full rounded-xl border border-stone-200 bg-white px-3 text-sm text-stone-800 outline-none transition focus:border-stone-400 dark:border-white/10 dark:bg-white/8 dark:text-stone-100"
+                      />
+                    </>
+                  ) : (
+                    <div className="rounded-xl border border-stone-200/70 bg-white px-3 py-2 dark:border-white/10 dark:bg-white/8">
+                      <div className="text-[11px] font-medium text-stone-400">
+                        {copy.provider.baseUrl}
+                      </div>
+                      <div className="mt-1 break-all text-xs text-stone-700 dark:text-stone-300">
+                        {draftModelBaseUrl}
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-stone-500 dark:text-stone-400">{copy.provider.baseUrl}</label>
-                  <input
-                    value={draftModelBaseUrl}
-                    onChange={(event) => setDraftModelBaseUrl(event.target.value)}
-                    placeholder="https://new-api.example.com/v1"
-                    className="h-9 w-full rounded-xl border border-stone-200 bg-white px-3 text-sm text-stone-800 outline-none transition focus:border-stone-400 dark:border-white/10 dark:bg-white/8 dark:text-stone-100"
-                  />
+                  {isCustomProvider ? (
+                    <>
+                      <label className="text-xs font-medium text-stone-500 dark:text-stone-400">
+                        {copy.provider.models}
+                      </label>
+                      <textarea
+                        value={draftProviderModels}
+                        onChange={(event) =>
+                          setDraftProviderModels(event.target.value)
+                        }
+                        rows={3}
+                        placeholder={copy.provider.modelsPlaceholder}
+                        className="w-full resize-none rounded-xl border border-stone-200 bg-white px-3 py-2 font-mono text-xs text-stone-800 outline-none transition focus:border-stone-400 dark:border-white/10 dark:bg-white/8 dark:text-stone-100"
+                      />
+                    </>
+                  ) : (
+                    <div className="rounded-xl border border-stone-200/70 bg-white px-3 py-2 dark:border-white/10 dark:bg-white/8">
+                      <div className="text-[11px] font-medium text-stone-400">
+                        {copy.provider.models}
+                      </div>
+                      <div className="mt-1 line-clamp-2 text-xs text-stone-700 dark:text-stone-300">
+                        {modelSummary}
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between gap-3">
-                    <label className="text-xs font-medium text-stone-500 dark:text-stone-400">{copy.provider.apiKey}</label>
+                    <label className="text-xs font-medium text-stone-500 dark:text-stone-400">
+                      {copy.provider.apiKey}
+                    </label>
                     <span className="text-[11px] text-stone-400">
-                      {editingProvider?.apiKeyConfigured ? copy.provider.configured : copy.provider.notConfigured}
+                      {editingProvider?.apiKeyConfigured
+                        ? copy.provider.configured
+                        : copy.provider.notConfigured}
                     </span>
                   </div>
                   <input
                     value={draftModelApiKey}
-                    onChange={(event) => setDraftModelApiKey(event.target.value)}
+                    onChange={(event) =>
+                      setDraftModelApiKey(event.target.value)
+                    }
                     type="password"
                     placeholder={copy.provider.apiKeyPlaceholder}
                     className="h-9 w-full rounded-xl border border-stone-200 bg-white px-3 font-mono text-sm text-stone-800 outline-none transition focus:border-stone-400 dark:border-white/10 dark:bg-white/8 dark:text-stone-100"
                   />
                 </div>
+              </div>
+            </div>
+            <div className="sticky bottom-0 z-10 -mx-4 mt-3 border-t border-stone-200/80 bg-white/95 px-4 pb-1 pt-3 backdrop-blur dark:border-white/10 dark:bg-stone-950/95">
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleTestProvider()}
+                  disabled={isTestingProvider || isSavingProvider}
+                  className="inline-flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 text-sm font-medium text-stone-800 transition hover:bg-stone-50 disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.03] dark:text-stone-100 dark:hover:bg-white/10"
+                >
+                  {isTestingProvider ? (
+                    <LoaderCircle className="size-4 animate-spin" />
+                  ) : (
+                    <Activity className="size-4" />
+                  )}
+                  <span className="truncate">
+                    {isTestingProvider
+                      ? copy.provider.testing
+                      : copy.provider.test}
+                  </span>
+                </button>
                 <button
                   type="button"
                   onClick={() => void handleSaveProvider()}
-                  disabled={isSavingProvider}
-                  className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-xl bg-zinc-900 px-3 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200"
+                  disabled={isSavingProvider || isTestingProvider}
+                  className="inline-flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-xl bg-zinc-900 px-3 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200"
                 >
-                  {isSavingProvider ? <LoaderCircle className="size-4 animate-spin" /> : <Save className="size-4" />}
-                  {copy.provider.save}
+                  {isSavingProvider ? (
+                    <LoaderCircle className="size-4 animate-spin" />
+                  ) : (
+                    <Save className="size-4" />
+                  )}
+                  <span className="truncate">{copy.provider.save}</span>
                 </button>
               </div>
             </div>
@@ -735,27 +1382,116 @@ export function AccountMenu({
         );
       }
 
+      const bindingStatus = session.newapiBindingStatus || "pending";
+      const bindingStatusLabel =
+        bindingStatus === "configured"
+          ? copy.provider.bindingConfigured
+          : bindingStatus === "failed"
+          ? copy.provider.bindingFailed
+          : copy.provider.pending;
+      const happyTokenProvider =
+        draftModelProviders.find((provider) =>
+          isHappyTokenProvider(provider)
+        ) ?? createHappyTokenProvider(session, draftModelProviders);
+      const customModelProviders = draftModelProviders.filter(
+        (provider) => !isHappyTokenProvider(provider)
+      );
+
       return (
         <section>
           <div className={sectionTitleClass}>{copy.provider.title}</div>
           <div className="grid gap-2">
-            {draftModelProviders.length > 0 ? (
-              draftModelProviders.map((provider) => (
+            <div
+              className={cn(
+                "flex items-center gap-3 rounded-2xl border bg-white p-3 transition dark:bg-white/[0.03]",
+                happyTokenProvider.selected
+                  ? "border-stone-300 shadow-sm dark:border-white/20"
+                  : "border-stone-200/80 dark:border-white/10"
+              )}
+            >
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-stone-100 text-stone-600 dark:bg-white/10 dark:text-stone-300">
+                <ServerCog className="size-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="truncate text-sm font-semibold text-stone-900 dark:text-stone-100">
+                    {copy.provider.happyToken}
+                  </span>
+                  <span className="inline-flex shrink-0 items-center rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-medium text-stone-600 dark:bg-white/10 dark:text-stone-300">
+                    {copy.provider.default}
+                  </span>
+                  {happyTokenProvider.selected ? (
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-stone-900 px-2 py-0.5 text-[10px] font-medium text-white dark:bg-stone-100 dark:text-stone-950">
+                      <Check className="size-3" />
+                      {copy.provider.active}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="mt-0.5 truncate text-xs text-stone-500 dark:text-stone-400">
+                  {happyTokenProvider.baseUrl}
+                </div>
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-stone-400">
+                  <span>
+                    {copy.provider.status}: {bindingStatusLabel}
+                  </span>
+                  {happyTokenProvider.apiKeyConfigured ? (
+                    <span>{copy.provider.configured}</span>
+                  ) : null}
+                </div>
+                {bindingStatus !== "configured" &&
+                session.newapiBindingMessage ? (
+                  <p className="mt-1 text-xs leading-5 text-stone-500 dark:text-stone-400">
+                    {session.newapiBindingMessage}
+                  </p>
+                ) : null}
+              </div>
+              <div className="flex shrink-0 items-center gap-1">
+                <a
+                  href={happyTokenManagementUrl}
+                  className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-stone-600 transition hover:bg-stone-100 hover:text-stone-900 dark:text-stone-300 dark:hover:bg-white/10 dark:hover:text-white"
+                  aria-label={copy.provider.openHappyToken}
+                  title={copy.provider.openHappyToken}
+                >
+                  <ExternalLink className="size-3.5" />
+                  {copy.provider.manageHappyToken}
+                </a>
+                {!happyTokenProvider.selected ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void handleSelectProvider(happyTokenProvider.id)
+                    }
+                    disabled={isSavingProvider}
+                    className="inline-flex h-8 items-center justify-center rounded-lg bg-stone-900 px-3 text-xs font-medium text-white transition hover:bg-stone-700 disabled:opacity-60 dark:bg-stone-100 dark:text-stone-950 dark:hover:bg-stone-200"
+                  >
+                    {isSavingProvider ? (
+                      <LoaderCircle className="size-3.5 animate-spin" />
+                    ) : (
+                      copy.provider.use
+                    )}
+                  </button>
+                ) : null}
+              </div>
+            </div>
+            {customModelProviders.map((provider) => {
+              return (
                 <div
                   key={provider.id}
                   className={cn(
                     "flex items-center gap-3 rounded-2xl border bg-white p-3 transition dark:bg-white/[0.03]",
                     provider.selected
                       ? "border-stone-300 shadow-sm dark:border-white/20"
-                      : "border-stone-200/80 dark:border-white/10",
+                      : "border-stone-200/80 dark:border-white/10"
                   )}
                 >
                   <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-stone-100 text-stone-600 dark:bg-white/10 dark:text-stone-300">
                     <ServerCog className="size-4" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate text-sm font-semibold text-stone-900 dark:text-stone-100">{provider.type}</span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="truncate text-sm font-semibold text-stone-900 dark:text-stone-100">
+                        {provider.type}
+                      </span>
                       {provider.selected ? (
                         <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-stone-900 px-2 py-0.5 text-[10px] font-medium text-white dark:bg-stone-100 dark:text-stone-950">
                           <Check className="size-3" />
@@ -763,9 +1499,13 @@ export function AccountMenu({
                         </span>
                       ) : null}
                     </div>
-                    <div className="mt-0.5 truncate text-xs text-stone-500 dark:text-stone-400">{provider.baseUrl}</div>
+                    <div className="mt-0.5 truncate text-xs text-stone-500 dark:text-stone-400">
+                      {provider.baseUrl}
+                    </div>
                     <div className="mt-1 text-[11px] text-stone-400">
-                      {provider.apiKeyConfigured ? copy.provider.configured : copy.provider.notConfigured}
+                      {provider.apiKeyConfigured
+                        ? copy.provider.configured
+                        : copy.provider.notConfigured}
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
@@ -778,6 +1518,16 @@ export function AccountMenu({
                     >
                       <Pencil className="size-4" />
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleDeleteProvider(provider.id)}
+                      disabled={isSavingProvider}
+                      className="inline-flex size-8 items-center justify-center rounded-lg text-stone-500 transition hover:bg-stone-100 hover:text-red-600 disabled:opacity-60 dark:text-stone-400 dark:hover:bg-white/10 dark:hover:text-red-300"
+                      aria-label={copy.provider.delete}
+                      title={copy.provider.delete}
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
                     {!provider.selected ? (
                       <button
                         type="button"
@@ -785,54 +1535,26 @@ export function AccountMenu({
                         disabled={isSavingProvider}
                         className="inline-flex h-8 items-center justify-center rounded-lg bg-stone-900 px-3 text-xs font-medium text-white transition hover:bg-stone-700 disabled:opacity-60 dark:bg-stone-100 dark:text-stone-950 dark:hover:bg-stone-200"
                       >
-                        {isSavingProvider ? <LoaderCircle className="size-3.5 animate-spin" /> : copy.provider.use}
+                        {isSavingProvider ? (
+                          <LoaderCircle className="size-3.5 animate-spin" />
+                        ) : (
+                          copy.provider.use
+                        )}
                       </button>
                     ) : null}
                   </div>
                 </div>
-              ))
-            ) : (
-              <div className="rounded-2xl border border-dashed border-stone-200/90 bg-stone-50/70 px-4 py-6 text-center text-sm text-stone-500 dark:border-white/10 dark:bg-white/5 dark:text-stone-400">
-                {copy.provider.empty}
-              </div>
-            )}
-              <button
-                type="button"
-              onClick={() => openProviderForm()}
-                disabled={isSavingProvider}
+              );
+            })}
+            <button
+              type="button"
+              onClick={() => openProviderPicker()}
+              disabled={isSavingProvider}
               className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 text-sm font-medium text-stone-800 transition hover:bg-stone-50 disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.03] dark:text-stone-100 dark:hover:bg-white/10"
-              >
+            >
               <Plus className="size-4" />
               {copy.provider.add}
-              </button>
-          </div>
-        </section>
-      );
-    }
-
-    if (activeSection === "newapi") {
-      const status = session.newapiBindingStatus || "pending";
-      const statusLabel =
-        status === "configured" ? copy.newapi.configured : status === "failed" ? copy.newapi.failed : copy.newapi.pending;
-      return (
-        <section>
-          <div className={sectionTitleClass}>{copy.newapi.title}</div>
-          <div className="rounded-2xl border border-stone-200/80 bg-stone-50/70 p-4 dark:border-white/10 dark:bg-white/5">
-            <div className="flex items-center justify-between gap-3 text-sm">
-              <span className="text-stone-500 dark:text-stone-400">{copy.newapi.status}</span>
-              <span className="font-medium text-stone-900 dark:text-stone-100">{statusLabel}</span>
-            </div>
-            {session.newapiBindingMessage ? (
-              <p className="mt-2 text-xs leading-5 text-stone-500 dark:text-stone-400">{session.newapiBindingMessage}</p>
-            ) : null}
-            <p className="mt-2 text-xs leading-5 text-stone-500 dark:text-stone-400">{copy.newapi.hint}</p>
-            <a
-              href="/settings/newapi"
-              className="mt-3 inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-xl bg-zinc-900 px-3 text-sm font-medium text-white transition hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200"
-            >
-              <KeyRound className="size-4" />
-              {copy.newapi.open}
-            </a>
+            </button>
           </div>
         </section>
       );
@@ -850,7 +1572,9 @@ export function AccountMenu({
             <div className="mt-3 flex gap-2">
               <input
                 value={draftWatermarkLabel}
-                onChange={(event) => setDraftWatermarkLabel(event.target.value.slice(0, 64))}
+                onChange={(event) =>
+                  setDraftWatermarkLabel(event.target.value.slice(0, 64))
+                }
                 placeholder={copy.watermark.placeholder}
                 className="h-9 min-w-0 flex-1 rounded-xl border border-stone-200 bg-white px-3 text-sm text-stone-800 outline-none transition focus:border-stone-400 dark:border-white/10 dark:bg-white/8 dark:text-stone-100"
               />
@@ -860,22 +1584,36 @@ export function AccountMenu({
                 disabled={isSavingWatermarkLabel}
                 className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl bg-zinc-900 px-3 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200"
               >
-                {isSavingWatermarkLabel ? <LoaderCircle className="size-4 animate-spin" /> : <Save className="size-4" />}
+                {isSavingWatermarkLabel ? (
+                  <LoaderCircle className="size-4 animate-spin" />
+                ) : (
+                  <Save className="size-4" />
+                )}
                 {copy.watermark.save}
               </button>
             </div>
-            <p className="mt-2 text-xs leading-5 text-stone-500 dark:text-stone-400">{copy.watermark.hint}</p>
+            <p className="mt-2 text-xs leading-5 text-stone-500 dark:text-stone-400">
+              {copy.watermark.hint}
+            </p>
             <div className="mt-4">
-              <div className="mb-2 text-xs font-medium text-stone-500 dark:text-stone-400">{copy.watermark.previewTitle}</div>
+              <div className="mb-2 text-xs font-medium text-stone-500 dark:text-stone-400">
+                {copy.watermark.previewTitle}
+              </div>
               <div className="relative overflow-hidden rounded-2xl border border-stone-200 bg-white p-6 dark:border-white/10 dark:bg-stone-900">
                 <div className="flex aspect-[4/3] items-center justify-center rounded-xl bg-gradient-to-br from-amber-50 via-white to-stone-100 dark:from-stone-800 dark:via-stone-900 dark:to-zinc-950">
-                  <img src="/happy-token-logo.svg" alt={copy.watermark.previewAlt} className="size-20 rounded-2xl shadow-sm" />
+                  <img
+                    src="/happy-token-logo.svg"
+                    alt={copy.watermark.previewAlt}
+                    className="size-20 rounded-2xl shadow-sm"
+                  />
                 </div>
                 <div className="absolute bottom-3 right-3 rounded-full bg-black/70 px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm backdrop-blur">
                   @Happy Token
                 </div>
               </div>
-              <p className="mt-2 text-xs leading-5 text-stone-500 dark:text-stone-400">{copy.watermark.previewCaption}</p>
+              <p className="mt-2 text-xs leading-5 text-stone-500 dark:text-stone-400">
+                {copy.watermark.previewCaption}
+              </p>
             </div>
           </div>
         </section>
@@ -893,19 +1631,27 @@ export function AccountMenu({
             >
               <Mail className="size-4 text-stone-400" />
               {copy.contact.email}
-              <span className="ml-auto max-w-44 truncate text-xs text-stone-400">{SUPPORT_EMAIL}</span>
+              <span className="ml-auto max-w-44 truncate text-xs text-stone-400">
+                {SUPPORT_EMAIL}
+              </span>
             </a>
             <button
               type="button"
-              onClick={() => void handleCopy(SUPPORT_WECHAT, copy.contact.wechat)}
+              onClick={() =>
+                void handleCopy(SUPPORT_WECHAT, copy.contact.wechat)
+              }
               className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm text-stone-700 transition hover:bg-stone-100 hover:text-stone-950 dark:text-stone-300 dark:hover:bg-white/10 dark:hover:text-white"
             >
               <Copy className="size-4 text-stone-400" />
               {copy.contact.wechat}
-              <span className="ml-auto max-w-44 truncate text-xs text-stone-400">{SUPPORT_WECHAT}</span>
+              <span className="ml-auto max-w-44 truncate text-xs text-stone-400">
+                {SUPPORT_WECHAT}
+              </span>
             </button>
             <div className="rounded-2xl border border-stone-200/80 bg-stone-50/70 p-3 dark:border-white/10 dark:bg-white/5">
-              <div className="mb-2 text-xs font-medium text-stone-500 dark:text-stone-400">{copy.contact.qr}</div>
+              <div className="mb-2 text-xs font-medium text-stone-500 dark:text-stone-400">
+                {copy.contact.qr}
+              </div>
               <img
                 src={SUPPORT_WECHAT_QR}
                 alt={copy.contact.qrAlt}
@@ -924,9 +1670,13 @@ export function AccountMenu({
           <div className="flex items-center gap-2">
             <Info className="size-4 text-stone-400" />
             Happy Token
-            <span className="ml-auto text-xs text-stone-400">v{webConfig.appVersion}</span>
+            <span className="ml-auto text-xs text-stone-400">
+              v{webConfig.appVersion}
+            </span>
           </div>
-          <p className="mt-2 text-xs leading-5 text-stone-500 dark:text-stone-400">{copy.about.description}</p>
+          <p className="mt-2 text-xs leading-5 text-stone-500 dark:text-stone-400">
+            {copy.about.description}
+          </p>
         </div>
       </section>
     );
@@ -939,21 +1689,27 @@ export function AccountMenu({
         aria-label={copy.trigger.aria}
       >
         <UserRound className="size-3.5 sm:size-4" />
-        {iconOnly ? null : <span className={compactOnMobile ? "hidden md:inline" : undefined}>{triggerLabel}</span>}
+        {iconOnly ? null : (
+          <span className={compactOnMobile ? "hidden md:inline" : undefined}>
+            {triggerLabel}
+          </span>
+        )}
       </PopoverTrigger>
       <PopoverContent
         align="end"
         sideOffset={8}
         collisionPadding={12}
-        className="max-h-[min(42rem,calc(100dvh-1.5rem))] w-[min(42rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border-stone-200/80 bg-white/96 p-0 text-stone-950 shadow-[0_28px_80px_-36px_rgba(24,24,27,0.38)] backdrop-blur-xl dark:border-white/10 dark:bg-stone-950/96 dark:text-stone-50"
+        className="flex h-[min(38rem,calc(100dvh-5.5rem))] w-[min(42rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-2xl border-stone-200/80 bg-white/96 p-0 text-stone-950 shadow-[0_28px_80px_-36px_rgba(24,24,27,0.38)] backdrop-blur-xl dark:border-white/10 dark:bg-stone-950/96 dark:text-stone-50"
       >
-        <div className="border-b border-stone-100 px-4 py-3 dark:border-white/10">
+        <div className="shrink-0 border-b border-stone-100 px-4 py-3 dark:border-white/10">
           <div className="truncate text-sm font-semibold">{displayName}</div>
-          <div className="mt-1 text-xs text-stone-500 dark:text-stone-400">{copy.header}</div>
+          <div className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+            {copy.header}
+          </div>
         </div>
 
-        <div className="grid min-h-[23rem] overflow-hidden grid-cols-1 sm:grid-cols-[11rem_minmax(0,1fr)]">
-          <nav className="flex gap-1 overflow-x-auto border-b border-stone-100 bg-stone-50/80 p-2 dark:border-white/10 dark:bg-white/[0.03] sm:block sm:overflow-visible sm:border-b-0 sm:border-r">
+        <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden sm:grid-cols-[11rem_minmax(0,1fr)]">
+          <nav className="flex shrink-0 gap-1 overflow-x-auto border-b border-stone-100 bg-stone-50/80 p-2 dark:border-white/10 dark:bg-white/[0.03] sm:block sm:overflow-visible sm:border-b-0 sm:border-r">
             {sections.map((section) => {
               const Icon = section.icon;
               const isActive = activeSection === section.id;
@@ -966,7 +1722,7 @@ export function AccountMenu({
                     "flex h-9 shrink-0 items-center gap-2 rounded-xl px-3 text-left text-sm font-medium transition sm:w-full",
                     isActive
                       ? "bg-white text-stone-950 shadow-sm dark:bg-white/10 dark:text-white"
-                      : "text-stone-500 hover:bg-white/70 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-white/8 dark:hover:text-stone-100",
+                      : "text-stone-500 hover:bg-white/70 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-white/8 dark:hover:text-stone-100"
                   )}
                 >
                   <Icon className="size-4" />
@@ -975,10 +1731,12 @@ export function AccountMenu({
               );
             })}
           </nav>
-          <div className="min-h-0 overflow-y-auto p-4">{renderPanel()}</div>
+          <div className="min-h-0 overflow-y-auto p-4 pb-24">
+            {renderPanel()}
+          </div>
         </div>
 
-        <div className="border-t border-stone-100 p-2 dark:border-white/10">
+        <div className="shrink-0 border-t border-stone-100 p-2 dark:border-white/10">
           <button
             type="button"
             onClick={() => void onLogout()}
