@@ -24,6 +24,10 @@ const MODEL_PROXY_HEADER_ALLOWLIST = [
   "user-agent",
 ] as const;
 
+function shouldDisablePageCache(pathname: string): boolean {
+  return pathname === "/login" || pathname === "/image" || pathname.startsWith("/image/");
+}
+
 function shouldProxy(pathname: string): boolean {
   return PROXY_PREFIXES.some(
     (prefix) =>
@@ -85,7 +89,13 @@ export async function middleware(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
 
   if (!shouldProxy(pathname)) {
-    return NextResponse.next();
+    const response = NextResponse.next();
+    if (shouldDisablePageCache(pathname)) {
+      response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
+      response.headers.set("Pragma", "no-cache");
+      response.headers.set("Expires", "0");
+    }
+    return response;
   }
 
   const backendUrl = buildProxyUrl(pathname, search);
@@ -131,5 +141,7 @@ export const config = {
     "/images/:path*",
     "/image-thumbnails/:path*",
     "/health",
+    "/login",
+    "/image/:path*",
   ],
 };
