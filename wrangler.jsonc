@@ -1,6 +1,6 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"main": ".open-next/worker.js",
+	"main": "custom-worker.js",
 	"name": "happyimage-web",
 	"compatibility_date": "2026-06-17",
 	"compatibility_flags": [
@@ -22,5 +22,11 @@
 	],
 	"images": {
 		"binding": "IMAGES"
-	}
+	},
+	"r2_buckets": [
+		{
+			"binding": "SEED_GALLERY",
+			"bucket_name": "happyimage-seed-gallery"
+		}
+	]
 }
