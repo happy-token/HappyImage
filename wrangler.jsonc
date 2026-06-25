@@ -12,7 +12,7 @@
 		"binding": "ASSETS"
 	},
 	"vars": {
-		"BACKEND_URL": "http://101.96.195.224:8000"
+		"BACKEND_URL": "https://image-b.musi.life:1215"
 	},
 	"services": [
 		{
