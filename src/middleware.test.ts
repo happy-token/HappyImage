@@ -72,6 +72,24 @@ describe("middleware proxy helpers", () => {
     expect(modelHeaders.get("cookie")).toBeNull();
   });
 
+  it("does not follow backend redirects so auth cookies survive callbacks", async () => {
+    const { buildProxyFetchInit } = await loadMiddleware({
+      BACKEND_URL: "http://127.0.0.1:8000",
+      MODEL_BACKEND_URL: "http://127.0.0.1:3001",
+    });
+
+    const init = buildProxyFetchInit(
+      {
+        method: "GET",
+        body: null,
+      } as never,
+      new Headers({ accept: "text/html" }),
+    );
+
+    expect(init.redirect).toBe("manual");
+    expect(init.body).toBeUndefined();
+  });
+
   it("strips product credentials from model paths", async () => {
     const { buildProxyHeaders } = await loadMiddleware({
       BACKEND_URL: "http://127.0.0.1:8000",

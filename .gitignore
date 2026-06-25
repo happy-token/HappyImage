@@ -51,3 +51,4 @@ next-env.d.ts
 # Official gallery static package. Generated or mounted at deploy time.
 /public/seed-gallery/*
 !/public/seed-gallery/README.md
+.gstack/

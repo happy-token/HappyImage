@@ -85,6 +85,22 @@ export function buildProxyHeaders(pathname: string, incoming: Headers) {
   return headers;
 }
 
+export function buildProxyFetchInit(request: NextRequest, headers: Headers) {
+  const body =
+    request.method === "GET" || request.method === "HEAD"
+      ? undefined
+      : request.body;
+
+  return {
+    method: request.method,
+    headers,
+    body,
+    redirect: "manual" as const,
+    // @ts-expect-error duplex is a valid fetch option
+    duplex: body ? "half" : undefined,
+  };
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
 
@@ -107,18 +123,7 @@ export async function middleware(request: NextRequest) {
   try {
     const headers = buildProxyHeaders(pathname, request.headers);
 
-    const body =
-      request.method === "GET" || request.method === "HEAD"
-        ? undefined
-        : request.body;
-
-    const response = await fetch(backendUrl, {
-      method: request.method,
-      headers,
-      body,
-      // @ts-expect-error duplex is a valid fetch option
-      duplex: body ? "half" : undefined,
-    });
+    const response = await fetch(backendUrl, buildProxyFetchInit(request, headers));
 
     // Stream the response back
     const responseHeaders = new Headers(response.headers);
