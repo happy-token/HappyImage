@@ -1,14 +1,24 @@
-# Cloudflare Pages headers configuration
-# JS/CSS are hashed — cache aggressively
+# Cloudflare Workers static asset cache headers
+# Rules are processed top-to-bottom; first match wins.
+# https://developers.cloudflare.com/workers/static-assets/headers
+
+# ── Hashed JS/CSS (Next.js build output) ──
 /_next/static/*
   Cache-Control: public, max-age=31536000, immutable
 
-# HTML must revalidate
+# ── Seed gallery (content-addressed filenames, never change) ──
+/seed-gallery/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# ── Site icons & logos (rarely change) ──
+/icon.png
+  Cache-Control: public, max-age=604800, must-revalidate
+/apple-icon.png
+  Cache-Control: public, max-age=604800, must-revalidate
+/*.svg
+  Cache-Control: public, max-age=604800, must-revalidate
+
+# ── Everything else (HTML pages, dynamic content) ──
+# Force revalidation so users always get the latest deployment.
 /*
-  Cache-Control: no-cache
-
-
-# https://developers.cloudflare.com/workers/static-assets/headers
-# https://opennext.js.org/cloudflare/caching#static-assets-caching
-/_next/static/*
-  Cache-Control: public,max-age=31536000,immutable
+  Cache-Control: public, max-age=0, must-revalidate

@@ -31,8 +31,36 @@ const nextConfig: NextConfig = {
             { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
             { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
         ]
+        // HTML pages: allow CDN to store, but always revalidate.
+        // max-age=0 forces browser revalidation on every navigation;
+        // stale-while-revalidate lets the CDN serve stale while refreshing in background.
+        const pageCacheHeaders = [
+            {
+                key: 'Cache-Control',
+                value: 'public, max-age=0, must-revalidate, stale-while-revalidate=300',
+            },
+        ]
+        // SSG pages (gallery detail, etc.): longer CDN cache with swr.
+        // These pages are pre-rendered and only change on redeploy.
+        const staticCacheHeaders = [
+            {
+                key: 'Cache-Control',
+                value: 'public, s-maxage=3600, stale-while-revalidate=86400',
+            },
+        ]
         return [
             {
+                // Static generated pages: cache at CDN level
+                source: '/gallery/:id',
+                headers: [...securityHeaders, ...staticCacheHeaders],
+            },
+            {
+                // All other pages: revalidate every time
+                source: '/((?!api|_next).*)',
+                headers: [...securityHeaders, ...pageCacheHeaders],
+            },
+            {
+                // Security headers on everything else (API, _next)
                 source: '/:path*',
                 headers: securityHeaders,
             },
