@@ -1,0 +1,48 @@
+# Runtime data and local migration backups
+/data/
+/tmp/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+build/
+dist/
+*.egg-info/
+*.db
+*.sqlite
+*.sqlite3
+
+# Node and frontend build output
+node_modules/
+.pnp
+.pnp.*
+.next/
+out/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+.open-next/
+.wrangler/
+
+# Generated gallery packages
+/web/public/seed-gallery/*
+!/web/public/seed-gallery/README.md
+
+# Local tool state
+.DS_Store
+.idea/
+.gstack/
+.superpowers/
+.claude/settings.local.json
