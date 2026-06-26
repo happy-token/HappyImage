@@ -228,3 +228,4 @@ The page calls `/api/auth/newapi-management` through the authenticated HappyImag
 - an external gateway-admin link for manual fallback.
 
 Do not treat `gateway.happy-token.cn` browser login state as the source of truth. SQL/provisioning creates or reuses the NewAPI user and token, but it does not create the NewAPI browser `session` cookie. Because that cookie belongs to a different origin and may be affected by frame and SameSite policies, the gateway admin page can show “not logged in” even when HappyImage is already bound and generation can use the default HappyToken API Key.
+
