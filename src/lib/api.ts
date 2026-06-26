@@ -19,21 +19,6 @@ export type ImageStorageSettings = {
   public_base_url: string;
 };
 
-export type Model = {
-  id: string;
-  object: string;
-  created: number;
-  owned_by: string;
-  permission: unknown[];
-  root: string;
-  parent: string | null;
-};
-
-type ModelListResponse = {
-  object: string;
-  data: Model[];
-};
-
 export type OIDCSettings = {
   enabled: boolean;
   issuer: string;
@@ -213,11 +198,6 @@ export type SystemLog = {
   summary?: string;
   detail?: Record<string, unknown>;
   [key: string]: unknown;
-};
-
-export type ImageResponse = {
-  created: number;
-  data: Array<{ b64_json?: string; url?: string; revised_prompt?: string }>;
 };
 
 export type ImageFeedbackVote = "like" | "dislike";
@@ -712,12 +692,6 @@ export async function loginWithAdminKey(key: string) {
   });
 }
 
-export async function fetchModels() {
-  return httpRequest<ModelListResponse>("/v1/models", {
-    redirectOnUnauthorized: false,
-  });
-}
-
 // ── OIDC Web Login ──────────────────────────────────────────────────
 
 export type OIDCStartResponse = {
@@ -821,54 +795,6 @@ export async function logoutSession() {
   return httpRequest<{ ok: boolean }>("/api/auth/logout", {
     method: "POST",
     redirectOnUnauthorized: false,
-  });
-}
-
-export async function generateImage(
-  prompt: string,
-  model?: ImageModel,
-  size?: string,
-  quality = "auto"
-) {
-  return httpRequest<ImageResponse>("/v1/images/generations", {
-    method: "POST",
-    body: {
-      prompt,
-      ...(model ? { model } : {}),
-      ...(size ? { size } : {}),
-      quality,
-      n: 1,
-      response_format: "b64_json",
-    },
-  });
-}
-
-export async function editImage(
-  files: File | File[],
-  prompt: string,
-  model?: ImageModel,
-  size?: string,
-  quality = "auto"
-) {
-  const formData = new FormData();
-  const uploadFiles = Array.isArray(files) ? files : [files];
-
-  uploadFiles.forEach((file) => {
-    formData.append("image", file);
-  });
-  formData.append("prompt", prompt);
-  if (model) {
-    formData.append("model", model);
-  }
-  if (size) {
-    formData.append("size", size);
-  }
-  formData.append("quality", quality);
-  formData.append("n", "1");
-
-  return httpRequest<ImageResponse>("/v1/images/edits", {
-    method: "POST",
-    body: formData,
   });
 }
 

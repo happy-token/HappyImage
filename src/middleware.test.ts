@@ -15,109 +15,72 @@ afterEach(() => {
 });
 
 describe("middleware proxy helpers", () => {
-  it("matches only /v1 and /v1/* as model paths", async () => {
-    const { isModelPath } = await loadMiddleware({});
+  it("does not proxy model API paths", async () => {
+    const { shouldProxy } = await loadMiddleware({});
 
-    expect(isModelPath("/v1")).toBe(true);
-    expect(isModelPath("/v1/models")).toBe(true);
-    expect(isModelPath("/api/image-tasks")).toBe(false);
-    expect(isModelPath("/images/a.png")).toBe(false);
+    expect(shouldProxy("/v1")).toBe(false);
+    expect(shouldProxy("/v1/models")).toBe(false);
   });
 
-  it("routes product and model paths to separate backend bases", async () => {
-    const { getProxyTargetBase } = await loadMiddleware({
+  it("proxies product paths to BACKEND_URL", async () => {
+    const { buildProxyUrl, shouldProxy } = await loadMiddleware({
       BACKEND_URL: "http://127.0.0.1:8000",
-      MODEL_BACKEND_URL: "http://127.0.0.1:3001",
     });
 
-    expect(getProxyTargetBase("/api/image-tasks")).toBe("http://127.0.0.1:8000");
-    expect(getProxyTargetBase("/v1/models")).toBe("http://127.0.0.1:3001");
+    expect(shouldProxy("/api/image-tasks")).toBe(true);
+    expect(shouldProxy("/images/a.png")).toBe(true);
+    expect(shouldProxy("/image-thumbnails/a.png")).toBe(true);
+    expect(shouldProxy("/health")).toBe(true);
+    expect(buildProxyUrl("/api/image-tasks", "?x=1")).toBe(
+      "http://127.0.0.1:8000/api/image-tasks?x=1",
+    );
   });
 
-  it("replaces authorization only for model paths when server token is configured", async () => {
+  it("uses NEXT_PUBLIC_API_BASE_URL when BACKEND_URL is not configured", async () => {
+    const { buildProxyUrl } = await loadMiddleware({
+      NEXT_PUBLIC_API_BASE_URL: "http://127.0.0.1:8001/",
+    });
+
+    expect(buildProxyUrl("/api/image-tasks", "")).toBe(
+      "http://127.0.0.1:8001/api/image-tasks",
+    );
+  });
+
+  it("preserves product credentials while stripping hop-by-hop request headers", async () => {
     const { buildProxyHeaders } = await loadMiddleware({
       BACKEND_URL: "http://127.0.0.1:8000",
-      MODEL_BACKEND_API_KEY: "sk-test",
-      MODEL_BACKEND_URL: "http://127.0.0.1:3001",
     });
-
-    const productHeaders = buildProxyHeaders(
-      "/api/image-tasks",
-      new Headers({ authorization: "Bearer user-token" }),
+    const headers = buildProxyHeaders(
+      new Headers({
+        authorization: "Bearer user-token",
+        cookie: "session=abc",
+        host: "happyimage.local",
+        connection: "keep-alive",
+        "content-length": "123",
+      }),
     );
-    expect(productHeaders.get("authorization")).toBe("Bearer user-token");
 
-    const modelHeaders = buildProxyHeaders(
-      "/v1/models",
-      new Headers({ authorization: "Bearer browser-token" }),
-    );
-    expect(modelHeaders.get("authorization")).toBe("Bearer sk-test");
-  });
-
-  it("strips browser cookies from model paths while preserving them for product paths", async () => {
-    const { buildProxyHeaders } = await loadMiddleware({
-      BACKEND_URL: "http://127.0.0.1:8000",
-      MODEL_BACKEND_URL: "http://127.0.0.1:3001",
-    });
-    const incoming = new Headers({
-      accept: "application/json",
-      cookie: "session=abc",
-    });
-
-    const productHeaders = buildProxyHeaders("/api/image-tasks", incoming);
-    expect(productHeaders.get("cookie")).toBe("session=abc");
-
-    const modelHeaders = buildProxyHeaders("/v1/models", incoming);
-    expect(modelHeaders.get("accept")).toBe("application/json");
-    expect(modelHeaders.get("cookie")).toBeNull();
+    expect(headers.get("authorization")).toBe("Bearer user-token");
+    expect(headers.get("cookie")).toBe("session=abc");
+    expect(headers.get("host")).toBeNull();
+    expect(headers.get("connection")).toBeNull();
+    expect(headers.get("content-length")).toBeNull();
   });
 
   it("does not follow backend redirects so auth cookies survive callbacks", async () => {
     const { buildProxyFetchInit } = await loadMiddleware({
       BACKEND_URL: "http://127.0.0.1:8000",
-      MODEL_BACKEND_URL: "http://127.0.0.1:3001",
     });
 
     const init = buildProxyFetchInit(
       {
         method: "GET",
         body: null,
-      } as never,
+      },
       new Headers({ accept: "text/html" }),
     );
 
     expect(init.redirect).toBe("manual");
     expect(init.body).toBeUndefined();
-  });
-
-  it("strips product credentials from model paths", async () => {
-    const { buildProxyHeaders } = await loadMiddleware({
-      BACKEND_URL: "http://127.0.0.1:8000",
-      MODEL_BACKEND_API_KEY: "sk-test",
-      MODEL_BACKEND_URL: "http://127.0.0.1:3001",
-    });
-
-    const modelHeaders = buildProxyHeaders(
-      "/v1/models",
-      new Headers({
-        "accept-language": "en-US",
-        "x-happytoken-auth": "product-secret",
-      }),
-    );
-
-    expect(modelHeaders.get("accept-language")).toBe("en-US");
-    expect(modelHeaders.get("x-happytoken-auth")).toBeNull();
-    expect(modelHeaders.get("authorization")).toBe("Bearer sk-test");
-  });
-
-  it("normalizes model proxy URLs when model backend is configured as /v1 base", async () => {
-    const { buildProxyUrl } = await loadMiddleware({
-      BACKEND_URL: "http://127.0.0.1:8000",
-      MODEL_BACKEND_URL: "http://127.0.0.1:3001/v1",
-    });
-
-    expect(buildProxyUrl("/v1/models", "?x=1")).toBe(
-      "http://127.0.0.1:3001/v1/models?x=1",
-    );
   });
 });

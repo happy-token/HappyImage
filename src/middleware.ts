@@ -4,80 +4,34 @@ const BACKEND_BASE =
   process.env.BACKEND_URL ||
   process.env.NEXT_PUBLIC_API_BASE_URL ||
   (process.env.NODE_ENV === "development" ? "http://127.0.0.1:8000" : "");
-const MODEL_BACKEND_BASE =
-  process.env.MODEL_BACKEND_URL ||
-  process.env.NEXT_PUBLIC_MODEL_API_BASE_URL ||
-  BACKEND_BASE;
-const MODEL_BACKEND_API_KEY = process.env.MODEL_BACKEND_API_KEY || "";
 
 const PROXY_PREFIXES = [
-  "/api/",
-  "/v1/",
-  "/images/",
-  "/image-thumbnails/",
+  "/api",
+  "/images",
+  "/image-thumbnails",
   "/health",
 ] as const;
-const MODEL_PROXY_HEADER_ALLOWLIST = [
-  "accept",
-  "accept-language",
-  "content-type",
-  "user-agent",
-] as const;
+
+type ProxyFetchInit = RequestInit & { duplex?: "half" };
 
 function shouldDisablePageCache(pathname: string): boolean {
   return pathname === "/login" || pathname === "/image" || pathname.startsWith("/image/");
 }
 
-function shouldProxy(pathname: string): boolean {
+export function shouldProxy(pathname: string): boolean {
   return PROXY_PREFIXES.some(
-    (prefix) =>
-      pathname === prefix ||
-      pathname.startsWith(prefix.endsWith("/") ? prefix : `${prefix}/`) ||
-      pathname.startsWith(prefix),
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
   );
 }
 
-export function isModelPath(pathname: string) {
-  return pathname === "/v1" || pathname.startsWith("/v1/");
-}
-
-export function getProxyTargetBase(pathname: string) {
-  return isModelPath(pathname) ? MODEL_BACKEND_BASE : BACKEND_BASE;
-}
-
 export function buildProxyUrl(pathname: string, search: string) {
-  const targetBase = getProxyTargetBase(pathname);
-  if (!targetBase) {
+  if (!BACKEND_BASE) {
     return "";
   }
-
-  if (!isModelPath(pathname)) {
-    return `${targetBase}${pathname}${search}`;
-  }
-
-  const base = targetBase.replace(/\/+$/, "");
-  const modelPath = base.endsWith("/v1")
-    ? pathname.replace(/^\/v1(?=\/|$)/, "")
-    : pathname;
-
-  return `${base}${modelPath || ""}${search}`;
+  return `${BACKEND_BASE.replace(/\/+$/, "")}${pathname}${search}`;
 }
 
-export function buildProxyHeaders(pathname: string, incoming: Headers) {
-  if (isModelPath(pathname)) {
-    const headers = new Headers();
-    for (const header of MODEL_PROXY_HEADER_ALLOWLIST) {
-      const value = incoming.get(header);
-      if (value) {
-        headers.set(header, value);
-      }
-    }
-    if (MODEL_BACKEND_API_KEY) {
-      headers.set("authorization", `Bearer ${MODEL_BACKEND_API_KEY}`);
-    }
-    return headers;
-  }
-
+export function buildProxyHeaders(incoming: Headers) {
   const headers = new Headers(incoming);
   for (const header of ["host", "connection", "content-length"]) {
     headers.delete(header);
@@ -85,20 +39,25 @@ export function buildProxyHeaders(pathname: string, incoming: Headers) {
   return headers;
 }
 
-export function buildProxyFetchInit(request: NextRequest, headers: Headers) {
+export function buildProxyFetchInit(
+  request: Pick<NextRequest, "method" | "body">,
+  headers: Headers,
+): ProxyFetchInit {
   const body =
     request.method === "GET" || request.method === "HEAD"
       ? undefined
       : request.body;
 
-  return {
+  const init: ProxyFetchInit = {
     method: request.method,
     headers,
     body,
     redirect: "manual" as const,
-    // @ts-expect-error duplex is a valid fetch option
-    duplex: body ? "half" : undefined,
   };
+  if (body) {
+    init.duplex = "half";
+  }
+  return init;
 }
 
 export async function middleware(request: NextRequest) {
@@ -121,7 +80,7 @@ export async function middleware(request: NextRequest) {
   }
 
   try {
-    const headers = buildProxyHeaders(pathname, request.headers);
+    const headers = buildProxyHeaders(request.headers);
 
     const response = await fetch(backendUrl, buildProxyFetchInit(request, headers));
 
@@ -142,7 +101,6 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     "/api/:path*",
-    "/v1/:path*",
     "/images/:path*",
     "/image-thumbnails/:path*",
     "/health",

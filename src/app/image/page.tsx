@@ -42,7 +42,6 @@ import {
   createImageGenerationTask,
   deleteServerImageConversation,
   fetchImageConversations,
-  fetchModels,
   fetchImageTasks,
   updateImageConversationResult,
   updateImageConversationTurn,
@@ -51,7 +50,6 @@ import {
   upsertImageConversation,
   type ImageFeedbackVote,
   type ImageModel,
-  type Model,
   type ImageTask,
 } from "@/lib/api";
 import { consumeGalleryPromptIntent } from "@/lib/gallery-intent";
@@ -94,6 +92,10 @@ const IMAGE_QUALITY_STORAGE_KEY = "happytoken:image_last_quality";
 const IMAGE_MODEL_STORAGE_KEY = "happytoken:image_last_model";
 const IMAGE_COUNT_STORAGE_KEY = "happytoken:image_last_count";
 const DEFAULT_IMAGE_COUNT = "1";
+const DEFAULT_IMAGE_MODELS: ImageModel[] = [
+  "gpt-image-2",
+  "codex-gpt-image-2",
+];
 const SIDEBAR_WIDTH_STORAGE_KEY = "happytoken:image_sidebar_width";
 const SIDEBAR_COLLAPSED_STORAGE_KEY = "happytoken:image_sidebar_collapsed";
 
@@ -229,15 +231,6 @@ function dataUrlToFile(dataUrl: string, fileName: string, mimeType?: string) {
   });
 }
 
-function filterImageModels(items: Model[]): ImageModel[] {
-  return items
-    .map((item) => String(item.id || "").trim())
-    .filter(
-      (id, index, list) =>
-        id.toLowerCase().includes("image") && list.indexOf(id) === index
-    );
-}
-
 function normalizeStoredImageModel(
   value: string | null,
   availableModels: ImageModel[]
@@ -272,7 +265,7 @@ function mergeImageModels(...groups: ImageModel[][]): ImageModel[] {
       merged.push(model);
     }
   });
-  return merged.length > 0 ? merged : ["gpt-image-2"];
+  return merged.length > 0 ? merged : [...DEFAULT_IMAGE_MODELS];
 }
 
 function buildReferenceImageFromResult(
@@ -632,8 +625,12 @@ function ImagePageContent({
   const [imageWidth, setImageWidth] = useState("1024");
   const [imageHeight, setImageHeight] = useState("1024");
   const [imageQuality, setImageQuality] = useState("auto");
-  const [imageModel, setImageModel] = useState<ImageModel>("gpt-image-2");
-  const [imageModels, setImageModels] = useState<ImageModel[]>(["gpt-image-2"]);
+  const [imageModel, setImageModel] = useState<ImageModel>(
+    DEFAULT_IMAGE_MODELS[0]
+  );
+  const [imageModels, setImageModels] = useState<ImageModel[]>([
+    ...DEFAULT_IMAGE_MODELS,
+  ]);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [workspaceMode, setWorkspaceMode] =
     useState<ImageWorkspaceMode>("compose");
@@ -1135,45 +1132,35 @@ function ImagePageContent({
 
     const loadImageModels = async () => {
       const providerModels = getSessionProviderImageModels(session);
-      if (isGuest) {
-        const guestModels = mergeImageModels(providerModels, ["gpt-image-2"]);
-        setImageModels(guestModels);
-        setImageModel(guestModels[0]);
+      const available = mergeImageModels(providerModels, DEFAULT_IMAGE_MODELS);
+      const storedModel =
+        session?.preferences?.imageModel ||
+        (typeof window !== "undefined"
+          ? window.localStorage.getItem(IMAGE_MODEL_STORAGE_KEY)
+          : null);
+
+      await Promise.resolve();
+      if (cancelled) {
         return;
       }
-      try {
-        const data = await fetchModels();
-        const available = mergeImageModels(
-          providerModels,
-          filterImageModels(Array.isArray(data.data) ? data.data : [])
-        );
-        if (cancelled || available.length === 0) {
-          return;
+
+      setImageModels(available);
+      setImageModel((current) => {
+        if (storedModel && available.includes(storedModel)) {
+          return storedModel;
         }
-        setImageModels(available);
-        const storedModel =
-          session?.preferences?.imageModel ||
-          (typeof window !== "undefined"
-            ? window.localStorage.getItem(IMAGE_MODEL_STORAGE_KEY)
-            : null);
-        setImageModel((current) => {
-          if (available.includes(current)) {
-            return current;
-          }
-          return normalizeStoredImageModel(storedModel, available);
-        });
-      } catch {
-        if (!cancelled) {
-          setImageModels(mergeImageModels(providerModels, ["gpt-image-2"]));
+        if (available.includes(current)) {
+          return current;
         }
-      }
+        return normalizeStoredImageModel(storedModel, available);
+      });
     };
 
     void loadImageModels();
     return () => {
       cancelled = true;
     };
-  }, [isGuest, session, session?.preferences?.imageModel]);
+  }, [session, session?.preferences?.imageModel]);
 
   // 切换会话时保存旧会话滚动位置，并隐藏容器防止闪烁
   useLayoutEffect(() => {
