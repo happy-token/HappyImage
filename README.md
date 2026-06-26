@@ -99,6 +99,31 @@ BACKEND_URL=https://api.example.com
 
 ## Docker 部署
 
+直接使用 GitHub Actions 发布的镜像：
+
+```bash
+docker pull ghcr.io/happy-token/happyimage-web:latest
+
+docker run -p 3000:3000 \
+  -e BACKEND_URL=http://happyimage-api:80 \
+  ghcr.io/happy-token/happyimage-web:latest
+```
+
+Web + API 组合部署见工作区根目录 `deploy/hs/docker-compose.yml`：
+
+```bash
+docker compose -f deploy/hs/docker-compose.yml pull
+docker compose -f deploy/hs/docker-compose.yml up -d
+```
+
+如果 GHCR package 不是公开可读，需要先在目标机器登录：
+
+```bash
+docker login ghcr.io
+```
+
+本地构建镜像：
+
 ```bash
 docker build \
   --build-arg NEXT_PUBLIC_API_BASE_URL="" \
