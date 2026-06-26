@@ -1,0 +1,44 @@
+# HappyImage
+
+HappyImage is a monorepo with separate backend and frontend services.
+
+## Layout
+
+- `api/`: FastAPI backend for auth, OIDC, image tasks, user data, private images, settings, logs, and NewAPI/HappyToken binding.
+- `web/`: Next.js frontend, same-origin middleware, image workspace, settings, gallery, and static seed gallery host.
+- `deploy/`: combined deployment files.
+- `docs/`: product, deployment, and migration documentation.
+- `data/`: local runtime data, ignored by Git.
+
+## Local Commands
+
+Use root commands for common workflows:
+
+```bash
+make api-dev
+make web-dev
+make dev
+make test
+make typecheck
+make compose-config
+```
+
+Service-native commands remain valid:
+
+```bash
+cd api && uv run python main.py
+cd web && pnpm run dev
+```
+
+## Boundaries
+
+Keep API and Web code separated. Do not move backend persistence or auth logic into `web/`, and do not move page rendering or Next.js middleware into `api/`.
+
+Request routing remains:
+
+```text
+/api/*, /images/*, /image-thumbnails/*, /health -> api
+/seed-gallery/*                                  -> web static assets
+```
+
+Keep runtime secrets, generated data, image stores, and migration backups out of Git.
