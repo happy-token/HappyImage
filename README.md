@@ -147,16 +147,17 @@ docker run -p 3000:3000 \
 
 如果 `public/seed-gallery/static/items.json` 不存在，前端会自动回退到 HappyImage API 的 `/api/seed-gallery/*` 兼容接口。
 
-## 部署到 Cloudflare Pages
+## 部署到 Cloudflare Workers
+
+Web 使用 OpenNext / Cloudflare Workers 形态部署，Worker 运行时通过 `BACKEND_URL` 访问 HappyImage API。`wrangler.jsonc` 的 `vars.BACKEND_URL` 是本地/默认示例；生产部署应在 Cloudflare Worker 变量或发布流程中设置实际 API 地址。
 
 自动部署由 `.github/workflows/deploy-web.yml` 处理。需要在 GitHub 仓库配置：
 
 | Secrets / Variables | 说明 |
 |:--|:--|
-| `vars.API_BASE_URL` | 后端 API 地址 |
-| `secrets.CLOUDFLARE_API_TOKEN` | Cloudflare API Token（Pages 编辑权限） |
+| `vars.BACKEND_URL` | Worker 服务端代理目标，供 middleware 转发 `/api/*`、`/images/*`、`/image-thumbnails/*` 和 `/health` |
+| `secrets.CLOUDFLARE_API_TOKEN` | Cloudflare API Token（Workers 编辑/部署权限） |
 | `secrets.CLOUDFLARE_ACCOUNT_ID` | Cloudflare 账户 ID |
-| `vars.CF_PAGES_PROJECT` | Cloudflare Pages 项目名（默认 `happyimage`） |
 
 ## 本地清理
 
