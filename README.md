@@ -66,19 +66,6 @@ NEXT_PUBLIC_API_BASE_URL=https://api.example.com pnpm run dev
 | Image storage | `image_storage.*`、`image_retention_days`、`image_access_token_ttl_seconds` | 本地/WebDAV 图片存储、公开 CDN 前缀、保留期和签名链接 TTL |
 | Safety settings | `sensitive_words`、`ai_review.*`、`global_system_prompt` | 内容安全、AI 审核和全局提示词设置 |
 
-### Removed Variable Migration
-
-| Removed variable | New home |
-|:--|:--|
-| `MODEL_BACKEND_URL` | `model_gateway.gateway_api_base_url` in API runtime settings; user generation uses selected provider Base URL |
-| `MODEL_BACKEND_API_KEY` | Default/user provider API key managed by HappyImage API; NewAPI binding secrets live under `model_gateway.*` |
-| `NEXT_PUBLIC_MODEL_API_BASE_URL` | Removed with Web `/v1/*` proxying |
-| `HAPPYTOKEN_FRONTEND_BASE_URL` | `public_app_url` |
-| `HAPPYTOKEN_API_BASE_URL` | `api_public_url` |
-| `HAPPYTOKEN_CORS_ORIGINS` | `cors_origins` or derived from `public_app_url` |
-| `HAPPYTOKEN_NEWAPI_BASE_URL` | `model_gateway.gateway_api_base_url` |
-| `HAPPYTOKEN_NEWAPI_MANAGEMENT_URL` | `model_gateway.gateway_management_url` |
-
 ## 构建
 
 ```bash
