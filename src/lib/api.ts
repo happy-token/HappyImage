@@ -44,10 +44,41 @@ export type OIDCSettings = {
   allowed_email_domains: string;
 };
 
+export type ModelGatewaySettings = {
+  gateway_api_base_url: string;
+  gateway_management_url: string;
+  provision_url?: string;
+  provision_secret?: string;
+  provision_secret_configured?: boolean;
+  sql_dsn?: string;
+  sql_dsn_configured?: boolean;
+  token_name: string;
+  enabled?: boolean;
+};
+
+export type SetupStatusResponse = {
+  ok: boolean;
+  setup_required: boolean;
+  storage?: Record<string, unknown>;
+};
+
+export type SetupPayload = {
+  admin_name: string;
+  admin_key: string;
+  public_app_url: string;
+  api_public_url?: string;
+  session_secret: string;
+  oidc: OIDCSettings;
+  model_gateway: ModelGatewaySettings;
+};
+
 export type SettingsConfig = {
   base_url?: string;
   frontend_base_url?: string;
   api_base_url?: string;
+  public_app_url?: string;
+  api_public_url?: string;
+  external_api_url?: string;
   cors_origins?: string[];
   session_cookie_name?: string;
   session_max_age_seconds?: number | string;
@@ -69,6 +100,7 @@ export type SettingsConfig = {
   image_settle_secs?: number | string;
   log_levels?: string[];
   oidc?: OIDCSettings;
+  model_gateway?: ModelGatewaySettings;
   image_storage?: ImageStorageSettings;
   [key: string]: unknown;
 };
@@ -650,6 +682,32 @@ export async function registerWithPassword(credentials: {
       password: credentials.password,
       confirm_password: credentials.confirmPassword || "",
     },
+    redirectOnUnauthorized: false,
+  });
+}
+
+export async function fetchSetupStatus() {
+  return httpRequest<SetupStatusResponse>("/api/setup/status", {
+    redirectOnUnauthorized: false,
+  });
+}
+
+export async function completeSetup(payload: SetupPayload) {
+  return httpRequest<{
+    ok: boolean;
+    setup_required: boolean;
+    config: SettingsConfig;
+  }>("/api/setup", {
+    method: "POST",
+    body: payload,
+    redirectOnUnauthorized: false,
+  });
+}
+
+export async function loginWithAdminKey(key: string) {
+  return httpRequest<LoginResponse>("/api/auth/admin-key-login", {
+    method: "POST",
+    body: { key },
     redirectOnUnauthorized: false,
   });
 }
