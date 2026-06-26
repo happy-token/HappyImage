@@ -4,18 +4,9 @@ on:
   push:
     branches: [main, dev]
     paths:
-      - "src/**"
-      - "public/**"
-      - "next.config.*"
-      - "open-next.config.*"
-      - "wrangler.*"
-      - "custom-worker.*"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - ".npmrc"
-      - "Dockerfile"
-      - ".dockerignore"
-      - ".github/workflows/docker-publish.yml"
+      - "web/**"
+      - "deploy/**"
+      - ".github/workflows/web-docker-publish.yml"
     tags:
       - "v*"
   workflow_dispatch: {}
@@ -66,8 +57,8 @@ jobs:
       - name: Build and push image
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: ./Dockerfile
+          context: ./web
+          file: ./web/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}

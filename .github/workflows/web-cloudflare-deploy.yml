@@ -1,11 +1,12 @@
-# Deploy HappyImage Web to Cloudflare Workers via OpenNext
-
-name: Deploy to Cloudflare Workers
+name: Deploy Web to Cloudflare Workers
 
 on:
   push:
     branches: [main]
-  workflow_dispatch:
+    paths:
+      - "web/**"
+      - ".github/workflows/web-cloudflare-deploy.yml"
+  workflow_dispatch: {}
 
 jobs:
   deploy:
@@ -18,6 +19,10 @@ jobs:
       name: production
       url: https://happyimage-web.happytoken.workers.dev
 
+    defaults:
+      run:
+        working-directory: ./web
+
     steps:
       - uses: actions/checkout@v4
 
@@ -28,7 +33,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'pnpm'
+          cache: "pnpm"
+          cache-dependency-path: web/pnpm-lock.yaml
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

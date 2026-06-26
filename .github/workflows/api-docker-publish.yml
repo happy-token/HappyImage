@@ -5,17 +5,8 @@ on:
     branches: [main, dev]
     paths:
       - "api/**"
-      - "services/**"
-      - "utils/**"
-      - "scripts/**"
-      - "data/image-gallery-seed/**"
-      - "main.py"
-      - "VERSION"
-      - "pyproject.toml"
-      - "uv.lock"
-      - "Dockerfile"
-      - ".dockerignore"
-      - ".github/workflows/docker-publish.yml"
+      - "deploy/**"
+      - ".github/workflows/api-docker-publish.yml"
     tags:
       - "v*"
   workflow_dispatch: {}
@@ -66,8 +57,8 @@ jobs:
       - name: Build and push image
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: ./Dockerfile
+          context: ./api
+          file: ./api/Dockerfile
           target: app
           platforms: linux/amd64,linux/arm64
           push: true
