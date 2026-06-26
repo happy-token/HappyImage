@@ -1,164 +1,117 @@
-<h1 align="center">Happy Token Web</h1>
+<h1 align="center">HappyImage Web</h1>
 
-<p align="center">Happy Token Web frontend — Next.js workspace UI, same-origin proxy, and official gallery static package host.</p>
+<p align="center">HappyImage Web frontend - Next.js workspace UI, same-origin product proxy, and official gallery static package host.</p>
 
-Happy Token Web 是 Happy Token 的用户界面层，负责图片工作台、登录态页面、官方图库静态包、同源 middleware，以及浏览器到 Happy Token API / NewAPI 的请求分流。用户、会话、历史记录、私有图片和系统设置由 `happyimage-api` 持久化；模型账号池、上游调试、额度/计费和 token 路由由 NewAPI 等模型网关管理。
+HappyImage Web 是 HappyImage 的浏览器界面层，负责图片工作台、登录态页面、官方图库静态包、同源 middleware，以及用户设置入口。用户、会话、历史记录、私有图片、系统设置、模型网关绑定和上游供应商配置由 `happyimage-api` 持久化和管理。
 
 ## 职责边界
 
 | 模块 | 负责 | 不负责 |
 |:--|:--|:--|
-| `happyimage-web`（本仓库） | Next.js 页面、用户工作台、同源 middleware、官方图库静态包读取与构建入口、`/v1/*` 服务端代理 | 用户历史/私有图库持久化、API 数据库、模型账号池管理 |
-| `happyimage-api` | 登录、OIDC、用户、图片任务历史、用户图库、私有图片访问、设置、日志、OpenAI-compatible 图片接口 | 前端页面、官方图库静态资源发布、NewAPI 上游账号调试、充值/额度 |
+| `happyimage-web`（本仓库） | Next.js 页面、用户工作台、同源 middleware、官方图库静态包读取与构建入口 | 用户历史/私有图库持久化、API 数据库、模型账号池管理、外部 `/v1` 代理 |
+| `happyimage-api` | 登录、OIDC、用户、图片任务历史、用户图库、私有图片访问、设置、日志、模型网关绑定 | 前端页面、官方图库静态资源发布、NewAPI 上游账号调试、充值/额度 |
 | `happyimage-gallery-source` | 官方图库源数据和候选池，供 `pnpm run gallery:build` 导出 | 运行时服务、GitHub 版本化发布 |
-| NewAPI / 模型网关 | 模型渠道、账号池、上游调试、token、额度/计费路由 | Happy Token 用户登录、历史会话、用户图库、私有图片 |
+| NewAPI / 模型网关 | 模型渠道、账号池、上游调试、token、额度/计费路由 | HappyImage 用户登录、历史会话、用户图库、私有图片 |
 
 推荐请求分流：
 
 ```text
 Browser -> happyimage-web
-  /api/*, /images/*, /image-thumbnails/* -> BACKEND_URL / happyimage-api
-  /seed-gallery/*                       -> public/seed-gallery static package
-  /v1/*                                 -> MODEL_BACKEND_URL / NewAPI
+  /api/*, /images/*, /image-thumbnails/*, /health -> BACKEND_URL / happyimage-api
+  /seed-gallery/*                                 -> public/seed-gallery static package
 ```
+
+Web middleware 只代理 `/api/*`、`/images/*`、`/image-thumbnails/*` 和 `/health` 到 `BACKEND_URL`。Web 不再提供 `/v1/*` 模型代理；图片工作台通过 `/api/image-tasks/*` 调用 HappyImage API，再由 API 使用当前用户选中的上游供应商或默认 HappyToken 供应商。
 
 ## 本地开发
 
 ```bash
 pnpm install
-pnpm run dev
+BACKEND_URL=http://127.0.0.1:8000 pnpm run dev
 ```
 
-前端开发模式默认使用同源请求，由 Next.js middleware 转发 `/api/*`、`/images/*` 到 `BACKEND_URL`。这是推荐模式，因为登录 Cookie、历史会话同步、私有图片签名链接都会保持在当前浏览器 origin 下。如需让浏览器直接请求其他后端地址，才设置环境变量：
+前端开发模式默认使用同源请求，由 Next.js middleware 转发产品接口到 `BACKEND_URL`。这是推荐模式，因为登录 Cookie、历史会话同步、私有图片签名链接都会保持在当前浏览器 origin 下。
+
+如需让浏览器直接请求其他 API 地址，才设置：
 
 ```bash
 NEXT_PUBLIC_API_BASE_URL=https://api.example.com pnpm run dev
 ```
 
-如果需要让 Web 应用接口走 Happy Token API、模型 `/v1/*` 请求走 NewAPI，本地开发使用同源代理：
-
-```bash
-BACKEND_URL=http://127.0.0.1:8000 \
-MODEL_BACKEND_URL=http://127.0.0.1:3001 \
-MODEL_BACKEND_API_KEY=sk-happytokentest \
-pnpm run dev
-```
-
-对应链路：
-
-```text
-/api/*, /images/*, /image-thumbnails/* -> BACKEND_URL
-/v1/*                                  -> MODEL_BACKEND_URL
-```
-
-图片生成类型与接口分流：
-
-| 类型 | 前端工作台使用方式 | 产品接口 | 外部模型接口 |
-|:--|:--|:--|:--|
-| 文生图 | 用户只输入提示词，未上传参考图 | `POST /api/image-tasks/generations` -> `BACKEND_URL` | `POST /v1/images/generations` -> `MODEL_BACKEND_URL` |
-| 图生图 / 图片编辑 | 用户上传参考图、源图，或提示词要求保持人物脸部/身份参考 | `POST /api/image-tasks/edits` -> `BACKEND_URL` | `POST /v1/images/edits` -> `MODEL_BACKEND_URL` |
-
-Happy Token Web 的图片工作台应优先调用 `/api/image-tasks/*`，因为这些接口会保留登录态、历史 session、用户图库、私有图片和下载状态。`/v1/images/*` 是给 NewAPI、Cherry Studio 或其他 OpenAI-compatible 外部客户端使用的图片接口；在同源代理模式下由 Next.js middleware 转发到 `MODEL_BACKEND_URL`。
-
-`MODEL_BACKEND_API_KEY` 只在 Next.js middleware 服务端使用，用于代理 `/v1/*` 时替换成 NewAPI token，不会直接暴露给浏览器。
-
-### 供应商与错误提示
-
-普通用户登录后会自动获得默认 HappyToken 供应商。HappyToken 不可删除，默认选中，卡片内的“管理”进入 `/settings/newapi`，用于查看绑定状态、默认 API Key 和 NewAPI token 列表。
-
-添加其他供应商时，前端先展示供应商列表，用户选择 OpenAI、Gemini / Nano Banana、火山方舟、BytePlus ModelArk、阿里云百炼或自定义供应商后进入配置页。预设供应商只填写 API Key；自定义供应商填写名称、Base URL、模型列表和 API Key。接口协议目前内部保存为 OpenAI-compatible，界面暂不显示协议选择。
-
-Gemini 图片模型在 UI 中显示带备注的标签：`gemini-3.1-flash-image（Nano Banana 2）`、`gemini-3-pro-image（Nano Banana Pro）`、`gemini-2.5-flash-image（Nano Banana）`。这些备注只用于展示，保存和请求时仍使用原始模型 ID。
-
-图片工作台不会使用后端 `.env` 里的模型网关密钥作为用户兜底；提交文生图、图生图或编辑生图时，后端只使用当前用户选中的 Base URL 和 API Key。当前通用链路按 OpenAI Images API 兼容形状请求，非兼容供应商需要后续 adapter。
-
-前端会把后端或模型网关返回的常见错误转换成可操作提示：
-
-| 场景 | 页面提示 |
-|:--|:--|
-| 没有配置供应商 | 请先在用户设置中配置模型供应商 Base URL 和 API Key。 |
-| 供应商额度、余额或 credit 不足 | 模型供应商额度不足，请先充值或更换供应商后再试。 |
-| API Key 无效或过期 | 模型供应商 API Key 无效或已过期，请在用户设置里更新 API Key。 |
-| curl/TLS/OpenSSL/连接中断 | 连接模型供应商失败，请稍后重试；如果持续出现，请检查 Base URL 或网络代理。 |
-| 模型不可用 | 当前模型不可用，请在生图页面切换可用模型后再试。 |
-
-充值、额度和计费由 NewAPI 或外部模型供应商负责，Happy Token Web 只展示供应商返回的额度不足提示，不维护本地 image quota。
-
 同源代理模式下不要设置 `NEXT_PUBLIC_API_BASE_URL`。例如页面从 `http://localhost:3000` 打开时，如果把它设置成 `http://127.0.0.1:3000`，浏览器会按跨域请求处理，历史会话恢复、图片访问等接口可能无法同步。
 
-常用公开配置：
+## Web 环境变量
 
 | 变量 | 说明 |
 |:--|:--|
-| `NEXT_PUBLIC_API_BASE_URL` | 浏览器直连 API 地址；同源代理模式保持为空 |
-| `BACKEND_URL` | Next.js middleware 转发 `/api/*`、`/images/*` 的服务端地址 |
-| `MODEL_BACKEND_URL` | Next.js middleware 转发 `/v1/*` 的服务端模型网关地址 |
-| `MODEL_BACKEND_API_KEY` | 服务端代理 `/v1/*` 使用的模型网关 token |
+| `BACKEND_URL` | Next.js middleware 的服务端转发目标；代理 `/api/*`、`/images/*`、`/image-thumbnails/*` 和 `/health` |
+| `NEXT_PUBLIC_API_BASE_URL` | 浏览器直连 API 地址；同源代理部署保持为空 |
 | `NEXT_PUBLIC_APP_VERSION` | 前端展示版本号 |
 | `NEXT_PUBLIC_SUPPORT_EMAIL` | “联系我们”里的邮箱 |
 | `NEXT_PUBLIC_SUPPORT_WECHAT` | “联系我们”里的微信号 |
 
+## 管理员运行时设置
+
+以下设置不再通过 Web Dockerfile、Web README 启动命令或部署环境变量配置。请在 `happyimage-api/config.json`、首次 `/setup` 或 Web 管理设置页中维护；密钥类字段会在 API 响应中脱敏。
+
+| 设置 | 位置 / 字段 | 说明 |
+|:--|:--|:--|
+| Public app URL | `public_app_url` | 用户访问 Web 的公开地址，用于登录跳转和跨站 Cookie 判断 |
+| Optional API public URL | `api_public_url` | API 有独立公网域名时填写；为空时可沿用公开应用地址 |
+| Session / cookie | `session_secret`、`session_cookie_name`、`session_cookie_domain`、`session_max_age_seconds` | Web 登录会话签名、Cookie 名称、域和有效期 |
+| OAuth / OIDC | `oidc.enabled`、`issuer`、`client_id`、`client_secret`、`scopes`、`allowed_email_domains` | 第三方登录配置 |
+| Model gateway URLs | `model_gateway.gateway_api_base_url`、`model_gateway.gateway_management_url` | 默认 HappyToken/NewAPI 网关 API 地址和管理入口；API 地址通常形如 `https://gateway.happy-token.cn/v1` |
+| NewAPI binding | `model_gateway.provision_url`、`provision_secret`、`sql_dsn`、`token_name` | OIDC 登录后创建/复用 NewAPI 用户和 token 的 provisioning 或 SQL 直连配置 |
+| Proxy | `proxy` | API 服务访问上游供应商时使用的代理 |
+| Image storage | `image_storage.*`、`image_retention_days`、`image_access_token_ttl_seconds` | 本地/WebDAV 图片存储、公开 CDN 前缀、保留期和签名链接 TTL |
+| Safety settings | `sensitive_words`、`ai_review.*`、`global_system_prompt` | 内容安全、AI 审核和全局提示词设置 |
+
+### Removed Variable Migration
+
+| Removed variable | New home |
+|:--|:--|
+| `MODEL_BACKEND_URL` | `model_gateway.gateway_api_base_url` in API runtime settings; user generation uses selected provider Base URL |
+| `MODEL_BACKEND_API_KEY` | Default/user provider API key managed by HappyImage API; NewAPI binding secrets live under `model_gateway.*` |
+| `NEXT_PUBLIC_MODEL_API_BASE_URL` | Removed with Web `/v1/*` proxying |
+| `HAPPYTOKEN_FRONTEND_BASE_URL` | `public_app_url` |
+| `HAPPYTOKEN_API_BASE_URL` | `api_public_url` |
+| `HAPPYTOKEN_CORS_ORIGINS` | `cors_origins` or derived from `public_app_url` |
+| `HAPPYTOKEN_NEWAPI_BASE_URL` | `model_gateway.gateway_api_base_url` |
+| `HAPPYTOKEN_NEWAPI_MANAGEMENT_URL` | `model_gateway.gateway_management_url` |
+
 ## 构建
 
 ```bash
-NEXT_PUBLIC_API_BASE_URL=https://api.example.com pnpm run build
-# Docker 镜像使用 Next standalone 输出，运行层只包含 server.js、必要依赖和静态资源。
+pnpm run build
 ```
 
-如果部署环境也运行 Next.js middleware，则可以继续保持 `NEXT_PUBLIC_API_BASE_URL` 为空，并通过服务端环境变量配置：
+如果要构建浏览器直连 API 的产物：
+
+```bash
+NEXT_PUBLIC_API_BASE_URL=https://api.example.com pnpm run build
+```
+
+同源 middleware 部署保持 `NEXT_PUBLIC_API_BASE_URL` 为空，并在运行层设置：
 
 ```bash
 BACKEND_URL=https://api.example.com
-MODEL_BACKEND_URL=https://newapi.example.com/v1
-MODEL_BACKEND_API_KEY=<newapi-token>
-NEXT_PUBLIC_EXTERNAL_MODEL_ADMIN=true
 ```
-
-## 故障记录
-
-跨仓库技术日志维护在后端仓库：
-
-- `happyimage-api/docs/technical-log.md`
-- `happyimage-api/docs/newapi-gateway.md`
-
-排查图片无法加载、历史会话恢复、NewAPI 网关、同源代理配置时，优先阅读这两个文档。
-
-## 本地清理
-
-可安全删除的生成目录：
-
-```bash
-rm -rf .next .open-next out .wrangler tsconfig.tsbuildinfo
-```
-
-不要删除 `.dev.vars` 或 `.env*`，除非你明确要重置本地环境变量。
 
 ## Docker 部署
 
 ```bash
-docker build \
-  --build-arg NEXT_PUBLIC_EXTERNAL_MODEL_ADMIN=true \
-  -t happytoken-web .
+docker build -t happyimage-web .
 
 docker run -p 3000:3000 \
-  -e BACKEND_URL=http://happytoken-api:80 \
-  -e MODEL_BACKEND_URL=https://newapi.example.com/v1 \
-  -e MODEL_BACKEND_API_KEY=<newapi-token> \
-  happytoken-web
+  -e BACKEND_URL=http://happyimage-api:80 \
+  happyimage-web
 ```
 
-Docker 镜像运行的是 Next.js server，不是静态 nginx。这样 `/api/*`、`/images/*`、`/image-thumbnails/*` 和 `/v1/*` 可以继续走 middleware 分流：
-
-```text
-/api/*, /images/*, /image-thumbnails/* -> BACKEND_URL
-/v1/*                                  -> MODEL_BACKEND_URL
-```
-
-同源代理模式下 `NEXT_PUBLIC_API_BASE_URL` 保持为空；如果构建时设置了它，浏览器会直连该地址，不再使用同源代理。
+Docker 镜像运行的是 Next.js server，不是静态 nginx。这样 `/api/*`、`/images/*`、`/image-thumbnails/*` 和 `/health` 可以继续走 middleware 到 `BACKEND_URL`。如果构建时设置了 `NEXT_PUBLIC_API_BASE_URL`，浏览器会直连该地址，不再使用同源代理。
 
 ## 官方图库静态包
 
-官方图库是公开只读静态资源，运行时优先从 `public/seed-gallery` 读取，不需要经过 Happy Token API。该目录已被 `.gitignore` 和 `.dockerignore` 忽略，避免把大体积图片提交到 GitHub 或默认打进 Docker 镜像。
+官方图库是公开只读静态资源，运行时优先从 `public/seed-gallery` 读取，不需要经过 HappyImage API。该目录已被 `.gitignore` 和 `.dockerignore` 忽略，避免把大体积图片提交到 GitHub 或默认打进 Docker 镜像。
 
 仅生成静态 JSON（图片和缩略图已通过对象存储、CDN 或 volume 另行提供时使用）：
 
@@ -187,12 +140,10 @@ Docker 部署时建议把图库包作为只读 volume 挂载：
 docker run -p 3000:3000 \
   -v /srv/happyimage/seed-gallery:/app/web/public/seed-gallery:ro \
   -e BACKEND_URL=https://api.example.com \
-  -e MODEL_BACKEND_URL=https://newapi.example.com/v1 \
-  -e MODEL_BACKEND_API_KEY=<newapi-token> \
   happyimage-web
 ```
 
-如果 `public/seed-gallery/static/items.json` 不存在，前端会自动回退到 Happy Token API 的 `/api/seed-gallery/*` 兼容接口。
+如果 `public/seed-gallery/static/items.json` 不存在，前端会自动回退到 HappyImage API 的 `/api/seed-gallery/*` 兼容接口。
 
 ## 部署到 Cloudflare Pages
 
@@ -204,6 +155,16 @@ docker run -p 3000:3000 \
 | `secrets.CLOUDFLARE_API_TOKEN` | Cloudflare API Token（Pages 编辑权限） |
 | `secrets.CLOUDFLARE_ACCOUNT_ID` | Cloudflare 账户 ID |
 | `vars.CF_PAGES_PROJECT` | Cloudflare Pages 项目名（默认 `happyimage`） |
+
+## 本地清理
+
+可安全删除的生成目录：
+
+```bash
+rm -rf .next .open-next out .wrangler tsconfig.tsbuildinfo
+```
+
+不要删除 `.dev.vars` 或 `.env*`，除非你明确要重置本地环境变量。
 
 ## 关联仓库
 

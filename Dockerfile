@@ -44,8 +44,7 @@ ENV NODE_ENV=production \
     HOSTNAME=0.0.0.0 \
     PORT=3000 \
     NEXT_PUBLIC_API_BASE_URL="" \
-    BACKEND_URL=http://happytoken-api:80 \
-    MODEL_BACKEND_URL=http://happytoken-api:80
+    BACKEND_URL=http://happytoken-api:80
 
 COPY --from=build /app/web/.next/standalone ./
 COPY --from=build /app/web/.next/static ./.next/static
