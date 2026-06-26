@@ -36,6 +36,26 @@ jobs:
       - name: Build and Deploy
         env:
           NEXT_PUBLIC_APP_VERSION: ${{ github.sha }}
+          BACKEND_URL: ${{ vars.BACKEND_URL }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: pnpm run deploy
+        run: |
+          test -n "$BACKEND_URL" || {
+            echo "GitHub variable BACKEND_URL is required for production deploys" >&2
+            exit 1
+          }
+          node -e '
+            const fs = require("fs");
+            const path = "wrangler.jsonc";
+            const backendUrl = process.env.BACKEND_URL;
+            const text = fs.readFileSync(path, "utf8");
+            const next = text.replace(
+              /"BACKEND_URL":\s*"[^"]*"/,
+              `"BACKEND_URL": ${JSON.stringify(backendUrl)}`,
+            );
+            if (next === text) {
+              throw new Error("BACKEND_URL entry not found in wrangler.jsonc");
+            }
+            fs.writeFileSync(path, next);
+          '
+          pnpm run deploy
