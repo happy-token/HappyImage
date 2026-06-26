@@ -1,0 +1,22 @@
+services:
+  happytoken-api:
+    image: ghcr.io/happy-token/happyimage-api:latest
+    container_name: happytoken-api
+    restart: unless-stopped
+    ports:
+      - "${HAPPYTOKEN_API_PORT:-8000}:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./data:/app/data
+      - ./config.json:/app/config.json:rw
+    environment:
+      STORAGE_BACKEND: ${STORAGE_BACKEND:-json}
+      DATABASE_URL: ${DATABASE_URL:-}
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1/health?format=json', timeout=3).read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s

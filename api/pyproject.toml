@@ -1,0 +1,37 @@
+[project]
+name = "happytoken"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "curl-cffi>=0.15.0",
+    "fastapi>=0.136.0",
+    "pillow>=12.2.0",
+    "pybase64>=1.4.3",
+    "python-multipart>=0.0.26",
+    "requests>=2.33.0",
+    "tiktoken>=0.12.0",
+    "uvicorn>=0.44.0",
+    "sqlalchemy>=2.0.0",
+    "psycopg2-binary>=2.9.0",
+    "gitpython>=3.1.0",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=8.0.0",
+]
+
+[[tool.uv.index]]
+url = "https://mirrors.aliyun.com/pypi/simple"
+default = true
+
+[tool.pytest.ini_options]
+addopts = ["-m", "not live"]
+testpaths = ["test"]
+python_files = ["test_*.py"]
+markers = [
+    "live: tests that require a running local Happy Token API service and often real upstream credentials",
+]

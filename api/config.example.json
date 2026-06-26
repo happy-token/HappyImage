@@ -1,0 +1,60 @@
+{
+  "registration_enabled": false,
+  "image_retention_days": 15,
+  "image_access_token_ttl_seconds": 86400,
+  "image_poll_timeout_secs": 120,
+  "log_levels": [
+    "debug",
+    "error",
+    "info",
+    "warning"
+  ],
+  "public_app_url": "",
+  "api_public_url": "",
+  "cors_origins": [],
+  "session_secret": "replace_with_a_different_strong_session_secret",
+  "session_cookie_name": "happytoken_session",
+  "session_cookie_domain": "",
+  "session_max_age_seconds": 86400,
+  "sensitive_words": [],
+  "global_system_prompt": "",
+  "ai_review": {
+    "enabled": false,
+    "base_url": "",
+    "api_key": "",
+    "model": "",
+    "prompt": ""
+  },
+  "oidc": {
+    "enabled": false,
+    "issuer": "",
+    "client_id": "",
+    "client_secret": "",
+    "scopes": "openid profile email",
+    "allowed_email_domains": ""
+  },
+  "model_gateway": {
+    "gateway_api_base_url": "https://gateway.happy-token.cn/v1",
+    "gateway_management_url": "https://gateway.happy-token.cn",
+    "provision_url": "",
+    "provision_secret": "",
+    "sql_dsn": "",
+    "token_name": "HappyImage Default"
+  },
+  "image_parallel_generation": true,
+  "image_poll_interval_secs": 10,
+  "image_poll_initial_wait_secs": 10,
+  "image_storage": {
+    "enabled": false,
+    "mode": "local",
+    "webdav_url": "",
+    "webdav_username": "",
+    "webdav_password": "",
+    "webdav_root_path": "happytoken/images",
+    "public_base_url": ""
+  },
+  "image_min_free_mb": 500,
+  "image_settle_enabled": false,
+  "image_check_before_hit_enabled": false,
+  "image_settle_secs": 2
+}
