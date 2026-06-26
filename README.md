@@ -174,7 +174,7 @@ rm -rf .next .open-next out .wrangler tsconfig.tsbuildinfo
 | `../happyimage-gallery-source` | 本地/服务器官方图库源数据，不提交 GitHub |
 | NewAPI / 模型网关 | 外部模型渠道、账号池、上游调试和 token 管理 |
 
-部署编排见后端的 `docker-compose.yml`；Web Docker 镜像运行 Next.js server，官方图库静态包通过 volume/CDN/对象存储提供。
+组合 Web/API 部署编排见工作区根目录的 `deploy/hs/docker-compose.yml`；API-only 部署见 `happyimage-api/docker-compose.yml`。Web Docker 镜像运行 Next.js server，官方图库静态包通过 volume/CDN/对象存储提供。
 
 ## NewAPI Management
 
