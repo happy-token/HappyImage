@@ -2,14 +2,14 @@
 
 ## Goal
 
-Merge `happyimage-api` and `happyimage-web` into one `HappyImage` repository while keeping backend and frontend code separated. The merged repository must preserve both existing Git histories and make local debugging, cross-service changes, CI, and deployment easier to operate.
+Merge `api` and `web` into one `HappyImage` repository while keeping backend and frontend code separated. The merged repository must preserve both existing Git histories and make local debugging, cross-service changes, CI, and deployment easier to operate.
 
 ## Current State
 
 `/Users/forever/workspace/HappyImage` already acts like a product workspace, but it is not yet a Git repository. It contains:
 
-- `happyimage-api/`: FastAPI backend repository.
-- `happyimage-web/`: Next.js frontend repository.
+- `api/`: FastAPI backend repository.
+- `web/`: Next.js frontend repository.
 - `deploy/hs/docker-compose.yml`: combined Web/API deployment.
 - `docs/`: shared deployment and product documentation.
 - `README.md`: shared workspace overview.
@@ -52,7 +52,7 @@ tmp/monorepo-migration-YYYYMMDD-HHMMSS/
 
 Then import the API and Web repositories into `api/` and `web/`. Restore shared root files such as `README.md`, `deploy/`, and `docs/` from the temporary backup after the subtree imports.
 
-The official source directories should be `api/` and `web/`, not `happyimage-api/` and `happyimage-web/`. This keeps paths short and makes the repository shape read as a single product.
+The official source directories should be `api/` and `web/`, not `api/` and `web/`. This keeps paths short and makes the repository shape read as a single product.
 
 ## Service Boundaries
 

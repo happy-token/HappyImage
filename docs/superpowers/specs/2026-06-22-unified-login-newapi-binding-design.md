@@ -18,16 +18,16 @@ The target user experience:
 
 Local project structure:
 
-- `happyimage-api/`: HappyImage backend for auth, users, image tasks, history, private images, settings, and API.
-- `happyimage-web/`: HappyImage frontend, middleware, NewAPI proxy surface, and static gallery assets.
+- `api/`: HappyImage backend for auth, users, image tasks, history, private images, settings, and API.
+- `web/`: HappyImage frontend, middleware, NewAPI proxy surface, and static gallery assets.
 - `prompts/login.md`: Product request for unified login and API key auto-import.
 - `arch.png`: Target platform architecture diagram.
 
 Existing HappyImage auth already includes:
 
-- OIDC login support in `happyimage-api/services/oidc_service.py`.
-- OIDC-created local users in `happyimage-api/services/auth_service.py` using `auth_provider` and `auth_subject`.
-- Frontend session storage in `happyimage-web/src/store/auth.ts`.
+- OIDC login support in `api/services/oidc_service.py`.
+- OIDC-created local users in `api/services/auth_service.py` using `auth_provider` and `auth_subject`.
+- Frontend session storage in `web/src/store/auth.ts`.
 - User model provider fields in both backend and frontend.
 
 Observed server platform under `/data/HappyServices` on `hk`:

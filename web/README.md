@@ -52,7 +52,7 @@ NEXT_PUBLIC_API_BASE_URL=https://api.example.com pnpm run dev
 
 ## 管理员运行时设置
 
-以下设置不再通过 Web Dockerfile、Web README 启动命令或部署环境变量配置。请在 `happyimage-api/config.json`、首次 `/setup` 或 Web 管理设置页中维护；密钥类字段会在 API 响应中脱敏。
+以下设置不再通过 Web Dockerfile、Web README 启动命令或部署环境变量配置。请在 `api/config.json`、首次 `/setup` 或 Web 管理设置页中维护；密钥类字段会在 API 响应中脱敏。
 
 | 设置 | 位置 / 字段 | 说明 |
 |:--|:--|:--|
@@ -139,12 +139,12 @@ pnpm run gallery:json
 pnpm run gallery:build
 ```
 
-默认读取 `../happyimage-gallery-source`，调用 `../happyimage-api` 中的图库归一化脚本，输出到 `public/seed-gallery`。如需覆盖路径：
+默认读取 `../data/gallery-source`，调用 `../api` 中的图库归一化脚本，输出到 `public/seed-gallery`。如需覆盖路径：
 
 ```bash
 pnpm run gallery:build -- \
   --source-dir=/srv/happyimage-gallery-source \
-  --api-dir=/srv/happyimage-api \
+  --api-dir=/srv/happyimage/api \
   --output=/srv/happyimage/seed-gallery
 ```
 
@@ -186,10 +186,10 @@ rm -rf .next .open-next out .wrangler tsconfig.tsbuildinfo
 | 项目 | 说明 |
 |:--|:--|
 | [happyimage-api](https://github.com/happy-token/happyimage-api) | 产品后端，负责登录、用户、历史、图库、设置和 `/api/*` |
-| `../happyimage-gallery-source` | 本地/服务器官方图库源数据，不提交 GitHub |
+| `../data/gallery-source` | 本地/服务器官方图库源数据，不提交 GitHub |
 | NewAPI / 模型网关 | 外部模型渠道、账号池、上游调试和 token 管理 |
 
-组合 Web/API 部署编排见工作区根目录的 `deploy/hs/docker-compose.yml`；API-only 部署见 `happyimage-api/docker-compose.yml`。Web Docker 镜像运行 Next.js server，官方图库静态包通过 volume/CDN/对象存储提供。
+组合 Web/API 部署编排见工作区根目录的 `deploy/hs/docker-compose.yml`；API-only 部署见 `api/docker-compose.yml`。Web Docker 镜像运行 Next.js server，官方图库静态包通过 volume/CDN/对象存储提供。
 
 ## NewAPI Management
 

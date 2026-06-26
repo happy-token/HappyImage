@@ -16,22 +16,22 @@ This plan covers one deliverable: HappyImage integration with the existing Happy
 
 ## File Structure
 
-- Modify `happyimage-api/services/config.py`: add NewAPI binding settings from env/config.
-- Create `happyimage-api/services/newapi_binding_service.py`: own NewAPI binding/provisioning logic and redacted error handling.
-- Modify `happyimage-api/services/auth_service.py`: add a focused helper for applying the default NewAPI provider to a user.
-- Modify `happyimage-api/api/auth_oidc.py`: run binding after OIDC user creation and include binding status in session/profile payloads.
-- Modify `happyimage-api/api/system.py`: disable public password login/registration unless explicitly enabled for emergency use.
-- Add `happyimage-api/test/test_newapi_binding_service.py`: unit tests for binding service behavior.
-- Modify `happyimage-api/test/test_oidc_login.py`: tests for OIDC callback triggering binding and reporting pending/success.
-- Modify `happyimage-api/test/test_cookie_session_auth.py`: tests for disabled local login/register behavior.
-- Modify `happyimage-web/src/lib/api.ts`: add NewAPI binding/status fields to response types.
-- Modify `happyimage-web/src/store/auth.ts`: persist binding status and management URL.
-- Modify `happyimage-web/src/app/login/page.tsx`: remove local login/register UI; leave one Casdoor login action.
-- Modify `happyimage-web/src/components/account-menu.tsx`: add NewAPI management section/entry for user sessions.
-- Create `happyimage-web/src/app/settings/newapi/page.tsx`: same-site NewAPI management container.
+- Modify `api/services/config.py`: add NewAPI binding settings from env/config.
+- Create `api/services/newapi_binding_service.py`: own NewAPI binding/provisioning logic and redacted error handling.
+- Modify `api/services/auth_service.py`: add a focused helper for applying the default NewAPI provider to a user.
+- Modify `api/api/auth_oidc.py`: run binding after OIDC user creation and include binding status in session/profile payloads.
+- Modify `api/api/system.py`: disable public password login/registration unless explicitly enabled for emergency use.
+- Add `api/test/test_newapi_binding_service.py`: unit tests for binding service behavior.
+- Modify `api/test/test_oidc_login.py`: tests for OIDC callback triggering binding and reporting pending/success.
+- Modify `api/test/test_cookie_session_auth.py`: tests for disabled local login/register behavior.
+- Modify `web/src/lib/api.ts`: add NewAPI binding/status fields to response types.
+- Modify `web/src/store/auth.ts`: persist binding status and management URL.
+- Modify `web/src/app/login/page.tsx`: remove local login/register UI; leave one Casdoor login action.
+- Modify `web/src/components/account-menu.tsx`: add NewAPI management section/entry for user sessions.
+- Create `web/src/app/settings/newapi/page.tsx`: same-site NewAPI management container.
 - Modify `README.md`: document server architecture and request boundaries.
-- Modify `happyimage-api/README.md`: document backend env settings.
-- Modify `happyimage-web/README.md`: document management route and verification.
+- Modify `api/README.md`: document backend env settings.
+- Modify `web/README.md`: document management route and verification.
 
 ## Internal NewAPI Provisioning Contract
 
@@ -82,8 +82,8 @@ Pending/unavailable response is represented inside HappyImage as:
 ### Task 1: Backend NewAPI Binding Configuration
 
 **Files:**
-- Modify: `happyimage-api/services/config.py`
-- Test: `happyimage-api/test/test_newapi_binding_service.py`
+- Modify: `api/services/config.py`
+- Test: `api/test/test_newapi_binding_service.py`
 
 - [ ] **Step 1: Write failing config tests**
 
@@ -149,7 +149,7 @@ Expected: failure containing `AttributeError: 'ConfigStore' object has no attrib
 
 - [ ] **Step 3: Add config method**
 
-In `happyimage-api/services/config.py`, add this method inside `ConfigStore`:
+In `api/services/config.py`, add this method inside `ConfigStore`:
 
 ```python
     def get_newapi_binding_settings(self) -> dict[str, object]:
@@ -212,12 +212,12 @@ git commit -m "feat: add newapi binding configuration"
 ### Task 2: AuthService Helper For Default NewAPI Provider
 
 **Files:**
-- Modify: `happyimage-api/services/auth_service.py`
-- Modify: `happyimage-api/test/test_newapi_binding_service.py`
+- Modify: `api/services/auth_service.py`
+- Modify: `api/test/test_newapi_binding_service.py`
 
 - [ ] **Step 1: Add failing AuthService helper test**
 
-Append to `happyimage-api/test/test_newapi_binding_service.py`:
+Append to `api/test/test_newapi_binding_service.py`:
 
 ```python
 from services.auth_service import AuthService
@@ -295,7 +295,7 @@ Expected: failure containing `AttributeError: 'AuthService' object has no attrib
 
 - [ ] **Step 3: Add AuthService helper**
 
-In `happyimage-api/services/auth_service.py`, add this method inside `AuthService` before `authenticate`:
+In `api/services/auth_service.py`, add this method inside `AuthService` before `authenticate`:
 
 ```python
     def apply_newapi_default_provider(
@@ -364,12 +364,12 @@ git commit -m "feat: apply newapi default provider to users"
 ### Task 3: NewAPI Binding Service
 
 **Files:**
-- Create: `happyimage-api/services/newapi_binding_service.py`
-- Modify: `happyimage-api/test/test_newapi_binding_service.py`
+- Create: `api/services/newapi_binding_service.py`
+- Modify: `api/test/test_newapi_binding_service.py`
 
 - [ ] **Step 1: Add failing binding service tests**
 
-Append to `happyimage-api/test/test_newapi_binding_service.py`:
+Append to `api/test/test_newapi_binding_service.py`:
 
 ```python
 import json
@@ -524,7 +524,7 @@ Expected: failure containing `ModuleNotFoundError: No module named 'services.new
 
 - [ ] **Step 3: Create binding service**
 
-Create `happyimage-api/services/newapi_binding_service.py`:
+Create `api/services/newapi_binding_service.py`:
 
 ```python
 from __future__ import annotations
@@ -670,12 +670,12 @@ git commit -m "feat: add newapi binding service"
 ### Task 4: Run Binding During OIDC Login And Session Refresh
 
 **Files:**
-- Modify: `happyimage-api/api/auth_oidc.py`
-- Modify: `happyimage-api/test/test_oidc_login.py`
+- Modify: `api/api/auth_oidc.py`
+- Modify: `api/test/test_oidc_login.py`
 
 - [ ] **Step 1: Add failing OIDC binding tests**
 
-Append to `happyimage-api/test/test_oidc_login.py`:
+Append to `api/test/test_oidc_login.py`:
 
 ```python
 def test_oidc_callback_applies_newapi_default_provider_when_binding_succeeds():
@@ -818,7 +818,7 @@ Expected: failure containing `AttributeError` for missing `newapi_binding_servic
 
 - [ ] **Step 3: Wire binding service into OIDC callback**
 
-In `happyimage-api/api/auth_oidc.py`, add import:
+In `api/api/auth_oidc.py`, add import:
 
 ```python
 from services.newapi_binding_service import newapi_binding_service
@@ -904,12 +904,12 @@ git commit -m "feat: bind newapi during oidc login"
 ### Task 5: Disable Public Local Login And Registration
 
 **Files:**
-- Modify: `happyimage-api/api/system.py`
-- Modify: `happyimage-api/test/test_cookie_session_auth.py`
+- Modify: `api/api/system.py`
+- Modify: `api/test/test_cookie_session_auth.py`
 
 - [ ] **Step 1: Add failing tests for disabled local auth**
 
-Append to `happyimage-api/test/test_cookie_session_auth.py`:
+Append to `api/test/test_cookie_session_auth.py`:
 
 ```python
 def test_password_login_disabled_by_default_for_public_users():
@@ -978,7 +978,7 @@ Expected: first test returns 401 instead of 403 or registration succeeds/returns
 
 - [ ] **Step 3: Add local auth gates**
 
-In `happyimage-api/api/system.py`, add helper after `_registration_enabled`:
+In `api/api/system.py`, add helper after `_registration_enabled`:
 
 ```python
 def _local_password_login_enabled() -> bool:
@@ -1004,7 +1004,7 @@ At the top of `register_user`, before rate limit, add:
 
 - [ ] **Step 4: Update old tests that expect password login by setting emergency env**
 
-In `happyimage-api/test/test_cookie_session_auth.py`, update `_login_password`:
+In `api/test/test_cookie_session_auth.py`, update `_login_password`:
 
 ```python
 def _login_password(client: TestClient, role: str = "admin", prefix: str = "account"):
@@ -1044,15 +1044,15 @@ git commit -m "feat: disable local public auth"
 ### Task 6: Frontend Session Types For NewAPI Binding
 
 **Files:**
-- Modify: `happyimage-web/src/lib/api.ts`
-- Modify: `happyimage-web/src/store/auth.ts`
-- Modify: `happyimage-web/src/lib/auth-session.ts`
-- Modify: `happyimage-web/src/app/login/page.tsx`
-- Modify: `happyimage-web/src/components/account-menu.tsx`
+- Modify: `web/src/lib/api.ts`
+- Modify: `web/src/store/auth.ts`
+- Modify: `web/src/lib/auth-session.ts`
+- Modify: `web/src/app/login/page.tsx`
+- Modify: `web/src/components/account-menu.tsx`
 
 - [ ] **Step 1: Add session fields to API types**
 
-In `happyimage-web/src/lib/api.ts`, add these optional fields to `LoginResponse`, `SessionResponse`, and nested `user` shapes where model provider fields already live:
+In `web/src/lib/api.ts`, add these optional fields to `LoginResponse`, `SessionResponse`, and nested `user` shapes where model provider fields already live:
 
 ```ts
   newapi_binding_status?: "configured" | "pending" | "failed";
@@ -1062,7 +1062,7 @@ In `happyimage-web/src/lib/api.ts`, add these optional fields to `LoginResponse`
 
 - [ ] **Step 2: Add stored session fields**
 
-In `happyimage-web/src/store/auth.ts`, add to `StoredAuthSession`:
+In `web/src/store/auth.ts`, add to `StoredAuthSession`:
 
 ```ts
   newapiBindingStatus?: "configured" | "pending" | "failed";
@@ -1083,7 +1083,7 @@ In `normalizeSession`, add:
 
 - [ ] **Step 3: Map backend fields into stored sessions**
 
-In `happyimage-web/src/lib/auth-session.ts`, when constructing `nextSession` in both branches, add:
+In `web/src/lib/auth-session.ts`, when constructing `nextSession` in both branches, add:
 
 ```ts
         newapiBindingStatus: data.user?.newapi_binding_status ?? data.newapi_binding_status,
@@ -1091,7 +1091,7 @@ In `happyimage-web/src/lib/auth-session.ts`, when constructing `nextSession` in 
         newapiManagementUrl: data.user?.newapi_management_url ?? data.newapi_management_url ?? "",
 ```
 
-In `happyimage-web/src/app/login/page.tsx` inside `buildStoredSession`, add:
+In `web/src/app/login/page.tsx` inside `buildStoredSession`, add:
 
 ```ts
     newapiBindingStatus: response.user?.newapi_binding_status ?? response.newapi_binding_status,
@@ -1099,7 +1099,7 @@ In `happyimage-web/src/app/login/page.tsx` inside `buildStoredSession`, add:
     newapiManagementUrl: response.user?.newapi_management_url ?? response.newapi_management_url ?? "",
 ```
 
-In `happyimage-web/src/components/account-menu.tsx` inside `buildSessionFromProfileResponse`, add:
+In `web/src/components/account-menu.tsx` inside `buildSessionFromProfileResponse`, add:
 
 ```ts
     newapiBindingStatus: data.user?.newapi_binding_status ?? data.newapi_binding_status ?? session.newapiBindingStatus,
@@ -1131,11 +1131,11 @@ git commit -m "feat: persist newapi binding session state"
 ### Task 7: Casdoor-Only Login Page
 
 **Files:**
-- Modify: `happyimage-web/src/app/login/page.tsx`
+- Modify: `web/src/app/login/page.tsx`
 
 - [ ] **Step 1: Replace local login/register state and UI**
 
-In `happyimage-web/src/app/login/page.tsx`, remove imports `Eye`, `EyeOff`, `Mail`, `UserPlus`, `Input`, `loginWithPassword`, and `registerWithPassword`.
+In `web/src/app/login/page.tsx`, remove imports `Eye`, `EyeOff`, `Mail`, `UserPlus`, `Input`, `loginWithPassword`, and `registerWithPassword`.
 
 Keep imports:
 
@@ -1200,12 +1200,12 @@ git commit -m "feat: use casdoor-only login page"
 ### Task 8: NewAPI Management Page And Account Menu Entry
 
 **Files:**
-- Create: `happyimage-web/src/app/settings/newapi/page.tsx`
-- Modify: `happyimage-web/src/components/account-menu.tsx`
+- Create: `web/src/app/settings/newapi/page.tsx`
+- Modify: `web/src/components/account-menu.tsx`
 
 - [ ] **Step 1: Create NewAPI management page**
 
-Create `happyimage-web/src/app/settings/newapi/page.tsx`:
+Create `web/src/app/settings/newapi/page.tsx`:
 
 ```tsx
 "use client";
@@ -1271,7 +1271,7 @@ export default function NewAPISettingsPage() {
 
 - [ ] **Step 2: Add account menu copy and nav item**
 
-In `happyimage-web/src/components/account-menu.tsx`, add `KeyRound` to lucide imports.
+In `web/src/components/account-menu.tsx`, add `KeyRound` to lucide imports.
 
 Extend `SettingsSection`:
 
@@ -1382,8 +1382,8 @@ git commit -m "feat: add embedded newapi management entry"
 
 **Files:**
 - Modify: `README.md`
-- Modify: `happyimage-api/README.md`
-- Modify: `happyimage-web/README.md`
+- Modify: `api/README.md`
+- Modify: `web/README.md`
 
 - [ ] **Step 1: Update workspace README architecture**
 
@@ -1420,7 +1420,7 @@ HappyImage 普通用户登录只走 Casdoor OIDC。用户登录后，后端用 C
 
 - [ ] **Step 2: Update backend README**
 
-Append to `happyimage-api/README.md`:
+Append to `api/README.md`:
 
 ```markdown
 ## Unified Login / NewAPI Binding
@@ -1442,7 +1442,7 @@ If `HAPPYTOKEN_NEWAPI_PROVISION_URL` or `HAPPYTOKEN_NEWAPI_PROVISION_SECRET` is 
 
 - [ ] **Step 3: Update frontend README**
 
-Append to `happyimage-web/README.md`:
+Append to `web/README.md`:
 
 ```markdown
 ## NewAPI Management
@@ -1469,7 +1469,7 @@ Top-level `README.md` is outside a Git repository in this workspace. Edit it but
 ### Task 10: Final Verification
 
 **Files:**
-- Read-only verification across `happyimage-api/`, `happyimage-web/`, and `README.md`
+- Read-only verification across `api/`, `web/`, and `README.md`
 
 - [ ] **Step 1: Run backend tests**
 

@@ -8,8 +8,8 @@ All HappyImage runtime files should live under one root:
 
 ```text
 /opt/happytoken/happyimage/
-  happyimage-api/       happyimage-api source and Dockerfile
-  happyimage-web/       happyimage-web source and Dockerfile
+  api/       happyimage-api source and Dockerfile
+  web/       happyimage-web source and Dockerfile
   data/
     api/                API runtime JSON data, images, thumbnails, logs
     config.json         API config mounted to /app/config.json
@@ -21,8 +21,8 @@ All HappyImage runtime files should live under one root:
 Older scattered locations that may still exist during migration:
 
 ```text
-/root/home/happy/happyimage-api/
-/root/home/happy/happyimage-web/
+/root/home/happy/api/
+/root/home/happy/web/
 /opt/happyimage/
 ```
 
@@ -52,7 +52,7 @@ The API no longer reads a private env file from `deploy/hs/docker-compose.yml`; 
 Do not use the old private file:
 
 ```text
-/opt/happytoken/happyimage/happyimage-api/.env
+/opt/happytoken/happyimage/api/.env
 ```
 
 Moved runtime settings include public app/API URLs, session/cookie settings, OIDC, model gateway/NewAPI binding, proxy, image storage, and safety settings. Keep them in setup/admin settings or `data/config.json`, not as `HAPPYTOKEN_*` runtime env.
@@ -119,7 +119,7 @@ From the server:
 ```bash
 cd /opt/happytoken/happyimage
 mkdir -p data/api data/seed-gallery
-test -f data/config.json || cp happyimage-api/config.example.json data/config.json
+test -f data/config.json || cp api/config.example.json data/config.json
 
 # The API and Web default images are pullable from GHCR.
 docker compose -f deploy/hs/docker-compose.yml pull

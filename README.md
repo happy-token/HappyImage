@@ -3,16 +3,16 @@
 Happy Token 统一工作区。
 
 ```text
-happyimage-api/              后端：登录、用户、历史、私有图片、设置、API
-happyimage-web/              前端：页面、同源产品 middleware、官方图库静态包
-happyimage-gallery-source/   官方图库源数据和候选池，不提交 GitHub
+api/              后端：登录、用户、历史、私有图片、设置、API
+web/              前端：页面、同源产品 middleware、官方图库静态包
+data/gallery-source/   官方图库源数据和候选池，不提交 GitHub
 ```
 
 请求边界：
 
 ```text
-/api/*, /images/*, /image-thumbnails/*, /health  -> happyimage-api
-/seed-gallery/*                                  -> happyimage-web/public/seed-gallery
+/api/*, /images/*, /image-thumbnails/*, /health  -> api
+/seed-gallery/*                                  -> web/public/seed-gallery
 ```
 
 HappyImage Web 只代理产品路径到 `BACKEND_URL`，不代理或暴露 `/v1/*`。外部 OpenAI-compatible 客户端应直接使用 NewAPI / 模型网关，例如 `gateway.happy-token.cn/v1/*`。
@@ -50,8 +50,8 @@ HappyImage 普通用户登录只走 Casdoor OIDC。用户登录后，后端用 C
 
 | 类型 | 使用方式 | Happy Token 产品接口 |
 |:--|:--|:--|
-| 文生图 | 只输入提示词，不上传参考图 | `POST /api/image-tasks/generations`，由 `happyimage-api` 保存任务、历史和用户图库 |
-| 图生图 / 图片编辑 | 上传一张或多张参考图，并输入编辑或生成要求 | `POST /api/image-tasks/edits`，multipart 上传图片，由 `happyimage-api` 保存任务、历史和用户图库 |
+| 文生图 | 只输入提示词，不上传参考图 | `POST /api/image-tasks/generations`，由 `api` 保存任务、历史和用户图库 |
+| 图生图 / 图片编辑 | 上传一张或多张参考图，并输入编辑或生成要求 | `POST /api/image-tasks/edits`，multipart 上传图片，由 `api` 保存任务、历史和用户图库 |
 
 前端工作台只使用 `/api/image-tasks/*`，这样可以保留登录态、历史 session、私有图片和下载管理。外部 OpenAI-compatible 客户端应直接调用 NewAPI / 模型网关，不经过 HappyImage Web 或 API。
 
@@ -68,14 +68,14 @@ HappyImage 普通用户登录只走 Casdoor OIDC。用户登录后，后端用 C
 稳定性验证：
 
 ```bash
-cd happyimage-api && uv run python -m pytest -q
-cd happyimage-web && pnpm exec tsc --noEmit
+cd api && uv run python -m pytest -q
+cd web && pnpm exec tsc --noEmit
 ```
 
 常用入口：
 
 ```bash
-cd happyimage-api && uv run python main.py
-cd happyimage-web && pnpm run dev
-cd happyimage-web && pnpm run gallery:build
+cd api && uv run python main.py
+cd web && pnpm run dev
+cd web && pnpm run gallery:build
 ```

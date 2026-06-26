@@ -31,8 +31,8 @@ function run(command, args, cwd) {
   }
 }
 
-const apiDir = resolve(rootDir, readFlag("api-dir", process.env.HAPPYIMAGE_API_DIR || "../happyimage-api"));
-const sourceDir = resolve(rootDir, readFlag("source-dir", process.env.HAPPYIMAGE_GALLERY_SOURCE_DIR || "../happyimage-gallery-source"));
+const apiDir = resolve(rootDir, readFlag("api-dir", process.env.HAPPYIMAGE_API_DIR || "../api"));
+const sourceDir = resolve(rootDir, readFlag("source-dir", process.env.HAPPYIMAGE_GALLERY_SOURCE_DIR || "../data/gallery-source"));
 const outputDir = resolve(rootDir, readFlag("output", process.env.HAPPYIMAGE_GALLERY_OUTPUT_DIR || "public/seed-gallery"));
 const widths = readFlag("widths", process.env.HAPPYIMAGE_GALLERY_THUMBNAIL_WIDTHS || "640");
 const seedDir = resolve(sourceDir, "image-gallery-seed");

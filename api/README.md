@@ -107,7 +107,7 @@ DATABASE_URL=postgresql://user:password@postgres.example.com:5432/happyimage \
 docker compose up -d
 ```
 
-也可以放在执行 `docker compose` 的目录里的 `.env` 文件中。API-only 部署是在 `happyimage-api/.env`；工作区组合部署是在工作区根目录 `.env`。
+也可以放在执行 `docker compose` 的目录里的 `.env` 文件中。API-only 部署是在 `api/.env`；工作区组合部署是在工作区根目录 `.env`。
 
 部署环境变量只保留基础设施项：
 
@@ -239,7 +239,7 @@ docker pull ghcr.io/happy-token/happyimage-web:latest
 
 cd /opt/happytoken/happyimage
 mkdir -p data/api data/seed-gallery
-test -f data/config.json || cp happyimage-api/config.example.json data/config.json
+test -f data/config.json || cp api/config.example.json data/config.json
 docker compose -f deploy/hs/docker-compose.yml pull
 docker compose -f deploy/hs/docker-compose.yml up -d
 ```

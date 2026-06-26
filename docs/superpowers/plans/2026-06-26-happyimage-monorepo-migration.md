@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Convert `/Users/forever/workspace/HappyImage` into the single `HappyImage` monorepo, preserving `happyimage-api` and `happyimage-web` Git histories under `api/` and `web/`.
+**Goal:** Convert `/Users/forever/workspace/HappyImage` into the single `HappyImage` monorepo, preserving `api` and `web` Git histories under `api/` and `web/`.
 
 **Architecture:** Use root Git history for shared workspace files, then import both existing repositories with `git subtree add --prefix`. Keep runtime services separate, with root-level scripts, ignore rules, docs, CI, and compose files updated for `api/` and `web/` paths.
 
@@ -31,7 +31,7 @@ Create or modify these files:
 - Modify: `/Users/forever/workspace/HappyImage/web/scripts/build-seed-gallery.mjs`  
   Responsibility: update default gallery source and API script paths after moving Web to `web/`.
 - Modify: `/Users/forever/workspace/HappyImage/web/README.md`  
-  Responsibility: update examples that reference `../happyimage-api` to `../api`.
+  Responsibility: update examples that reference `../api` to `../api`.
 - Modify: `/Users/forever/workspace/HappyImage/api/README.md`  
   Responsibility: update repository references from separate repo to monorepo path.
 - Create: `/Users/forever/workspace/HappyImage/docs/monorepo-migration.md`  
@@ -521,7 +521,7 @@ Run:
 
 ```bash
 cd /Users/forever/workspace/HappyImage
-perl -0pi -e 's/happyimage-api\\//api\\//g; s/happyimage-web\\//web\\//g; s/`happyimage-api`/`api`/g; s/`happyimage-web`/`web`/g; s/happyimage-api/api/g; s/happyimage-web/web/g' README.md docs/hs-deployment.md docs/hs-deployment-cn.md
+perl -0pi -e 's/happyimage-api\\//api\\//g; s/happyimage-web\\//web\\//g; s/`api`/`api`/g; s/`web`/`web`/g; s/api/api/g; s/web/web/g' README.md docs/hs-deployment.md docs/hs-deployment-cn.md
 ```
 
 Expected: references in shared docs point to `api/` and `web/` where they refer to local source paths. Service names in prose may need manual review in the next step.
@@ -567,7 +567,7 @@ Run:
 
 ```bash
 cd /Users/forever/workspace/HappyImage
-rg -n 'happyimage-api/|happyimage-web/' README.md docs deploy
+rg -n 'api/|web/' README.md docs deploy
 ```
 
 Expected: no matches for old slash-suffixed source directory names.
@@ -636,7 +636,7 @@ Run:
 
 ```bash
 cd /Users/forever/workspace/HappyImage
-perl -0pi -e 's/\\[happyimage-api\\]\\(https:\\/\\/github\\.com\\/happy-token\\/happyimage-api\\)/`..\\/api`/g; s/`\\.\\.\\/happyimage-api`/`..\\/api`/g; s/`\\.\\.\\/happyimage-web`/`..\\/web`/g; s/happyimage-api\\/docker-compose\\.yml/api\\/docker-compose.yml/g; s/happyimage-web/web/g; s/happyimage-api/api/g' web/README.md api/README.md api/AGENTS.md api/CLAUDE.md
+perl -0pi -e 's/\\[happyimage-api\\]\\(https:\\/\\/github\\.com\\/happy-token\\/happyimage-api\\)/`..\\/api`/g; s/`\\.\\.\\/happyimage-api`/`..\\/api`/g; s/`\\.\\.\\/happyimage-web`/`..\\/web`/g; s/happyimage-api\\/docker-compose\\.yml/api\\/docker-compose.yml/g; s/web/web/g; s/api/api/g' web/README.md api/README.md api/AGENTS.md api/CLAUDE.md
 ```
 
 Expected: local docs refer to monorepo paths where they mean local source directories.
@@ -647,7 +647,7 @@ Run:
 
 ```bash
 cd /Users/forever/workspace/HappyImage
-rg -n 'happyimage-api/|happyimage-web/|\\.\\./happyimage-api|\\.\\./happyimage-web' api web README.md docs deploy
+rg -n 'api/|web/|\\.\\./happyimage-api|\\.\\./happyimage-web' api web README.md docs deploy
 ```
 
 Expected: no matches where the text means local source paths. If matches remain as historical repository names in changelog-like prose, leave them only if they are not instructions.
