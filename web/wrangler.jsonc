@@ -1,0 +1,32 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"main": "custom-worker.js",
+	"name": "happyimage-web",
+	"compatibility_date": "2026-06-17",
+	"compatibility_flags": [
+		"nodejs_compat",
+		"global_fetch_strictly_public"
+	],
+	"assets": {
+		"directory": ".open-next/assets",
+		"binding": "ASSETS"
+	},
+	"vars": {
+		"BACKEND_URL": "http://127.0.0.1:8000"
+	},
+	"services": [
+		{
+			"binding": "WORKER_SELF_REFERENCE",
+			"service": "happyimage-web"
+		}
+	],
+	"images": {
+		"binding": "IMAGES"
+	},
+	"r2_buckets": [
+		{
+			"binding": "SEED_GALLERY",
+			"bucket_name": "happyimage-seed-gallery"
+		}
+	]
+}

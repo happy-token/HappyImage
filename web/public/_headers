@@ -1,0 +1,28 @@
+# Cloudflare Workers static asset cache headers
+# Rules are processed top-to-bottom; first match wins.
+# https://developers.cloudflare.com/workers/static-assets/headers
+
+# ── Service Worker (always fetch fresh to enable updates) ──
+/sw.js
+  Cache-Control: public, max-age=0, must-revalidate
+
+# ── Hashed JS/CSS (Next.js build output) ──
+/_next/static/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# ── Seed gallery (content-addressed filenames, never change) ──
+/seed-gallery/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# ── Site icons & logos (rarely change) ──
+/icon.png
+  Cache-Control: public, max-age=604800, must-revalidate
+/apple-icon.png
+  Cache-Control: public, max-age=604800, must-revalidate
+/*.svg
+  Cache-Control: public, max-age=604800, must-revalidate
+
+# ── Everything else (HTML pages, dynamic content) ──
+# Force revalidation so users always get the latest deployment.
+/*
+  Cache-Control: public, max-age=0, must-revalidate
