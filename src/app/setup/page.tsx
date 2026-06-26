@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { LoaderCircle, Save } from "lucide-react";
+import { LoaderCircle, RotateCw, Save } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -35,33 +35,83 @@ const initialPayload: SetupPayload = {
   },
 };
 
+function getInitialPayload(): SetupPayload {
+  return {
+    ...initialPayload,
+    public_app_url: typeof window === "undefined" ? "" : window.location.origin,
+  };
+}
+
 export default function SetupPage() {
   const router = useRouter();
   const [isChecking, setIsChecking] = useState(true);
+  const [isRedirecting, setIsRedirecting] = useState(false);
+  const [setupReady, setSetupReady] = useState(false);
+  const [statusError, setStatusError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
-  const [payload, setPayload] = useState<SetupPayload>(initialPayload);
+  const [payload, setPayload] = useState<SetupPayload>(() =>
+    getInitialPayload()
+  );
+
+  const applySetupStatus = useCallback(
+    (setupRequired: boolean) => {
+      if (!setupRequired) {
+        setIsRedirecting(true);
+        router.replace("/login");
+        return;
+      }
+      setSetupReady(true);
+      setStatusError("");
+    },
+    [router]
+  );
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      setPayload((current) => ({
-        ...current,
-        public_app_url: current.public_app_url || window.location.origin,
-      }));
-    }
-
+    let didCancel = false;
     void fetchSetupStatus()
       .then((status) => {
-        if (!status.setup_required) {
-          router.replace("/login");
+        if (didCancel) {
+          return;
         }
+        applySetupStatus(status.setup_required);
       })
       .catch((error) => {
-        toast.error(
-          error instanceof Error ? error.message : "检查初始化状态失败"
-        );
+        if (didCancel) {
+          return;
+        }
+        const message =
+          error instanceof Error ? error.message : "检查初始化状态失败";
+        setSetupReady(false);
+        setStatusError(message);
+        toast.error(message);
       })
-      .finally(() => setIsChecking(false));
-  }, [router]);
+      .finally(() => {
+        if (!didCancel) {
+          setIsChecking(false);
+        }
+      });
+
+    return () => {
+      didCancel = true;
+    };
+  }, [applySetupStatus]);
+
+  const retrySetupStatus = async () => {
+    setIsChecking(true);
+    setStatusError("");
+    try {
+      const status = await fetchSetupStatus();
+      applySetupStatus(status.setup_required);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "检查初始化状态失败";
+      setSetupReady(false);
+      setStatusError(message);
+      toast.error(message);
+    } finally {
+      setIsChecking(false);
+    }
+  };
 
   const setField = <K extends keyof SetupPayload>(
     key: K,
@@ -71,6 +121,11 @@ export default function SetupPage() {
   };
 
   const save = async () => {
+    if (!setupReady) {
+      toast.error("请先确认初始化状态");
+      return;
+    }
+
     setIsSaving(true);
     try {
       await completeSetup({
@@ -117,11 +172,43 @@ export default function SetupPage() {
     }
   };
 
-  if (isChecking) {
+  if (isChecking || isRedirecting) {
     return (
       <div className="grid min-h-[calc(100vh-1rem)] w-full place-items-center px-4 py-6">
         <LoaderCircle className="size-5 animate-spin text-stone-400" />
       </div>
+    );
+  }
+
+  if (statusError || !setupReady) {
+    return (
+      <main className="grid min-h-[calc(100vh-1rem)] w-full place-items-center px-4 py-6 text-stone-950">
+        <Card className="w-full max-w-[520px] rounded-2xl border-white/80 bg-white/90 shadow-sm">
+          <CardContent className="space-y-5 p-6">
+            <div className="space-y-2">
+              <h1 className="text-xl font-semibold tracking-tight">
+                无法确认初始化状态
+              </h1>
+              <p className="text-sm leading-6 text-stone-500">
+                {statusError || "正在等待初始化状态确认。"}
+              </p>
+            </div>
+            <Button
+              type="button"
+              className="h-10 rounded-xl bg-stone-950 px-5 text-white hover:bg-stone-800"
+              disabled={isChecking}
+              onClick={() => void retrySetupStatus()}
+            >
+              {isChecking ? (
+                <LoaderCircle className="size-4 animate-spin" />
+              ) : (
+                <RotateCw className="size-4" />
+              )}
+              重试
+            </Button>
+          </CardContent>
+        </Card>
+      </main>
     );
   }
 
