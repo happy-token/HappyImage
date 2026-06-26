@@ -12,7 +12,8 @@
 		"binding": "ASSETS"
 	},
 	"vars": {
-		"BACKEND_URL": "https://image-b.musi.life:1215"
+		"BACKEND_URL": "https://image-b.happy-token.cn",
+		"NEXT_PUBLIC_API_BASE_URL": "https://image-b.happy-token.cn"
 	},
 	"services": [
 		{

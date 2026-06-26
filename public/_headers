@@ -2,6 +2,10 @@
 # Rules are processed top-to-bottom; first match wins.
 # https://developers.cloudflare.com/workers/static-assets/headers
 
+# ── Service Worker (always fetch fresh to enable updates) ──
+/sw.js
+  Cache-Control: public, max-age=0, must-revalidate
+
 # ── Hashed JS/CSS (Next.js build output) ──
 /_next/static/*
   Cache-Control: public, max-age=31536000, immutable
