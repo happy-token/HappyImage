@@ -73,7 +73,7 @@ export default function LoginPage() {
       const trimmedKey = adminKey.trim();
       const data = await loginWithAdminKey(trimmedKey);
       await setStoredAuthSession({
-        key: data.access_token || trimmedKey,
+        key: "",
         role: data.user?.role ?? data.role,
         subjectId: data.user?.id ?? data.subject_id,
         name: data.user?.name ?? data.name,
@@ -106,6 +106,7 @@ export default function LoginPage() {
           data.user?.preferences ?? data.preferences
         ),
       });
+      setAdminKey("");
       router.replace("/settings");
     } catch (error) {
       toast.error(
