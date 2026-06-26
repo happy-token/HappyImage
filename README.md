@@ -177,7 +177,7 @@ rm -rf .next .open-next out .wrangler tsconfig.tsbuildinfo
 | `../happyimage-gallery-source` | 本地/服务器官方图库源数据，不提交 GitHub |
 | NewAPI / 模型网关 | 外部模型渠道、账号池、上游调试和 token 管理 |
 
-组合 Web/API 部署编排见 API 仓库内的 `happyimage-api/deploy/hs/docker-compose.yml`；API-only 部署见 `happyimage-api/docker-compose.yml`。Web Docker 镜像运行 Next.js server，官方图库静态包通过 volume/CDN/对象存储提供。
+组合 Web/API 部署编排见工作区根目录的 `deploy/hs/docker-compose.yml`；API-only 部署见 `happyimage-api/docker-compose.yml`。Web Docker 镜像运行 Next.js server，官方图库静态包通过 volume/CDN/对象存储提供。
 
 ## NewAPI Management
 
@@ -192,4 +192,3 @@ The page calls `/api/auth/newapi-management` through the authenticated HappyImag
 - an external gateway-admin link for manual fallback.
 
 Do not treat `gateway.happy-token.cn` browser login state as the source of truth. SQL/provisioning creates or reuses the NewAPI user and token, but it does not create the NewAPI browser `session` cookie. Because that cookie belongs to a different origin and may be affected by frame and SameSite policies, the gateway admin page can show “not logged in” even when HappyImage is already bound and generation can use the default HappyToken API Key.
-
