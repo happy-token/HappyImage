@@ -11,8 +11,7 @@ Both service histories were imported with `git subtree add`, so service history 
 
 ```bash
 git log --oneline --graph --all
-git log --oneline happyimage-api-local/main
-git log --oneline happyimage-web-local/main
+git log --oneline --graph --all --max-count=40
 ```
 
 The runtime boundary did not change:
