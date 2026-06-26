@@ -91,7 +91,7 @@ pnpm run build
 NEXT_PUBLIC_API_BASE_URL=https://api.example.com pnpm run build
 ```
 
-同源 middleware 部署保持 `NEXT_PUBLIC_API_BASE_URL` 为空，并在运行层设置：
+同源 middleware 部署必须在构建时保持 `NEXT_PUBLIC_API_BASE_URL` 为空；这是 Next 客户端构建期值，运行时环境变量不能可靠覆盖已打进 bundle 的值。运行层只设置 `BACKEND_URL`：
 
 ```bash
 BACKEND_URL=https://api.example.com
@@ -100,14 +100,16 @@ BACKEND_URL=https://api.example.com
 ## Docker 部署
 
 ```bash
-docker build -t happyimage-web .
+docker build \
+  --build-arg NEXT_PUBLIC_API_BASE_URL="" \
+  -t happyimage-web .
 
 docker run -p 3000:3000 \
   -e BACKEND_URL=http://happyimage-api:80 \
   happyimage-web
 ```
 
-Docker 镜像运行的是 Next.js server，不是静态 nginx。这样 `/api/*`、`/images/*`、`/image-thumbnails/*` 和 `/health` 可以继续走 middleware 到 `BACKEND_URL`。如果构建时设置了 `NEXT_PUBLIC_API_BASE_URL`，浏览器会直连该地址，不再使用同源代理。
+Docker 镜像运行的是 Next.js server，不是静态 nginx。这样 `/api/*`、`/images/*`、`/image-thumbnails/*` 和 `/health` 可以继续走 middleware 到 `BACKEND_URL`。如果构建时设置了非空 `NEXT_PUBLIC_API_BASE_URL`，浏览器会直连该地址，不再使用同源代理；运行时再设为空不能可靠撤销这个构建结果。
 
 ## 官方图库静态包
 
