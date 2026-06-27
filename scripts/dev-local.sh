@@ -148,6 +148,7 @@ echo "Starting API: http://127.0.0.1:${API_PORT}"
   cd "$ROOT_DIR/api"
   uv run python main.py
 ) &
+api_pid="$!"
 
 echo "Starting Web: http://127.0.0.1:${WEB_PORT}"
 echo "Web BACKEND_URL=${BACKEND_URL}"
@@ -156,5 +157,25 @@ echo "Web BACKEND_URL=${BACKEND_URL}"
   CI=true npx -y pnpm@10.33.2 install --frozen-lockfile --config.confirmModulesPurge=false
   BACKEND_URL="$BACKEND_URL" PORT="$WEB_PORT" npx -y pnpm@10.33.2 run dev
 ) &
+web_pid="$!"
 
-wait
+while true; do
+  api_running=0
+  web_running=0
+  kill -0 "$api_pid" >/dev/null 2>&1 && api_running=1
+  kill -0 "$web_pid" >/dev/null 2>&1 && web_running=1
+
+  if [ "$api_running" -eq 0 ]; then
+    wait "$api_pid" || true
+    echo "API process exited; stopping Web."
+    stop_all
+    exit 1
+  fi
+  if [ "$web_running" -eq 0 ]; then
+    wait "$web_pid" || true
+    echo "Web process exited; stopping API."
+    stop_all
+    exit 1
+  fi
+  sleep 1
+done
