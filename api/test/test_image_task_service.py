@@ -620,6 +620,43 @@ class ImageTaskServiceTests(unittest.TestCase):
             )
             self.assertEqual(reloaded.list_tasks(OWNER, ["legacy-task"])["missing_ids"], [])
 
+    def test_database_store_overwrites_existing_tasks_by_task_key(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            db_url = f"sqlite:///{Path(tmp_dir) / 'tasks.db'}"
+            store = DatabaseImageTaskStore(db_url)
+            store.save_tasks(
+                [
+                    {
+                        "id": "same-task",
+                        "owner_id": "owner-1",
+                        "status": "queued",
+                        "updated_at": "2026-01-01 00:00:00",
+                    }
+                ]
+            )
+
+            store.save_tasks(
+                [
+                    {
+                        "id": "same-task",
+                        "owner_id": "owner-1",
+                        "status": "running",
+                        "updated_at": "2026-01-01 00:00:01",
+                    },
+                    {
+                        "id": "same-task",
+                        "owner_id": "owner-1",
+                        "status": "success",
+                        "updated_at": "2026-01-01 00:00:02",
+                    },
+                ]
+            )
+
+            tasks = store.load_tasks()
+            self.assertEqual(len(tasks), 1)
+            self.assertEqual(tasks[0]["id"], "same-task")
+            self.assertEqual(tasks[0]["status"], "success")
+
 
 if __name__ == "__main__":
     unittest.main()

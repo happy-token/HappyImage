@@ -90,7 +90,7 @@ class DatabaseImageTaskStore:
     def save_tasks(self, tasks: list[dict[str, Any]]) -> None:
         session = self.Session()
         try:
-            session.query(ImageTaskModel).delete()
+            rows_by_key: dict[str, dict[str, Any]] = {}
             for item in tasks:
                 if not isinstance(item, dict):
                     continue
@@ -98,15 +98,32 @@ class DatabaseImageTaskStore:
                 task_id = str(item.get("id") or "").strip()
                 if not owner or not task_id:
                     continue
-                session.add(
-                    ImageTaskModel(
-                        task_key=f"{owner}:{task_id}",
-                        owner_id=owner,
-                        task_id=task_id,
-                        updated_at=str(item.get("updated_at") or ""),
-                        data=json.dumps(item, ensure_ascii=False),
-                    )
-                )
+                rows_by_key[f"{owner}:{task_id}"] = item
+
+            task_keys = set(rows_by_key)
+            if task_keys:
+                existing = {
+                    row.task_key: row
+                    for row in session.query(ImageTaskModel)
+                    .filter(ImageTaskModel.task_key.in_(task_keys))
+                    .all()
+                }
+                for task_key, item in rows_by_key.items():
+                    owner = str(item.get("owner_id") or "").strip()
+                    task_id = str(item.get("id") or "").strip()
+                    row = existing.get(task_key)
+                    if row is None:
+                        row = ImageTaskModel(task_key=task_key)
+                        session.add(row)
+                    row.owner_id = owner
+                    row.task_id = task_id
+                    row.updated_at = str(item.get("updated_at") or "")
+                    row.data = json.dumps(item, ensure_ascii=False)
+                session.query(ImageTaskModel).filter(
+                    ~ImageTaskModel.task_key.in_(task_keys)
+                ).delete(synchronize_session=False)
+            else:
+                session.query(ImageTaskModel).delete(synchronize_session=False)
             session.commit()
         except Exception:
             session.rollback()
