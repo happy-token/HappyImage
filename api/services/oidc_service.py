@@ -109,6 +109,13 @@ class OIDCService:
             raise OIDCError(f"OIDC 提供方未声明 {key} 端点")
         return url
 
+    def _get_optional_provider_endpoint(self, key: str) -> str:
+        try:
+            doc = self._fetch_discovery()
+        except OIDCError:
+            return ""
+        return str(doc.get(key) or "").strip()
+
     # ------------------------------------------------------------------
     # PKCE helpers
     # ------------------------------------------------------------------
@@ -192,6 +199,20 @@ class OIDCService:
             "transaction_id": transaction_id,
             "expires_in": str(self._TRANSACTION_TTL_SECONDS),
         }
+
+    def build_logout_url(self, post_logout_redirect_uri: str = "") -> str:
+        """Return the provider logout URL when discovery exposes one."""
+        if not self.is_enabled():
+            return ""
+        endpoint = self._get_optional_provider_endpoint("end_session_endpoint")
+        if not endpoint:
+            return ""
+        settings = self._oidc_settings()
+        redirect_uri = str(post_logout_redirect_uri or config.public_app_url or "").strip()
+        params = {"client_id": str(settings.get("client_id") or "").strip()}
+        if redirect_uri:
+            params["post_logout_redirect_uri"] = redirect_uri
+        return f"{endpoint}?{urlencode(params)}"
 
     @staticmethod
     def _make_callback_url(api_base_url: str = "") -> str:

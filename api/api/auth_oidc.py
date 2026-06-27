@@ -599,11 +599,15 @@ def create_router() -> APIRouter:
 
     @router.post("/api/auth/logout")
     async def logout():
-        """Clear the web session cookie."""
+        """Clear the web session cookie and return provider logout if available."""
         from fastapi.responses import JSONResponse
 
         cookie = web_session_service.make_clear_cookie_header()
-        response = JSONResponse(content={"ok": True})
+        logout_url = await run_in_threadpool(
+            oidc_service.build_logout_url,
+            config.public_app_url.rstrip("/") + "/login" if config.public_app_url else "",
+        )
+        response = JSONResponse(content={"ok": True, "logout_url": logout_url})
         response.headers["Set-Cookie"] = cookie
         return response
 

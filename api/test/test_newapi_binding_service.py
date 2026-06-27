@@ -522,6 +522,32 @@ def test_newapi_binding_direct_sql_creates_missing_user_and_token():
     assert any("insert into tokens" in query.lower() for query, _params in connection.queries)
 
 
+def test_newapi_binding_direct_sql_host_docker_failure_is_actionable():
+    service = NewAPIBindingService(
+        settings={
+            **_enabled_settings(),
+            "provision_url": "",
+            "provision_secret": "",
+            "sql_dsn": "postgresql://newapi:secret@host.docker.internal:15432/new-api",
+        },
+        sql_connect_factory=lambda dsn: (_ for _ in ()).throw(
+            RuntimeError("server closed the connection unexpectedly")
+        ),
+    )
+
+    result = service.ensure_default_token(
+        provider="casdoor",
+        subject="casdoor-sub",
+        email="creator@example.com",
+        name="Creator",
+    )
+
+    assert result["ok"] is False
+    assert result["status"] == "failed"
+    assert "host.docker.internal:15432" in str(result["message"])
+    assert "Postgres" in str(result["message"])
+
+
 def test_newapi_binding_pending_response_defaults_missing_urls():
     service = NewAPIBindingService(
         settings={

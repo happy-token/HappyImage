@@ -810,7 +810,10 @@ function ImagePageContent({
   );
 
   const handleLogout = useCallback(async () => {
-    await logoutCurrentSession();
+    const redirectedToProvider = await logoutCurrentSession();
+    if (redirectedToProvider) {
+      return;
+    }
     router.replace("/login");
   }, [router]);
 

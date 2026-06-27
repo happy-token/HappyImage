@@ -113,7 +113,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const showAdminSidebar = session?.role === "admin" && !isImageWorkspacePath(pathname);
 
   const handleLogout = async () => {
-    await logoutCurrentSession();
+    const redirectedToProvider = await logoutCurrentSession();
+    if (redirectedToProvider) {
+      return;
+    }
     setSession(null);
     router.replace("/login");
   };

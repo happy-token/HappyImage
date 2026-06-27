@@ -209,6 +209,7 @@ class NewAPIBindingService:
                 "management_url": management_url,
             }
         except Exception as exc:
+            message = self._sql_failure_message(dsn, exc)
             logger.warning(
                 {
                     "event": "newapi_sql_provisioning_failed",
@@ -217,7 +218,7 @@ class NewAPIBindingService:
                     "dsn": self._redact_dsn(dsn),
                 }
             )
-            return self._failed(message="NewAPI SQL provisioning request failed")
+            return self._failed(message=message)
         finally:
             if connection is not None:
                 try:
@@ -453,6 +454,28 @@ class NewAPIBindingService:
             )
         except Exception:
             return "<redacted>"
+
+    @staticmethod
+    def _sql_failure_message(dsn: str, exc: Exception) -> str:
+        text = str(exc).lower()
+        host = ""
+        port = ""
+        try:
+            parsed = urlsplit(dsn)
+            host = parsed.hostname or ""
+            port = str(parsed.port or "")
+        except Exception:
+            pass
+        if host == "host.docker.internal":
+            target = f"{host}:{port}" if port else host
+            return (
+                "NewAPI SQL 连接失败：HappyImage API 容器无法连接宿主机 "
+                f"{target}。请确认 NewAPI Postgres 已把端口映射到宿主机、"
+                "监听 0.0.0.0，并且 DSN 端口是 Postgres 端口。"
+            )
+        if "connection refused" in text or "server closed the connection" in text:
+            return "NewAPI SQL 连接失败，请检查 DSN 主机、端口和 NewAPI Postgres 是否正在运行。"
+        return "NewAPI SQL provisioning request failed"
 
     @staticmethod
     def _failed(

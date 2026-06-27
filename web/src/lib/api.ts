@@ -792,7 +792,7 @@ export async function fetchNewAPIManagement() {
 }
 
 export async function logoutSession() {
-  return httpRequest<{ ok: boolean }>("/api/auth/logout", {
+  return httpRequest<{ ok: boolean; logout_url?: string }>("/api/auth/logout", {
     method: "POST",
     redirectOnUnauthorized: false,
   });

@@ -54,7 +54,10 @@ export function TopNav({
   }, [pathname, providedSession]);
 
   const handleLogout = async () => {
-    await logoutCurrentSession();
+    const redirectedToProvider = await logoutCurrentSession();
+    if (redirectedToProvider) {
+      return;
+    }
     router.replace("/login");
   };
 

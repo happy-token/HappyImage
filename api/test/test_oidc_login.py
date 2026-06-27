@@ -564,7 +564,7 @@ def test_logout_clear_cookie_matches_cross_site_secure_cookie_attributes():
     app = FastAPI()
     app.include_router(auth_oidc_api.create_router())
 
-    with _runtime_config(api_public_url="https://api.example.com"):
+    with _runtime_config(api_public_url="https://api.example.com", oidc={"enabled": False}):
         response = TestClient(app).post("/api/auth/logout")
 
     assert response.status_code == 200, response.text
@@ -574,13 +574,43 @@ def test_logout_clear_cookie_matches_cross_site_secure_cookie_attributes():
     assert "Expires=Thu, 01 Jan 1970 00:00:00 GMT" in cookie
     assert "Secure" in cookie
     assert "SameSite=None" in cookie
+    assert response.json()["logout_url"] == ""
+
+
+def test_logout_returns_provider_logout_url_when_configured():
+    app = FastAPI()
+    app.include_router(auth_oidc_api.create_router())
+
+    with (
+        _runtime_config(public_app_url="https://web.example.com"),
+        mock.patch.object(
+            auth_oidc_api.oidc_service,
+            "_fetch_discovery",
+            return_value={
+                "end_session_endpoint": "https://issuer.example/logout",
+            },
+        ),
+    ):
+        response = TestClient(app).post("/api/auth/logout")
+
+    assert response.status_code == 200, response.text
+    logout_url = response.json()["logout_url"]
+    parsed = urlsplit(logout_url)
+    query = parse_qs(parsed.query)
+    assert f"{parsed.scheme}://{parsed.netloc}{parsed.path}" == "https://issuer.example/logout"
+    assert query["client_id"] == ["happytoken"]
+    assert query["post_logout_redirect_uri"] == ["https://web.example.com/login"]
 
 
 def test_logout_clear_cookie_is_secure_when_public_app_url_is_https():
     app = FastAPI()
     app.include_router(auth_oidc_api.create_router())
 
-    with _runtime_config(api_public_url="", public_app_url="https://web.example.com"):
+    with _runtime_config(
+        api_public_url="",
+        public_app_url="https://web.example.com",
+        oidc={"enabled": False},
+    ):
         response = TestClient(app).post("/api/auth/logout")
 
     assert response.status_code == 200, response.text
@@ -596,6 +626,7 @@ def test_logout_clear_cookie_uses_lax_for_http_test_origin():
     with _runtime_config(
         api_public_url="http://101.96.195.224",
         public_app_url="http://101.96.195.224:3000",
+        oidc={"enabled": False},
     ):
         response = TestClient(app).post("/api/auth/logout")
 

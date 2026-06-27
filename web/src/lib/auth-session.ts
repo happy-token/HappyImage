@@ -118,11 +118,18 @@ export async function getValidatedAuthSession(): Promise<StoredAuthSession | nul
   }
 }
 
-export async function logoutCurrentSession(): Promise<void> {
+export async function logoutCurrentSession(): Promise<boolean> {
+  let providerLogoutUrl = "";
   try {
-    await logoutSession();
+    const response = await logoutSession();
+    providerLogoutUrl = String(response.logout_url || "").trim();
   } catch {
     // Local logout should still complete if the API is temporarily unreachable.
   }
   await clearStoredAuthSession();
+  if (providerLogoutUrl && typeof window !== "undefined") {
+    window.location.assign(providerLogoutUrl);
+    return true;
+  }
+  return false;
 }
