@@ -522,8 +522,8 @@ def test_newapi_binding_direct_sql_creates_missing_user_and_token():
     assert any("insert into tokens" in query.lower() for query, _params in connection.queries)
 
 
-def test_newapi_binding_direct_sql_host_docker_failure_is_actionable():
-    service = NewAPIBindingService(
+def _failing_host_docker_sql_service() -> NewAPIBindingService:
+    return NewAPIBindingService(
         settings={
             **_enabled_settings(),
             "provision_url": "",
@@ -535,16 +535,40 @@ def test_newapi_binding_direct_sql_host_docker_failure_is_actionable():
         ),
     )
 
-    result = service.ensure_default_token(
-        provider="casdoor",
-        subject="casdoor-sub",
-        email="creator@example.com",
-        name="Creator",
-    )
+
+def test_newapi_binding_direct_sql_host_docker_failure_is_actionable_for_local_run():
+    service = _failing_host_docker_sql_service()
+
+    with mock.patch.object(NewAPIBindingService, "_running_in_container", return_value=False):
+        result = service.ensure_default_token(
+            provider="casdoor",
+            subject="casdoor-sub",
+            email="creator@example.com",
+            name="Creator",
+        )
 
     assert result["ok"] is False
     assert result["status"] == "failed"
     assert "host.docker.internal:15432" in str(result["message"])
+    assert "本地直接运行" in str(result["message"])
+    assert "jp-v2" in str(result["message"])
+
+
+def test_newapi_binding_direct_sql_host_docker_failure_is_actionable_for_container_run():
+    service = _failing_host_docker_sql_service()
+
+    with mock.patch.object(NewAPIBindingService, "_running_in_container", return_value=True):
+        result = service.ensure_default_token(
+            provider="casdoor",
+            subject="casdoor-sub",
+            email="creator@example.com",
+            name="Creator",
+        )
+
+    assert result["ok"] is False
+    assert result["status"] == "failed"
+    assert "host.docker.internal:15432" in str(result["message"])
+    assert "容器" in str(result["message"])
     assert "Postgres" in str(result["message"])
 
 

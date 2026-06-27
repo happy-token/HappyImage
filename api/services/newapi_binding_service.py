@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import Path
 import secrets
 import time
 from typing import Any
@@ -468,6 +469,12 @@ class NewAPIBindingService:
             pass
         if host == "host.docker.internal":
             target = f"{host}:{port}" if port else host
+            if not NewAPIBindingService._running_in_container():
+                return (
+                    "NewAPI SQL 连接失败：当前 HappyImage API 看起来是在本地直接运行，"
+                    f"但 DSN 指向 {target}。host.docker.internal 主要用于容器访问宿主机；"
+                    "本地直连测试请把 DSN 改为 jp-v2 的数据库地址，或改为本机 SSH 隧道地址。"
+                )
             return (
                 "NewAPI SQL 连接失败：HappyImage API 容器无法连接宿主机 "
                 f"{target}。请确认 NewAPI Postgres 已把端口映射到宿主机、"
@@ -476,6 +483,16 @@ class NewAPIBindingService:
         if "connection refused" in text or "server closed the connection" in text:
             return "NewAPI SQL 连接失败，请检查 DSN 主机、端口和 NewAPI Postgres 是否正在运行。"
         return "NewAPI SQL provisioning request failed"
+
+    @staticmethod
+    def _running_in_container() -> bool:
+        if Path("/.dockerenv").exists():
+            return True
+        try:
+            cgroup = Path("/proc/self/cgroup").read_text(encoding="utf-8")
+        except Exception:
+            return False
+        return any(marker in cgroup for marker in ("docker", "containerd", "kubepods"))
 
     @staticmethod
     def _failed(
