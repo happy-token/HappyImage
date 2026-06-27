@@ -3,11 +3,12 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from sqlalchemy import Column, String, Text, create_engine, Integer, text
+from sqlalchemy import Column, String, Text, Integer, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
+from services.database_engine import create_database_engine
 from services.storage.base import StorageBackend
 
 Base = declarative_base()
@@ -52,7 +53,7 @@ class DatabaseStorageBackend(StorageBackend):
 
     def __init__(self, database_url: str):
         self.database_url = database_url
-        self.engine = create_engine(
+        self.engine = create_database_engine(
             database_url,
             pool_pre_ping=True,  # 自动检测连接是否有效
             pool_recycle=3600,   # 1小时回收连接

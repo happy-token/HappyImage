@@ -5,11 +5,12 @@ import os
 from pathlib import Path
 from typing import Any, Protocol
 
-from sqlalchemy import Column, Integer, String, Text, create_engine
+from sqlalchemy import Column, Integer, String, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
 from services.config import DATA_DIR
+from services.database_engine import create_database_engine
 from services.storage.factory import _mask_password
 
 
@@ -63,7 +64,7 @@ class ImageTaskModel(ImageTaskBase):
 class DatabaseImageTaskStore:
     def __init__(self, database_url: str):
         self.database_url = database_url
-        self.engine = create_engine(
+        self.engine = create_database_engine(
             database_url,
             pool_pre_ping=True,
             pool_recycle=3600,
