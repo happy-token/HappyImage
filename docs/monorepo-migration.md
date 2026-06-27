@@ -21,22 +21,20 @@ The runtime boundary did not change:
 /seed-gallery/*                                  -> web static assets
 ```
 
-Use root commands for local development:
+Use the local helper script for the combined dev workflow:
 
 ```bash
-make api-dev
-make web-dev
-make dev
-make test
-make typecheck
-make compose-config
+scripts/dev-local.sh
 ```
 
-Service-native commands still work:
+Service-native commands still work for focused work:
 
 ```bash
 cd api && uv run python main.py
 cd web && pnpm run dev
+cd api && uv run python -m pytest -q
+cd web && pnpm exec tsc --noEmit
+docker compose -f deploy/hs/docker-compose.yml config
 ```
 
 Large gallery source data is not committed to Git. Keep local gallery source under `data/gallery-source` or pass an explicit path:

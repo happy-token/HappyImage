@@ -12,22 +12,20 @@ HappyImage is a monorepo with separate backend and frontend services.
 
 ## Local Commands
 
-Use root commands for common workflows:
+Use the local helper script for the combined dev workflow:
 
 ```bash
-make api-dev
-make web-dev
-make dev
-make test
-make typecheck
-make compose-config
+scripts/dev-local.sh
 ```
 
-Service-native commands remain valid:
+Service-native commands remain valid for focused work:
 
 ```bash
 cd api && uv run python main.py
 cd web && pnpm run dev
+cd api && uv run python -m pytest -q
+cd web && pnpm exec tsc --noEmit
+docker compose -f deploy/hs/docker-compose.yml config
 ```
 
 ## Boundaries
