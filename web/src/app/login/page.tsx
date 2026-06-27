@@ -1,22 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { LoaderCircle, LockKeyhole, LogIn } from "lucide-react";
 import { toast } from "sonner";
 
 import { HeaderActions } from "@/components/header-actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { loginWithAdminKey, startOIDCLogin } from "@/lib/api";
+import { startOIDCLogin } from "@/lib/api";
 import { useRedirectIfAuthenticated } from "@/lib/use-auth-guard";
-import {
-  normalizeModelProviders,
-  normalizePostAuthRedirectPath,
-  normalizeUserPreferences,
-  setStoredAuthSession,
-} from "@/store/auth";
+import { normalizePostAuthRedirectPath } from "@/store/auth";
 
 function getNextPathFromLocation() {
   if (typeof window === "undefined") {
@@ -35,10 +28,7 @@ function shouldForceLoginFromLocation() {
 }
 
 export default function LoginPage() {
-  const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [adminKey, setAdminKey] = useState("");
-  const [isAdminKeySubmitting, setIsAdminKeySubmitting] = useState(false);
   const { isCheckingAuth } = useRedirectIfAuthenticated({
     forceLogin: shouldForceLoginFromLocation(),
   });
@@ -64,56 +54,6 @@ export default function LoginPage() {
         error instanceof Error ? error.message : "启动 OIDC 登录失败"
       );
       setIsSubmitting(false);
-    }
-  };
-
-  const handleAdminKeyLogin = async () => {
-    setIsAdminKeySubmitting(true);
-    try {
-      const trimmedKey = adminKey.trim();
-      const data = await loginWithAdminKey(trimmedKey);
-      await setStoredAuthSession({
-        key: "",
-        role: data.user?.role ?? data.role,
-        subjectId: data.user?.id ?? data.subject_id,
-        name: data.user?.name ?? data.name,
-        watermarkLabel:
-          data.user?.watermark_label ?? data.watermark_label ?? "",
-        watermarkUnlocked: Boolean(
-          data.user?.watermark_unlocked ?? data.watermark_unlocked ?? true
-        ),
-        modelProvider: data.user?.model_provider ?? data.model_provider ?? "",
-        modelBaseUrl: data.user?.model_base_url ?? data.model_base_url ?? "",
-        modelApiKeyConfigured: Boolean(
-          data.user?.model_api_key_configured ?? data.model_api_key_configured
-        ),
-        modelGatewayEnabled: Boolean(
-          data.user?.model_gateway_enabled ?? data.model_gateway_enabled
-        ),
-        newapiBindingStatus:
-          data.user?.newapi_binding_status ?? data.newapi_binding_status,
-        newapiBindingMessage:
-          (data.user?.newapi_binding_status ?? data.newapi_binding_status) ===
-          "configured"
-            ? undefined
-            : data.user?.newapi_binding_message ?? data.newapi_binding_message,
-        newapiManagementUrl:
-          data.user?.newapi_management_url ?? data.newapi_management_url,
-        modelProviders: normalizeModelProviders(
-          data.user?.model_providers ?? data.model_providers
-        ),
-        preferences: normalizeUserPreferences(
-          data.user?.preferences ?? data.preferences
-        ),
-      });
-      setAdminKey("");
-      router.replace("/settings");
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "管理员密钥登录失败"
-      );
-    } finally {
-      setIsAdminKeySubmitting(false);
     }
   };
 
@@ -157,35 +97,6 @@ export default function LoginPage() {
             )}
             使用 Happy Token 登录
           </Button>
-
-          <form
-            className="space-y-3 border-t border-stone-100 pt-5"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void handleAdminKeyLogin();
-            }}
-          >
-            <Input
-              type="password"
-              placeholder="管理员恢复密钥"
-              value={adminKey}
-              onChange={(event) => setAdminKey(event.target.value)}
-              className="h-11 rounded-lg border-stone-200 bg-white"
-            />
-            <Button
-              type="submit"
-              variant="outline"
-              className="h-11 w-full rounded-lg border-stone-200 bg-white"
-              disabled={isAdminKeySubmitting}
-            >
-              {isAdminKeySubmitting ? (
-                <LoaderCircle className="size-4 animate-spin" />
-              ) : (
-                <LogIn className="size-4" />
-              )}
-              使用管理员密钥进入设置
-            </Button>
-          </form>
         </CardContent>
       </Card>
     </div>

@@ -36,6 +36,13 @@ describe("middleware proxy helpers", () => {
     );
   });
 
+  it("matches login pages that must not be cached", async () => {
+    const { config } = await loadMiddleware({});
+
+    expect(config.matcher).toContain("/login");
+    expect(config.matcher).toContain("/admin-login");
+  });
+
   it("uses NEXT_PUBLIC_API_BASE_URL when BACKEND_URL is not configured", async () => {
     const { buildProxyUrl } = await loadMiddleware({
       NEXT_PUBLIC_API_BASE_URL: "http://127.0.0.1:8001/",

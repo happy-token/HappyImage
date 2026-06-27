@@ -63,7 +63,6 @@ import { humanizeRequestError } from "@/lib/request";
 import { cn } from "@/lib/utils";
 import {
   getStoredAuthKey,
-  getStoredAuthSession,
   normalizeModelProviders,
   setStoredAuthSession,
   type StoredAuthSession,
@@ -2302,7 +2301,7 @@ function ImagePageContent({
       toast.info("登录或注册后即可生成图片", {
         description: "登录后可以保存历史会话和管理生成结果。",
       });
-      router.push("/login?next=%2Fimage&force=1");
+      router.push("/login?next=%2Fimage");
       return;
     }
 
@@ -2485,7 +2484,7 @@ function ImagePageContent({
             "h-9 rounded-full border-zinc-200 bg-white text-sm text-zinc-700 shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800",
             isSidebarCollapsed ? "w-9 px-0" : "px-3"
           )}
-          onClick={() => router.push("/login?next=%2Fimage&force=1")}
+          onClick={() => router.push("/login?next=%2Fimage")}
           title={copy.login}
           aria-label={copy.login}
         >
@@ -2675,10 +2674,7 @@ export default function ImagePage() {
   useEffect(() => {
     let active = true;
     const load = async () => {
-      const storedSession = await getStoredAuthSession();
-      const nextSession = storedSession
-        ? await getValidatedAuthSession()
-        : null;
+      const nextSession = await getValidatedAuthSession();
       if (active) {
         setSession(nextSession);
       }
@@ -2691,7 +2687,7 @@ export default function ImagePage() {
 
   useEffect(() => {
     if (session === null) {
-      router.replace("/login?next=%2Fimage&force=1");
+      router.replace("/login?next=%2Fimage");
     }
   }, [router, session]);
 

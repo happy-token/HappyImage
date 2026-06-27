@@ -11,6 +11,10 @@ import { getValidatedAuthSession, logoutCurrentSession } from "@/lib/auth-sessio
 import { cn } from "@/lib/utils";
 import { type StoredAuthSession } from "@/store/auth";
 
+function isPublicPath(pathname: string) {
+  return pathname === "/" || pathname === "/login" || pathname === "/admin-login";
+}
+
 export function TopNav({
   session: providedSession,
   hideAccountMenu = false,
@@ -32,7 +36,7 @@ export function TopNav({
     let active = true;
 
     const load = async () => {
-      if (pathname === "/" || pathname === "/login") {
+      if (isPublicPath(pathname)) {
         if (!active) {
           return;
         }
@@ -69,7 +73,7 @@ export function TopNav({
     onSessionUpdate?.(nextSession);
   };
 
-  if (pathname === "/" || pathname === "/login" || currentSession === undefined || !currentSession) {
+  if (isPublicPath(pathname) || currentSession === undefined || !currentSession) {
     return null;
   }
 

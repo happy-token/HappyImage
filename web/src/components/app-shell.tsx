@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 import { type StoredAuthSession } from "@/store/auth";
 
 function isPublicPath(pathname: string) {
-  return pathname === "/" || pathname === "/login";
+  return pathname === "/" || pathname === "/login" || pathname === "/admin-login";
 }
 
 function isImageWorkspacePath(pathname: string) {

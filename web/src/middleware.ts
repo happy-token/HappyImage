@@ -15,7 +15,12 @@ const PROXY_PREFIXES = [
 type ProxyFetchInit = RequestInit & { duplex?: "half" };
 
 function shouldDisablePageCache(pathname: string): boolean {
-  return pathname === "/login" || pathname === "/image" || pathname.startsWith("/image/");
+  return (
+    pathname === "/login" ||
+    pathname === "/admin-login" ||
+    pathname === "/image" ||
+    pathname.startsWith("/image/")
+  );
 }
 
 export function shouldProxy(pathname: string): boolean {
@@ -105,6 +110,7 @@ export const config = {
     "/image-thumbnails/:path*",
     "/health",
     "/login",
+    "/admin-login",
     "/image/:path*",
   ],
 };

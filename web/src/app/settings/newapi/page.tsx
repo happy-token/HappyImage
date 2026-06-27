@@ -37,7 +37,7 @@ function statusLabel(status: string) {
 export default function NewAPISettingsPage() {
   const { isCheckingAuth, session } = useAuthGuard(["user"]);
   const [data, setData] = useState<NewAPIManagementResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
   const defaultToken = useMemo(
@@ -65,9 +65,9 @@ export default function NewAPISettingsPage() {
   };
 
   useEffect(() => {
-    if (!session) return;
+    if (!session?.subjectId) return;
     void loadManagement();
-  }, [session]);
+  }, [session?.subjectId]);
 
   const copyValue = async (value: string, label: string) => {
     try {

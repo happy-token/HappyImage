@@ -216,7 +216,12 @@ export function normalizePostAuthRedirectPath(
   ) {
     return "";
   }
-  if (candidate === "/login" || candidate.startsWith("/login?")) {
+  if (
+    candidate === "/login" ||
+    candidate.startsWith("/login?") ||
+    candidate === "/admin-login" ||
+    candidate.startsWith("/admin-login?")
+  ) {
     return "";
   }
   return candidate;
