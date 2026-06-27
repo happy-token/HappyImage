@@ -8,7 +8,7 @@ from uuid import uuid4
 
 import fcntl
 
-from sqlalchemy import Column, Integer, String, Text
+from sqlalchemy import Column, Integer, String, Text, func
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
@@ -114,7 +114,11 @@ class DatabaseImageConversationStore:
     def load_conversations(self) -> list[dict[str, Any]]:
         session = self.Session()
         try:
-            rows = session.query(ImageConversationModel).order_by(ImageConversationModel.updated_at.desc()).all()
+            query = session.query(ImageConversationModel)
+            max_row_bytes = _load_max_row_bytes()
+            if max_row_bytes > 0:
+                query = query.filter(func.length(ImageConversationModel.data) <= max_row_bytes)
+            rows = query.order_by(ImageConversationModel.updated_at.desc()).all()
             items: list[dict[str, Any]] = []
             for row in rows:
                 try:
@@ -181,3 +185,10 @@ def create_image_conversation_store(path: Path) -> ImageConversationStore:
         return DatabaseImageConversationStore(database_url)
     print(f"[image-conversations] Using JSON storage: {path}")
     return JSONImageConversationStore(path)
+
+
+def _load_max_row_bytes() -> int:
+    try:
+        return max(0, int(os.getenv("HAPPYIMAGE_DATABASE_LOAD_MAX_ROW_BYTES", "0").strip() or "0"))
+    except ValueError:
+        return 0

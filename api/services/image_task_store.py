@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from typing import Any, Protocol
 
-from sqlalchemy import Column, Integer, String, Text
+from sqlalchemy import Column, Integer, String, Text, func
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
@@ -76,7 +76,11 @@ class DatabaseImageTaskStore:
         session = self.Session()
         try:
             items: list[dict[str, Any]] = []
-            rows = session.query(ImageTaskModel).order_by(ImageTaskModel.updated_at.desc()).all()
+            query = session.query(ImageTaskModel)
+            max_row_bytes = _load_max_row_bytes()
+            if max_row_bytes > 0:
+                query = query.filter(func.length(ImageTaskModel.data) <= max_row_bytes)
+            rows = query.order_by(ImageTaskModel.updated_at.desc()).all()
             for row in rows:
                 try:
                     item = json.loads(row.data)
@@ -120,11 +124,13 @@ class DatabaseImageTaskStore:
                     row.task_id = task_id
                     row.updated_at = str(item.get("updated_at") or "")
                     row.data = json.dumps(item, ensure_ascii=False)
-                session.query(ImageTaskModel).filter(
-                    ~ImageTaskModel.task_key.in_(task_keys)
-                ).delete(synchronize_session=False)
+                if _load_max_row_bytes() <= 0:
+                    session.query(ImageTaskModel).filter(
+                        ~ImageTaskModel.task_key.in_(task_keys)
+                    ).delete(synchronize_session=False)
             else:
-                session.query(ImageTaskModel).delete(synchronize_session=False)
+                if _load_max_row_bytes() <= 0:
+                    session.query(ImageTaskModel).delete()
             session.commit()
         except Exception:
             session.rollback()
@@ -143,3 +149,10 @@ def create_image_task_store(path: Path) -> ImageTaskStore:
         return DatabaseImageTaskStore(database_url)
     print(f"[image-tasks] Using JSON storage: {path}")
     return JSONImageTaskStore(path)
+
+
+def _load_max_row_bytes() -> int:
+    try:
+        return max(0, int(os.getenv("HAPPYIMAGE_DATABASE_LOAD_MAX_ROW_BYTES", "0").strip() or "0"))
+    except ValueError:
+        return 0
