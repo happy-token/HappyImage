@@ -12,7 +12,9 @@
 		"binding": "ASSETS"
 	},
 	"vars": {
-		"BACKEND_URL": "http://127.0.0.1:8000"
+		"BACKEND_URL": "https://image-b.happy-token.cn",
+		"MODEL_BACKEND_URL": "https://image-b.happy-token.cn",
+		"NEXT_PUBLIC_API_BASE_URL": ""
 	},
 	"services": [
 		{

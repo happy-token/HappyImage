@@ -176,7 +176,20 @@ function parseImageSize(size: string) {
     : { width: "1024", height: "1024" };
 }
 
-const activeConversationQueueIds = new Set<string>();
+const ACTIVE_QUEUE_STALE_MS = 90_000;
+const activeConversationQueueIds = new Map<string, number>();
+
+function isConversationQueueActive(conversationId: string) {
+  const startedAt = activeConversationQueueIds.get(conversationId);
+  if (!startedAt) {
+    return false;
+  }
+  if (Date.now() - startedAt > ACTIVE_QUEUE_STALE_MS) {
+    activeConversationQueueIds.delete(conversationId);
+    return false;
+  }
+  return true;
+}
 let pollAbortController: AbortController | null = null;
 
 function getResultsDistanceFromBottom(element: HTMLElement) {
@@ -1831,7 +1844,7 @@ function ImagePageContent({
   /* eslint-disable react-hooks/preserve-manual-memoization */
   const runConversationQueue = useCallback(
     async (conversationId: string) => {
-      if (activeConversationQueueIds.has(conversationId)) {
+      if (isConversationQueueActive(conversationId)) {
         return;
       }
 
@@ -1847,7 +1860,7 @@ function ImagePageContent({
         return;
       }
 
-      activeConversationQueueIds.add(conversationId);
+      activeConversationQueueIds.set(conversationId, Date.now());
       const applyTasks = async (tasks: ImageTask[]) => {
         const taskMap = new Map(tasks.map((task) => [task.id, task]));
         await updateConversation(conversationId, (current) => {
@@ -2015,7 +2028,7 @@ function ImagePageContent({
         activeConversationQueueIds.delete(conversationId);
         for (const conversation of conversationsRef.current) {
           if (
-            !activeConversationQueueIds.has(conversation.id) &&
+            !isConversationQueueActive(conversation.id) &&
             conversation.turns.some(
               (turn) =>
                 (turn.status === "queued" || turn.status === "generating") &&
@@ -2278,7 +2291,7 @@ function ImagePageContent({
   useEffect(() => {
     for (const conversation of conversations) {
       if (
-        !activeConversationQueueIds.has(conversation.id) &&
+        !isConversationQueueActive(conversation.id) &&
         conversation.turns.some(
           (turn) =>
             !turn.resultsDeleted &&

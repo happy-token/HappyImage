@@ -439,9 +439,7 @@ function createHappyTokenProvider(
     id: HAPPYTOKEN_PROVIDER_ID,
     type: "happytoken",
     protocol: OPENAI_PROTOCOL,
-    baseUrl: baseUrl.toLowerCase().includes("gateway.happy-token.cn")
-      ? baseUrl
-      : HAPPYTOKEN_MODEL_BASE_URL,
+    baseUrl: baseUrl || HAPPYTOKEN_MODEL_BASE_URL,
     models: existingProvider?.models?.length
       ? existingProvider.models
       : ["gpt-image-2", "gpt-image-1.5", "gpt-image-1"],
