@@ -54,6 +54,7 @@ COPY VERSION ./
 COPY api ./api
 COPY services ./services
 COPY utils ./utils
+COPY scripts/compact_image_history.py ./scripts/compact_image_history.py
 COPY scripts/docker-entrypoint.sh ./scripts/docker-entrypoint.sh
 RUN chmod +x /app/scripts/docker-entrypoint.sh
 
