@@ -173,6 +173,7 @@ class OIDCService:
             "scope": scopes,
             "state": state,
             "nonce": nonce,
+            "prompt": "login",
             "code_challenge": challenge,
             "code_challenge_method": "S256",
         }

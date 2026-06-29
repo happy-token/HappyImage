@@ -92,6 +92,7 @@ def test_oidc_authorize_and_callback_reuse_absolute_redirect_uri():
         assert query["redirect_uri"] == [
             "https://api.example.com/api/auth/oidc/callback"
         ]
+        assert query["prompt"] == ["login"]
 
         captured = {}
 
