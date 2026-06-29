@@ -118,6 +118,30 @@ export async function getValidatedAuthSession(): Promise<StoredAuthSession | nul
   }
 }
 
+function clearProviderSessionInBackground(logoutUrl: string): Promise<void> {
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    const iframe = document.createElement("iframe");
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      window.setTimeout(() => {
+        iframe.remove();
+        resolve();
+      }, 100);
+    };
+    iframe.style.display = "none";
+    iframe.referrerPolicy = "no-referrer";
+    iframe.addEventListener("load", finish, { once: true });
+    document.body.appendChild(iframe);
+    window.setTimeout(finish, 1500);
+    iframe.src = logoutUrl;
+  });
+}
+
 export async function logoutCurrentSession(): Promise<boolean> {
   let providerLogoutUrl = "";
   try {
@@ -128,8 +152,7 @@ export async function logoutCurrentSession(): Promise<boolean> {
   }
   await clearStoredAuthSession();
   if (providerLogoutUrl && typeof window !== "undefined") {
-    window.location.assign(providerLogoutUrl);
-    return true;
+    await clearProviderSessionInBackground(providerLogoutUrl);
   }
   return false;
 }
