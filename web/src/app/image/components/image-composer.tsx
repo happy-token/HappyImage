@@ -45,7 +45,7 @@ type ImageComposerProps = {
   imageModel: ImageModel;
   imageModels: ImageModel[];
   activeTaskCount: number;
-  referenceImages: Array<{ name: string; dataUrl: string }>;
+  referenceImages: Array<{ name: string; dataUrl?: string; url?: string }>;
   textareaRef: RefObject<HTMLTextAreaElement | null>;
   fileInputRef: RefObject<HTMLInputElement | null>;
   onPromptChange: (value: string) => void;
@@ -252,7 +252,7 @@ export function ImageComposer({
     () =>
       referenceImages.map((image, index) => ({
         id: `${image.name}-${index}`,
-        src: image.dataUrl,
+        src: image.dataUrl || image.url || "",
       })),
     [referenceImages]
   );
@@ -391,7 +391,7 @@ export function ImageComposer({
                   aria-label={`预览参考图 ${image.name || index + 1}`}
                 >
                   <img
-                    src={image.dataUrl}
+                    src={image.dataUrl || image.url || ""}
                     alt={image.name || `参考图 ${index + 1}`}
                     className="h-full w-full object-cover"
                   />

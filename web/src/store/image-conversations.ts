@@ -9,7 +9,10 @@ export type ImageConversationMode = "generate" | "edit";
 export type StoredReferenceImage = {
   name: string;
   type: string;
-  dataUrl: string;
+  dataUrl?: string;
+  url?: string;
+  path?: string;
+  storage?: string;
 };
 
 export type StoredImage = {
@@ -94,11 +97,15 @@ function normalizeStoredImage(image: StoredImage): StoredImage {
 }
 
 function normalizeReferenceImage(image: StoredReferenceImage): StoredReferenceImage {
-  return {
+  const normalized: StoredReferenceImage = {
     name: image.name || "reference.png",
     type: image.type || "image/png",
-    dataUrl: image.dataUrl,
   };
+  if (typeof image.dataUrl === "string" && image.dataUrl) normalized.dataUrl = image.dataUrl;
+  if (typeof image.url === "string" && image.url) normalized.url = image.url;
+  if (typeof image.path === "string" && image.path) normalized.path = image.path;
+  if (typeof image.storage === "string" && image.storage) normalized.storage = image.storage;
+  return normalized;
 }
 
 function dataUrlMimeType(dataUrl: string) {
@@ -114,7 +121,10 @@ function getLegacyReferenceImages(source: Record<string, unknown>): StoredRefere
           return false;
         }
         const candidate = image as StoredReferenceImage;
-        return typeof candidate.dataUrl === "string" && candidate.dataUrl.length > 0;
+        return (
+          (typeof candidate.dataUrl === "string" && candidate.dataUrl.length > 0) ||
+          (typeof candidate.url === "string" && candidate.url.length > 0)
+        );
       })
       .map(normalizeReferenceImage);
   }

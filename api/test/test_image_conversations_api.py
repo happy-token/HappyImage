@@ -39,7 +39,7 @@ class FakeImageConversationService:
         self.items[conversation_id] = item
         return item
 
-    def create_turn(self, identity, *, conversation_id, turn):
+    def create_turn(self, identity, *, conversation_id, turn, base_url=""):
         item = self.items.get(conversation_id)
         if item is None or item["ownerId"] != identity["id"]:
             raise ValueError("conversation not found")
@@ -56,7 +56,7 @@ class FakeImageConversationService:
                 return item
         raise ValueError("turn not found")
 
-    def update_result(self, identity, *, conversation_id, image_id, updates):
+    def update_result(self, identity, *, conversation_id, image_id, updates, base_url=""):
         item = self.items.get(conversation_id)
         if item is None or item["ownerId"] != identity["id"]:
             raise ValueError("conversation not found")

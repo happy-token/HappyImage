@@ -4,9 +4,11 @@ import tempfile
 import threading
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from services.image_conversation_service import ImageConversationService
 from services.image_conversation_store import JSONImageConversationStore
+from services.image_storage_service import StoredImage
 
 
 OWNER = {"id": "owner-1", "name": "Owner", "role": "user"}
@@ -173,6 +175,40 @@ class ImageConversationServiceTests(unittest.TestCase):
         self.assertEqual(image["status"], "success")
         self.assertEqual(image["url"], "http://api.test/images/cat.png")
         self.assertEqual(updated["turns"][0]["status"], "success")
+
+    def test_create_turn_materializes_reference_data_url(self):
+        service = self.make_service()
+        service.upsert_conversation(OWNER, conversation_id="conv-1", title="Cat")
+        stored = StoredImage(
+            rel="2026/06/21/reference.png",
+            url="http://api.test/images/2026/06/21/reference.png?image_token=test",
+            storage="local",
+            size=8,
+        )
+
+        with patch("services.image_conversation_service.image_storage_service.save", return_value=stored):
+            conversation = service.create_turn(
+                OWNER,
+                conversation_id="conv-1",
+                turn={
+                    "id": "turn-1",
+                    "prompt": "cat",
+                    "referenceImages": [
+                        {
+                            "name": "reference.png",
+                            "type": "image/png",
+                            "dataUrl": "data:image/png;base64,cG5nLWRhdGE=",
+                        }
+                    ],
+                    "images": [{"id": "image-1", "status": "loading"}],
+                },
+                base_url="http://api.test",
+            )
+
+        reference = conversation["turns"][0]["referenceImages"][0]
+        self.assertEqual(reference["url"], stored.url)
+        self.assertEqual(reference["path"], stored.rel)
+        self.assertNotIn("dataUrl", reference)
 
     def test_create_turn_normalizes_invalid_count(self):
         service = self.make_service()

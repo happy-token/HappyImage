@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import threading
+import base64
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from services.config import DATA_DIR
 from services.image_conversation_store import ImageConversationStore, create_image_conversation_store
+from services.image_storage_service import image_storage_service
 
 
 def _now_iso() -> str:
@@ -34,6 +36,77 @@ def _positive_int(value: object, default: int = 1) -> int:
 
 
 def _normalize_image(value: dict[str, Any]) -> dict[str, Any]:
+    return _normalize_image_for_storage(value, base_url="", owner_id="")
+
+
+def _decode_image_data_url(value: str) -> tuple[str, bytes] | None:
+    prefix, separator, payload = str(value or "").partition(",")
+    lowered = prefix.lower()
+    if not separator or ";base64" not in lowered or not lowered.startswith("data:image/"):
+        return None
+    mime_type = prefix.removeprefix("data:").split(";", 1)[0] or "image/png"
+    try:
+        return mime_type, base64.b64decode(payload, validate=True)
+    except Exception:
+        return None
+
+
+def _materialize_data_url(value: str, *, base_url: str, owner_id: str) -> dict[str, str] | None:
+    decoded = _decode_image_data_url(value)
+    if decoded is None:
+        return None
+    mime_type, payload = decoded
+    stored = image_storage_service.save(payload, base_url=base_url or None, owner_id=owner_id)
+    return {
+        "url": stored.url,
+        "path": stored.rel,
+        "storage": stored.storage,
+        "type": mime_type,
+    }
+
+
+def _normalize_reference_image(value: dict[str, Any], *, base_url: str, owner_id: str) -> dict[str, Any]:
+    item = {
+        "name": _clean(value.get("name") or value.get("fileName"), "reference.png"),
+        "type": _clean(value.get("type"), "image/png"),
+    }
+    data_url = _clean(value.get("dataUrl") or value.get("data_url"))
+    url = _clean(value.get("url"))
+    path = _clean(value.get("path") or value.get("rel"))
+    if data_url:
+        materialized = _materialize_data_url(data_url, base_url=base_url, owner_id=owner_id)
+        if materialized is not None:
+            item.update(
+                {
+                    "url": materialized["url"],
+                    "path": materialized["path"],
+                    "storage": materialized["storage"],
+                    "type": materialized["type"],
+                }
+            )
+            return item
+        item["dataUrl"] = data_url
+    elif url.startswith("data:image/"):
+        materialized = _materialize_data_url(url, base_url=base_url, owner_id=owner_id)
+        if materialized is not None:
+            item.update(
+                {
+                    "url": materialized["url"],
+                    "path": materialized["path"],
+                    "storage": materialized["storage"],
+                    "type": materialized["type"],
+                }
+            )
+            return item
+        item["url"] = url
+    elif url:
+        item["url"] = url
+    if path:
+        item["path"] = path
+    return item
+
+
+def _normalize_image_for_storage(value: dict[str, Any], *, base_url: str, owner_id: str) -> dict[str, Any]:
     item = {
         "id": _clean(value.get("id")),
         "taskId": _clean(value.get("taskId") or value.get("task_id")),
@@ -50,6 +123,17 @@ def _normalize_image(value: dict[str, Any]) -> dict[str, Any]:
     ):
         if value.get(field) is not None:
             item[field] = value.get(field)
+    url = _clean(item.get("url"))
+    b64_json = _clean(value.get("b64_json"))
+    materialized: dict[str, str] | None = None
+    if url.startswith("data:image/"):
+        materialized = _materialize_data_url(url, base_url=base_url, owner_id=owner_id)
+    elif b64_json:
+        materialized = _materialize_data_url(f"data:image/png;base64,{b64_json}", base_url=base_url, owner_id=owner_id)
+    if materialized is not None:
+        item["url"] = materialized["url"]
+        item["path"] = materialized["path"]
+        item["storage"] = materialized["storage"]
     return item
 
 
@@ -120,6 +204,7 @@ class ImageConversationService:
         identity: dict[str, object],
         conversation_id: str,
         turn: dict[str, Any],
+        base_url: str = "",
     ) -> dict[str, Any]:
         owner = _owner_id(identity)
         key = _conversation_key(owner, _clean(conversation_id))
@@ -133,16 +218,21 @@ class ImageConversationService:
             if not turn_id:
                 raise ValueError("turn.id is required")
             images = [
-                _normalize_image(image)
+                _normalize_image_for_storage(image, base_url=base_url, owner_id=owner)
                 for image in (turn.get("images") or [])
                 if isinstance(image, dict) and _clean(image.get("id"))
+            ]
+            reference_images = [
+                _normalize_reference_image(image, base_url=base_url, owner_id=owner)
+                for image in (turn.get("referenceImages") or [])
+                if isinstance(image, dict)
             ]
             next_turn = {
                 "id": turn_id,
                 "prompt": _clean(turn.get("prompt")),
                 "model": _clean(turn.get("model"), "gpt-image-2"),
                 "mode": "edit" if turn.get("mode") == "edit" else "generate",
-                "referenceImages": turn.get("referenceImages") if isinstance(turn.get("referenceImages"), list) else [],
+                "referenceImages": reference_images,
                 "count": _positive_int(turn.get("count"), len(images) or 1),
                 "size": _clean(turn.get("size")),
                 "ratio": _clean(turn.get("ratio"), "1:1"),
@@ -205,6 +295,7 @@ class ImageConversationService:
         conversation_id: str,
         image_id: str,
         updates: dict[str, Any],
+        base_url: str = "",
     ) -> dict[str, Any]:
         owner = _owner_id(identity)
         key = _conversation_key(owner, _clean(conversation_id))
@@ -229,6 +320,11 @@ class ImageConversationService:
                     found = True
                     turn_changed = True
                     next_image = dict(image)
+                    normalized_updates = _normalize_image_for_storage(
+                        {"id": image_id, **next_image, **updates},
+                        base_url=base_url,
+                        owner_id=owner,
+                    )
                     for field in (
                         "taskId",
                         "status",
@@ -239,9 +335,11 @@ class ImageConversationService:
                         "error",
                         "durationMs",
                         "feedback",
+                        "path",
+                        "storage",
                     ):
-                        if field in updates:
-                            next_image[field] = updates[field]
+                        if field in normalized_updates:
+                            next_image[field] = normalized_updates[field]
                     next_images.append(next_image)
                 if turn_changed:
                     next_turn = {**turn, "images": next_images}

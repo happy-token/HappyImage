@@ -187,6 +187,25 @@ class ImageTaskServiceTests(unittest.TestCase):
             },
         )
 
+    def test_generation_materializes_data_url_in_url_field(self):
+        identity = {"id": "user-1", "role": "admin", **GATEWAY_FIELDS}
+        data_url = "data:image/png;base64,cG5nLWRhdGE="
+
+        service = self.make_service(generation_handler=lambda _payload: {"data": [{"url": data_url}]})
+        service.submit_generation(
+            identity,
+            client_task_id="data-url-001",
+            prompt="a clean product photo",
+            model="gpt-image-2",
+            size="1024x1024",
+            quality="auto",
+            base_url="http://api.test",
+        )
+
+        task = wait_for_task(service, identity, "data-url-001", "success", timeout=3)
+        self.assertEqual(task["data"][0]["url"], self._stored_image.url)
+        self.assertNotIn("b64_json", task["data"][0])
+
     def test_linked_generation_updates_conversation_result_on_error(self):
         identity = {"id": "user-1", "role": "admin", **GATEWAY_FIELDS}
 

@@ -300,6 +300,33 @@ async function fetchImageAsFile(url: string, fileName: string) {
   return new File([blob], fileName, { type: blob.type || "image/png" });
 }
 
+async function buildFileFromReferenceImage(
+  image: StoredReferenceImage,
+  fileName: string
+) {
+  if (image.dataUrl) {
+    return dataUrlToFile(image.dataUrl, image.name || fileName, image.type);
+  }
+  if (image.url) {
+    return fetchImageAsFile(image.url, image.name || fileName);
+  }
+  return null;
+}
+
+async function buildReferenceImageFromReference(
+  image: StoredReferenceImage,
+  fileName: string
+) {
+  const file = await buildFileFromReferenceImage(image, fileName);
+  if (!file) {
+    return null;
+  }
+  return {
+    referenceImage: image,
+    file,
+  };
+}
+
 async function buildReferenceImageFromStoredImage(
   image: StoredImage,
   fileName: string
@@ -308,7 +335,7 @@ async function buildReferenceImageFromStoredImage(
   if (direct) {
     return {
       referenceImage: direct,
-      file: dataUrlToFile(direct.dataUrl, direct.name, direct.type),
+      file: dataUrlToFile(direct.dataUrl || "", direct.name, direct.type),
     };
   }
 
@@ -629,6 +656,7 @@ function ImagePageContent({
   const scrollPositionsRef = useRef<Map<string, number>>(loadScrollPositions());
   const isRestoringScrollRef = useRef(false);
   const scrollRestoreGenerationRef = useRef(0);
+  const serverResultSyncSignatureRef = useRef<Map<string, string>>(new Map());
 
   const [imagePrompt, setImagePrompt] = useState("");
   const [imageCount, setImageCount] = useState(DEFAULT_IMAGE_COUNT);
@@ -1432,7 +1460,18 @@ function ImagePageContent({
       }
       try {
         await upsertImageConversation(conversation.id, conversation.title);
-        await createImageConversationTurn(conversation.id, turn);
+        const response = await createImageConversationTurn(conversation.id, turn);
+        if (response.item) {
+          const nextConversations = sortImageConversations([
+            response.item,
+            ...conversationsRef.current.filter(
+              (item) => item.id !== response.item.id
+            ),
+          ]);
+          conversationsRef.current = nextConversations;
+          setConversations(nextConversations);
+          await saveImageConversation(response.item, ownerId);
+        }
       } catch (error) {
         if (options.toastOnError !== false) {
           const message =
@@ -1441,7 +1480,7 @@ function ImagePageContent({
         }
       }
     },
-    [isGuest]
+    [isGuest, ownerId]
   );
 
   const syncServerImageResults = useCallback(
@@ -1459,8 +1498,8 @@ function ImagePageContent({
       }
       const updates = turn.images
         .filter((image) => taskIds.has(image.taskId || image.id))
-        .map((image) =>
-          updateImageConversationResult(conversationId, image.id, {
+        .flatMap((image) => {
+          const payload = {
             taskId: image.taskId,
             status: image.status,
             taskStatus: image.taskStatus ?? null,
@@ -1470,8 +1509,15 @@ function ImagePageContent({
             error: image.error ?? null,
             durationMs: image.durationMs ?? null,
             feedback: image.feedback ?? null,
-          })
-        );
+          };
+          const syncKey = `${conversationId}:${image.id}`;
+          const signature = JSON.stringify(payload);
+          if (serverResultSyncSignatureRef.current.get(syncKey) === signature) {
+            return [];
+          }
+          serverResultSyncSignatureRef.current.set(syncKey, signature);
+          return [updateImageConversationResult(conversationId, image.id, payload)];
+        });
       await Promise.allSettled(updates);
     },
     [isGuest]
@@ -1754,11 +1800,11 @@ function ImagePageContent({
     ) => {
       try {
         const nextReference =
-          "dataUrl" in image
-            ? {
-                referenceImage: image,
-                file: dataUrlToFile(image.dataUrl, image.name, image.type),
-              }
+          "name" in image
+            ? await buildReferenceImageFromReference(
+                image,
+                `conversation-${conversationId}-${Date.now()}.png`
+              )
             : await buildReferenceImageFromStoredImage(
                 image,
                 `conversation-${conversationId}-${Date.now()}.png`
@@ -1804,11 +1850,17 @@ function ImagePageContent({
       setImageQuality(turn.quality);
       setImageModel(turn.model);
       setReferenceImages(turn.referenceImages);
-      setReferenceImageFiles(
-        turn.referenceImages.map((image) =>
-          dataUrlToFile(image.dataUrl, image.name, image.type)
+      const files = (
+        await Promise.all(
+          turn.referenceImages.map((image, index) =>
+            buildFileFromReferenceImage(
+              image,
+              image.name || `${turn.id}-${index + 1}.png`
+            )
+          )
         )
-      );
+      ).filter((file): file is File => Boolean(file));
+      setReferenceImageFiles(files);
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -1893,13 +1945,16 @@ function ImagePageContent({
       };
 
       try {
-        const referenceFiles = activeTurn.referenceImages.map((image, index) =>
-          dataUrlToFile(
-            image.dataUrl,
-            image.name || `${activeTurn.id}-${index + 1}.png`,
-            image.type
+        const referenceFiles = (
+          await Promise.all(
+            activeTurn.referenceImages.map((image, index) =>
+              buildFileFromReferenceImage(
+                image,
+                image.name || `${activeTurn.id}-${index + 1}.png`
+              )
+            )
           )
-        );
+        ).filter((file): file is File => Boolean(file));
         if (activeTurn.mode === "edit" && referenceFiles.length === 0) {
           throw new Error("未找到可用于继续编辑的参考图");
         }

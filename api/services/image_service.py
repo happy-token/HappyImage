@@ -18,6 +18,8 @@ from services.image_tags_service import load_tags, remove_tags
 from utils.log import logger
 
 THUMBNAIL_SIZE = (320, 320)
+IMAGE_CACHE_CONTROL = "private, max-age=86400"
+THUMBNAIL_CACHE_CONTROL = "private, max-age=604800, immutable"
 
 
 def _cleanup_empty_dirs(root: Path) -> None:
@@ -56,6 +58,7 @@ def get_image_response(relative_path: str) -> FileResponse | Response:
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "GET, OPTIONS",
         "Access-Control-Allow-Headers": "*",
+        "Cache-Control": IMAGE_CACHE_CONTROL,
     }
     if image_storage_service.has_local(relative_path):
         return FileResponse(_safe_image_path(relative_path), headers=headers)
@@ -64,7 +67,15 @@ def get_image_response(relative_path: str) -> FileResponse | Response:
 
 def _thumbnail_path(relative_path: str) -> Path:
     rel = _safe_relative_path(relative_path)
-    return config.image_thumbnails_dir / f"{rel}.png"
+    return config.image_thumbnails_dir / f"{rel}.webp"
+
+
+def _thumbnail_paths(relative_path: str) -> tuple[Path, Path]:
+    rel = _safe_relative_path(relative_path)
+    return (
+        config.image_thumbnails_dir / f"{rel}.webp",
+        config.image_thumbnails_dir / f"{rel}.png",
+    )
 
 
 def thumbnail_url(base_url: str, relative_path: str) -> str:
@@ -98,7 +109,7 @@ def ensure_thumbnail(relative_path: str) -> Path:
             if image.mode not in {"RGB", "RGBA"}:
                 image = image.convert("RGBA" if "A" in image.getbands() else "RGB")
             image.thumbnail(THUMBNAIL_SIZE, Image.Resampling.LANCZOS)
-            image.save(target, format="PNG", optimize=True)
+            image.save(target, format="WEBP", quality=78, method=6)
     except HTTPException:
         raise
     except Exception as exc:
@@ -111,6 +122,7 @@ def get_thumbnail_response(relative_path: str) -> FileResponse:
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "GET, OPTIONS",
         "Access-Control-Allow-Headers": "*",
+        "Cache-Control": THUMBNAIL_CACHE_CONTROL,
     }
     return FileResponse(ensure_thumbnail(relative_path), headers=headers)
 
@@ -144,7 +156,12 @@ def cleanup_image_thumbnails() -> int:
         if not path.is_file():
             continue
         rel = path.relative_to(thumbnails_root).as_posix()
-        if not rel.endswith(".png") or not image_storage_service.exists(rel[:-4]):
+        source_rel = ""
+        if rel.endswith(".webp"):
+            source_rel = rel[:-5]
+        elif rel.endswith(".png"):
+            source_rel = rel[:-4]
+        if not source_rel or not image_storage_service.exists(source_rel):
             path.unlink()
             removed += 1
     _cleanup_empty_dirs(thumbnails_root)
@@ -202,7 +219,7 @@ def delete_images(paths: list[str] | None = None, start_date: str = "", end_date
             continue
         if image_storage_service.delete(item):
             removed += 1
-        for thumbnail in (_thumbnail_path(item), config.image_thumbnails_dir / _safe_relative_path(item)):
+        for thumbnail in (*_thumbnail_paths(item), config.image_thumbnails_dir / _safe_relative_path(item)):
             if thumbnail.is_file():
                 thumbnail.unlink()
         remove_tags(item)

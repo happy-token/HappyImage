@@ -49,6 +49,7 @@ class PrivateImageRouteTests(unittest.TestCase):
             self.assertEqual(missing.status_code, 401)
             self.assertEqual(allowed.status_code, 200)
             self.assertEqual(allowed.headers.get("content-type"), "image/png")
+            self.assertEqual(allowed.headers.get("cache-control"), "private, max-age=86400")
 
     def test_user_can_create_signed_link_for_owned_image(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

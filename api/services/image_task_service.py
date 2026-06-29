@@ -82,6 +82,16 @@ def _is_http_url(value: str) -> bool:
         return False
 
 
+def _decode_image_data_url(value: str) -> bytes | None:
+    prefix, separator, payload = value.partition(",")
+    if not separator or ";base64" not in prefix.lower() or not prefix.lower().startswith("data:image/"):
+        return None
+    try:
+        return base64.b64decode(payload, validate=True)
+    except Exception as exc:
+        raise RuntimeError("gateway returned invalid data URL image") from exc
+
+
 def _is_own_image_url(value: str, base_url: str) -> bool:
     normalized_base = _clean(base_url or config.base_url).rstrip("/")
     return bool(normalized_base and value.startswith(f"{normalized_base}/images/"))
@@ -118,6 +128,8 @@ def _materialize_gateway_images(data: list[Any], *, base_url: str, owner_id: str
                 image_data = base64.b64decode(b64_json)
             except Exception as exc:
                 raise RuntimeError("gateway returned invalid base64 image data") from exc
+        elif url.startswith("data:image/"):
+            image_data = _decode_image_data_url(url)
         elif url and _is_http_url(url) and not _is_own_image_url(url, base_url):
             image_data = _download_remote_image(url)
             item["source_url"] = url

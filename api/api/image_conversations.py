@@ -6,7 +6,7 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
-from api.support import require_identity
+from api.support import require_identity, resolve_image_base_url
 from services.image_conversation_service import image_conversation_service
 
 
@@ -96,6 +96,7 @@ def create_router() -> APIRouter:
                 identity,
                 conversation_id=conversation_id,
                 turn=body.model_dump(),
+                base_url=resolve_image_base_url(request),
             )
         except ValueError as exc:
             raise HTTPException(status_code=404, detail={"error": str(exc)}) from exc
@@ -138,6 +139,7 @@ def create_router() -> APIRouter:
                 conversation_id=conversation_id,
                 image_id=image_id,
                 updates=_patch_dict(body),
+                base_url=resolve_image_base_url(request),
             )
         except ValueError as exc:
             raise HTTPException(status_code=404, detail={"error": str(exc)}) from exc
