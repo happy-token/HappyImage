@@ -7,7 +7,6 @@ import {
   ArrowLeft,
   ArrowRight,
   Copy,
-  ExternalLink,
   ImageIcon,
   LoaderCircle,
   ShieldAlert,
@@ -313,50 +312,23 @@ export function GalleryDetailClient() {
             </div>
           ) : null}
 
-          {item.rights_notes ? (
-            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
-              <div className="flex items-center gap-1.5 font-medium">
-                <ShieldAlert className="size-3.5" />
-                发布前复核
-              </div>
-              <p className="mt-1">{item.rights_notes}</p>
-            </div>
-          ) : null}
-
           <div className="mt-auto flex flex-col gap-2 pt-2">
-            <Button className="h-10 rounded-md" onClick={handleUsePrompt}>
-              生成同款
-              <ArrowRight className="size-4" />
-            </Button>
             <div className="grid grid-cols-2 gap-2">
-              <Button variant="outline" className="rounded-md" onClick={handleCopyPrompt}>
+              <Button className="h-10 rounded-md" onClick={handleUsePrompt}>
+                生成同款
+                <ArrowRight className="size-4" />
+              </Button>
+              <Button variant="outline" className="h-10 rounded-md" onClick={handleCopyPrompt}>
                 <Copy className="size-4" />
                 复制提示词
               </Button>
-              {item.source_url ? (
-                <Button asChild variant="outline" className="rounded-md">
-                  <a href={item.source_url} target="_blank" rel="noreferrer">
-                    <ExternalLink className="size-4" />
-                    查看来源
-                  </a>
-                </Button>
-              ) : (
-                <Button asChild variant="outline" className="rounded-md">
-                  <Link href="/gallery">
-                    <ArrowLeft className="size-4" />
-                    返回图库
-                  </Link>
-                </Button>
-              )}
             </div>
-            {item.source_url ? (
-              <Button asChild variant="ghost" className="rounded-md text-stone-500">
-                <Link href="/gallery">
-                  <ArrowLeft className="size-4" />
-                  返回灵感图库
-                </Link>
-              </Button>
-            ) : null}
+            <Button asChild variant="ghost" className="rounded-md text-stone-500">
+              <Link href="/gallery">
+                <ArrowLeft className="size-4" />
+                返回灵感图库
+              </Link>
+            </Button>
           </div>
         </aside>
       </div>

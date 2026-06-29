@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowRight, Copy, ExternalLink, ImageIcon, LoaderCircle, Search, ShieldAlert } from "lucide-react";
+import { ArrowRight, Copy, ImageIcon, LoaderCircle, Search } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -118,26 +118,15 @@ function SeedGalleryCard({
             ))}
           </div>
         ) : null}
-        <div className="flex items-center gap-2">
-          <Button size="sm" className="h-8 flex-1 rounded-md" onClick={() => onUsePrompt(item)}>
+        <div className="grid grid-cols-2 gap-2">
+          <Button size="sm" className="h-8 rounded-md" onClick={() => onUsePrompt(item)}>
             <ArrowRight className="size-3.5" />
             生成同款
           </Button>
-          <Button size="icon" variant="outline" className="size-8 rounded-md" onClick={() => onCopyPrompt(item)} title="复制提示词">
+          <Button size="sm" variant="outline" className="h-8 rounded-md" onClick={() => onCopyPrompt(item)}>
             <Copy className="size-3.5" />
+            复制提示词
           </Button>
-          <Button size="icon" variant="outline" className="size-8 rounded-md" asChild title="查看详情">
-            <Link href={detailHref}>
-              <ArrowRight className="size-3.5" />
-            </Link>
-          </Button>
-          {item.source_url ? (
-            <Button size="icon" variant="outline" className="size-8 rounded-md" asChild title="查看来源">
-              <a href={item.source_url} target="_blank" rel="noreferrer">
-                <ExternalLink className="size-3.5" />
-              </a>
-            </Button>
-          ) : null}
         </div>
       </div>
     </article>
@@ -307,10 +296,6 @@ export function GalleryBrowser({ embedded = false, onUsePrompt }: GalleryBrowser
           </Select>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500 dark:text-stone-400">
-          <ShieldAlert className="size-4 text-amber-600" />
-          <span>当前展示 {items.length} / {total} 条；品牌、真实人物或商用发布素材请先复核权利风险。</span>
-        </div>
       </div>
 
       {isLoading ? (

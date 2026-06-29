@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
-import { ArrowRight, ImageIcon, LoaderCircle, Sparkles } from "lucide-react";
+import { ArrowRight, ImageIcon, LoaderCircle } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -1575,10 +1575,6 @@ export default function HomePage() {
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/74 via-black/28 to-black/8" />
         <div className="relative z-10 flex min-h-[min(630px,calc(100dvh-11rem))] flex-col justify-end gap-6 pb-6 sm:pb-8">
-          <div className="inline-flex w-fit items-center gap-2 rounded-full bg-white/92 px-3 py-1.5 text-xs font-medium text-stone-800 shadow-sm">
-            <Sparkles className="size-3.5" />
-            官方灵感图库 · 公开预览
-          </div>
           <div className="max-w-4xl space-y-4 text-white">
             <h1 className="text-5xl font-bold tracking-normal sm:text-6xl lg:text-7xl">
               Happy Token Studio
