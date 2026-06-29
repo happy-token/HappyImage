@@ -118,7 +118,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       return;
     }
     setSession(null);
-    router.replace("/login");
+    router.replace("/");
   };
 
   const adminAccountFooter = session ? (

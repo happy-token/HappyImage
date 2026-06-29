@@ -213,9 +213,10 @@ class OIDCService:
             or settings.get("post_logout_redirect_uri")
             or ""
         ).strip()
+        if not redirect_uri:
+            return ""
         params = {"client_id": str(settings.get("client_id") or "").strip()}
-        if redirect_uri:
-            params["post_logout_redirect_uri"] = redirect_uri
+        params["post_logout_redirect_uri"] = redirect_uri
         return f"{endpoint}?{urlencode(params)}"
 
     @staticmethod

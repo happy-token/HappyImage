@@ -577,7 +577,7 @@ def test_logout_clear_cookie_matches_cross_site_secure_cookie_attributes():
     assert response.json()["logout_url"] == ""
 
 
-def test_logout_returns_provider_logout_url_without_default_redirect_uri():
+def test_logout_omits_provider_logout_url_without_redirect_uri():
     app = FastAPI()
     app.include_router(auth_oidc_api.create_router())
 
@@ -594,12 +594,7 @@ def test_logout_returns_provider_logout_url_without_default_redirect_uri():
         response = TestClient(app).post("/api/auth/logout")
 
     assert response.status_code == 200, response.text
-    logout_url = response.json()["logout_url"]
-    parsed = urlsplit(logout_url)
-    query = parse_qs(parsed.query)
-    assert f"{parsed.scheme}://{parsed.netloc}{parsed.path}" == "https://issuer.example/logout"
-    assert query["client_id"] == ["happytoken"]
-    assert "post_logout_redirect_uri" not in query
+    assert response.json()["logout_url"] == ""
 
 
 def test_logout_returns_configured_post_logout_redirect_uri():

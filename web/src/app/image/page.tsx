@@ -854,7 +854,7 @@ function ImagePageContent({
     if (redirectedToProvider) {
       return;
     }
-    router.replace("/login");
+    router.replace("/");
   }, [router]);
 
   const handleSaveWatermarkLabel = useCallback(

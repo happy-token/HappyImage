@@ -62,7 +62,7 @@ export function TopNav({
     if (redirectedToProvider) {
       return;
     }
-    router.replace("/login");
+    router.replace("/");
   };
 
   const currentSession = providedSession !== undefined ? providedSession : session;
