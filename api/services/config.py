@@ -107,6 +107,10 @@ def _normalize_oidc_settings(value: object) -> dict[str, object]:
         "allowed_email_domains": str(
             source.get("allowed_email_domains") or ""
         ).strip(),
+        "post_logout_redirect_uri": _normalize_http_url(
+            source.get("post_logout_redirect_uri"),
+            "OIDC Post Logout Redirect URI",
+        ),
     }
 
 

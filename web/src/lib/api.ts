@@ -27,6 +27,7 @@ export type OIDCSettings = {
   client_secret_configured?: boolean;
   scopes: string;
   allowed_email_domains: string;
+  post_logout_redirect_uri?: string;
 };
 
 export type ModelGatewaySettings = {

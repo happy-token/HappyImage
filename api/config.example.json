@@ -31,7 +31,8 @@
     "client_id": "",
     "client_secret": "",
     "scopes": "openid profile email",
-    "allowed_email_domains": ""
+    "allowed_email_domains": "",
+    "post_logout_redirect_uri": ""
   },
   "model_gateway": {
     "gateway_api_base_url": "https://gateway.happy-token.cn/v1",

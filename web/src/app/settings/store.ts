@@ -36,6 +36,7 @@ function defaultOIDC(): OIDCSettings {
     client_secret_configured: false,
     scopes: "openid profile email",
     allowed_email_domains: "",
+    post_logout_redirect_uri: "",
   };
 }
 

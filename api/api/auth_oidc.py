@@ -605,7 +605,6 @@ def create_router() -> APIRouter:
         cookie = web_session_service.make_clear_cookie_header()
         logout_url = await run_in_threadpool(
             oidc_service.build_logout_url,
-            config.public_app_url.rstrip("/") + "/login" if config.public_app_url else "",
         )
         response = JSONResponse(content={"ok": True, "logout_url": logout_url})
         response.headers["Set-Cookie"] = cookie

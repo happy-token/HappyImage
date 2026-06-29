@@ -773,6 +773,7 @@ class ConfigLoadingTests(unittest.TestCase):
                         "client_secret": "",
                         "scopes": "openid profile email",
                         "allowed_email_domains": "",
+                        "post_logout_redirect_uri": "",
                     },
                 )
 

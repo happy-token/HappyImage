@@ -208,7 +208,11 @@ class OIDCService:
         if not endpoint:
             return ""
         settings = self._oidc_settings()
-        redirect_uri = str(post_logout_redirect_uri or config.public_app_url or "").strip()
+        redirect_uri = str(
+            post_logout_redirect_uri
+            or settings.get("post_logout_redirect_uri")
+            or ""
+        ).strip()
         params = {"client_id": str(settings.get("client_id") or "").strip()}
         if redirect_uri:
             params["post_logout_redirect_uri"] = redirect_uri
