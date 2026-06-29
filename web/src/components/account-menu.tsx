@@ -1425,9 +1425,6 @@ export function AccountMenu({
                     </span>
                   ) : null}
                 </div>
-                <div className="mt-0.5 truncate text-xs text-stone-500 dark:text-stone-400">
-                  {happyTokenProvider.baseUrl}
-                </div>
                 <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-stone-400">
                   <span>
                     {copy.provider.status}: {bindingStatusLabel}
