@@ -146,7 +146,7 @@ fi
 echo "Starting API: http://127.0.0.1:${API_PORT}"
 (
   cd "$ROOT_DIR/api"
-  uv run python main.py
+  uv run uvicorn main:app --host 127.0.0.1 --port "$API_PORT"
 ) &
 api_pid="$!"
 

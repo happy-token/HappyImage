@@ -1,0 +1,392 @@
+"use client";
+
+import Link from "next/link";
+import {
+  BookOpen,
+  CheckCircle2,
+  ImagePlus,
+  Images,
+  KeyRound,
+  LoaderCircle,
+  MessageSquarePlus,
+  Palette,
+  Settings2,
+  Sparkles,
+  Stamp,
+  WandSparkles,
+} from "lucide-react";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { useAuthGuard } from "@/lib/use-auth-guard";
+import { useEffectiveLanguage, type EffectiveLanguage } from "@/lib/language";
+
+const docsCopy = {
+  "zh-CN": {
+    title: "使用文档",
+    subtitle:
+      "从第一次生成到长期管理图库，这里整理了 Happy Token 图片工作台的核心流程。",
+    backToStudio: "进入图片工作台",
+    gallery: "浏览官方图库",
+    updated: "面向当前 Web 工作台",
+    quickStartTitle: "快速开始",
+    quickStart: [
+      {
+        title: "新建对话",
+        body: "进入图片工作台后点击新建对话，在底部输入框描述画面主体、风格、比例和用途。",
+        icon: MessageSquarePlus,
+      },
+      {
+        title: "选择生成参数",
+        body: "按需要选择模型、比例、清晰度和生成张数。常用配置会保存到当前账户偏好。",
+        icon: Settings2,
+      },
+      {
+        title: "保存和复用",
+        body: "生成结果会保存在历史对话和我的图库中，后续可以继续生成、复用提示词或下载图片。",
+        icon: Images,
+      },
+    ],
+    sections: [
+      {
+        title: "图片生成",
+        icon: WandSparkles,
+        items: [
+          "提示词建议包含主体、背景、镜头、材质、色彩和输出用途。",
+          "如果要改图，先上传参考图，再描述要保留和要修改的部分。",
+          "生成中可以切换历史或图库，任务完成后结果会回到对应对话。",
+        ],
+      },
+      {
+        title: "官方图库",
+        icon: Sparkles,
+        items: [
+          "官方图库提供预设案例和可复用提示词，适合快速找方向。",
+          "点击使用提示词会把内容带回工作台，不会覆盖你已保存的历史。",
+          "你可以在载入后继续改品牌、场景、尺寸和风格关键词。",
+        ],
+      },
+      {
+        title: "我的图库",
+        icon: ImagePlus,
+        items: [
+          "我的图库汇总当前账户生成过的成功图片，便于回看和二次创作。",
+          "喜欢或不喜欢的反馈会保留在本机统计里，帮助筛选作品。",
+          "删除历史记录前请确认，删除操作可能无法恢复。",
+        ],
+      },
+      {
+        title: "模型供应商",
+        icon: KeyRound,
+        items: [
+          "普通用户可以在账户菜单里配置 HappyToken 或 OpenAI 兼容供应商。",
+          "保存 API Key 后建议先测试连接，再切换为使用中供应商。",
+          "管理员的系统级配置在系统设置中管理，用户侧配置只影响当前账户。",
+        ],
+      },
+      {
+        title: "水印与账户",
+        icon: Stamp,
+        items: [
+          "账户菜单可以设置水印标签，带水印下载会使用标签和用户标识。",
+          "主题、语言、常用图片参数和侧边栏状态会保存为账户偏好。",
+          "遇到登录或供应商绑定问题，可以在账户菜单的联系我们里获取支持方式。",
+        ],
+      },
+      {
+        title: "界面偏好",
+        icon: Palette,
+        items: [
+          "工作台侧边栏可展开、收起或拖动调整宽度。",
+          "移动端通过历史记录按钮打开对话列表。",
+          "官方图库、我的图库和新建对话可以在侧栏中快速切换。",
+        ],
+      },
+    ],
+    checklistTitle: "写好提示词的检查清单",
+    checklist: [
+      "主体明确：谁或什么出现在画面中",
+      "场景明确：地点、时间、氛围和背景",
+      "风格明确：摄影、插画、海报、产品图等",
+      "限制明确：不要出现的元素、文字或比例错误",
+      "用途明确：头像、封面、广告图、商品图等",
+    ],
+    faqTitle: "常见问题",
+    faq: [
+      {
+        question: "为什么看不到生成结果？",
+        answer:
+          "先确认任务是否仍在处理中；如果长时间没有结果，可刷新页面或重新登录后查看历史对话。",
+      },
+      {
+        question: "为什么模型不可用？",
+        answer:
+          "通常是供应商配置、API Key 或账户绑定未完成。请到账户菜单的供应商页检查状态并测试连接。",
+      },
+      {
+        question: "如何避免提示词覆盖历史？",
+        answer:
+          "从官方图库载入提示词会开启新的草稿，不会删除已有对话。提交生成后才会形成新的对话记录。",
+      },
+    ],
+  },
+  "en-US": {
+    title: "Docs",
+    subtitle:
+      "Core workflows for Happy Token, from your first image to managing a long-running gallery.",
+    backToStudio: "Open workspace",
+    gallery: "Browse gallery",
+    updated: "For the current web workspace",
+    quickStartTitle: "Quick Start",
+    quickStart: [
+      {
+        title: "Create a chat",
+        body: "Open the image workspace and describe the subject, style, ratio, and intended use in the composer.",
+        icon: MessageSquarePlus,
+      },
+      {
+        title: "Choose settings",
+        body: "Select model, ratio, quality, and count. Common choices are saved to your account preferences.",
+        icon: Settings2,
+      },
+      {
+        title: "Save and reuse",
+        body: "Results are kept in history and My Gallery so you can continue, reuse prompts, or download images later.",
+        icon: Images,
+      },
+    ],
+    sections: [
+      {
+        title: "Image Generation",
+        icon: WandSparkles,
+        items: [
+          "Good prompts include subject, background, camera, material, color, and use case.",
+          "For edits, upload reference images first, then describe what to keep and what to change.",
+          "You can browse history or galleries while tasks run; results return to the source chat.",
+        ],
+      },
+      {
+        title: "Official Gallery",
+        icon: Sparkles,
+        items: [
+          "The official gallery offers examples and reusable prompts for quick direction.",
+          "Using a prompt loads it into the workspace without overwriting saved history.",
+          "Adjust brand, scene, size, and style keywords after loading.",
+        ],
+      },
+      {
+        title: "My Gallery",
+        icon: ImagePlus,
+        items: [
+          "My Gallery collects successful images generated by the current account.",
+          "Like and dislike feedback remains in local stats to help you sort results.",
+          "Confirm before deleting history; deletion may not be recoverable.",
+        ],
+      },
+      {
+        title: "Model Providers",
+        icon: KeyRound,
+        items: [
+          "Users can configure HappyToken or OpenAI-compatible providers from the account menu.",
+          "After saving an API key, test the connection before making the provider active.",
+          "Admin system settings are managed separately; user provider settings affect only the current account.",
+        ],
+      },
+      {
+        title: "Watermark and Account",
+        icon: Stamp,
+        items: [
+          "Set a watermark label from the account menu. Watermarked downloads use the label and user ID.",
+          "Theme, language, image settings, and sidebar state are saved as account preferences.",
+          "For login or provider binding issues, use Contact in the account menu.",
+        ],
+      },
+      {
+        title: "Interface Preferences",
+        icon: Palette,
+        items: [
+          "The workspace sidebar can expand, collapse, or be resized by dragging.",
+          "On mobile, use History to open the conversation list.",
+          "Switch between new chat, official gallery, and my gallery from the sidebar.",
+        ],
+      },
+    ],
+    checklistTitle: "Prompt Checklist",
+    checklist: [
+      "Clear subject: who or what appears",
+      "Clear scene: place, time, mood, and background",
+      "Clear style: photo, illustration, poster, product image, and more",
+      "Clear constraints: unwanted elements, text, or ratio mistakes",
+      "Clear use case: avatar, cover, ad, product shot, and more",
+    ],
+    faqTitle: "FAQ",
+    faq: [
+      {
+        question: "Why do I not see generated results?",
+        answer:
+          "Check whether the task is still running. If it takes too long, refresh or sign in again and inspect history.",
+      },
+      {
+        question: "Why is a model unavailable?",
+        answer:
+          "Provider settings, API key, or account binding may be incomplete. Check Provider in the account menu and test the connection.",
+      },
+      {
+        question: "How do I avoid overwriting history?",
+        answer:
+          "Loading a gallery prompt opens a fresh draft and does not delete saved chats. A new record is created after generation.",
+      },
+    ],
+  },
+} satisfies Record<EffectiveLanguage, unknown>;
+
+export default function DocsPage() {
+  const { isCheckingAuth, session } = useAuthGuard();
+  const language = useEffectiveLanguage();
+  const copy = docsCopy[language];
+
+  if (isCheckingAuth || !session) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <LoaderCircle className="size-5 animate-spin text-stone-400" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto w-full max-w-6xl px-1 py-5 sm:px-3 sm:py-8">
+      <section className="overflow-hidden rounded-[28px] border border-zinc-200 bg-white shadow-[0_24px_90px_-58px_rgba(24,24,27,0.5)] dark:border-white/10 dark:bg-[#171717]">
+        <div className="grid gap-0 lg:grid-cols-[1fr_22rem]">
+          <div className="p-6 sm:p-8 lg:p-10">
+            <Badge variant="info" className="gap-1.5">
+              <BookOpen className="size-3.5" />
+              {copy.updated}
+            </Badge>
+            <h1 className="mt-5 text-3xl font-bold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-4xl">
+              {copy.title}
+            </h1>
+            <p className="mt-4 max-w-2xl text-base leading-7 text-zinc-600 dark:text-zinc-300">
+              {copy.subtitle}
+            </p>
+            <div className="mt-7 flex flex-col gap-2 sm:flex-row">
+              <Button
+                asChild
+                className="rounded-full bg-zinc-950 text-white hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200"
+              >
+                <Link href="/image">
+                  <WandSparkles className="size-4" />
+                  {copy.backToStudio}
+                </Link>
+              </Button>
+              <Button asChild variant="outline" className="rounded-full">
+                <Link href="/image?mode=official_gallery">
+                  <Sparkles className="size-4" />
+                  {copy.gallery}
+                </Link>
+              </Button>
+            </div>
+          </div>
+          <div className="border-t border-zinc-200 bg-zinc-50 p-5 dark:border-white/10 dark:bg-white/[0.03] lg:border-l lg:border-t-0">
+            <div className="grid gap-3">
+              {copy.quickStart.map((item, index) => {
+                const Icon = item.icon;
+                return (
+                  <div
+                    key={item.title}
+                    className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-white/10 dark:bg-zinc-950/40"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-zinc-950 text-white dark:bg-zinc-50 dark:text-zinc-950">
+                        <Icon className="size-4" />
+                      </span>
+                      <div className="min-w-0">
+                        <div className="text-xs font-medium text-zinc-400">
+                          {copy.quickStartTitle} {index + 1}
+                        </div>
+                        <div className="truncate text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+                          {item.title}
+                        </div>
+                      </div>
+                    </div>
+                    <p className="mt-3 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+                      {item.body}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {copy.sections.map((section) => {
+          const Icon = section.icon;
+          return (
+            <article
+              key={section.title}
+              className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-white/10 dark:bg-white/[0.03]"
+            >
+              <div className="flex items-center gap-3">
+                <span className="flex size-10 items-center justify-center rounded-xl bg-zinc-100 text-zinc-700 dark:bg-white/10 dark:text-zinc-200">
+                  <Icon className="size-5" />
+                </span>
+                <h2 className="text-base font-semibold text-zinc-950 dark:text-zinc-50">
+                  {section.title}
+                </h2>
+              </div>
+              <ul className="mt-4 space-y-3">
+                {section.items.map((item) => (
+                  <li
+                    key={item}
+                    className="flex gap-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300"
+                  >
+                    <CheckCircle2 className="mt-1 size-4 shrink-0 text-emerald-600 dark:text-emerald-300" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </article>
+          );
+        })}
+      </section>
+
+      <section className="mt-6 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+        <div className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-white/10 dark:bg-white/[0.03]">
+          <h2 className="text-base font-semibold text-zinc-950 dark:text-zinc-50">
+            {copy.checklistTitle}
+          </h2>
+          <div className="mt-4 grid gap-2">
+            {copy.checklist.map((item) => (
+              <div
+                key={item}
+                className="flex items-center gap-2 rounded-xl bg-zinc-50 px-3 py-2 text-sm text-zinc-700 dark:bg-white/[0.05] dark:text-zinc-300"
+              >
+                <CheckCircle2 className="size-4 shrink-0 text-teal-600 dark:text-teal-300" />
+                <span>{item}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-white/10 dark:bg-white/[0.03]">
+          <h2 className="text-base font-semibold text-zinc-950 dark:text-zinc-50">
+            {copy.faqTitle}
+          </h2>
+          <div className="mt-4 divide-y divide-zinc-200 dark:divide-white/10">
+            {copy.faq.map((item) => (
+              <div key={item.question} className="py-4 first:pt-0 last:pb-0">
+                <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                  {item.question}
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+                  {item.answer}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}

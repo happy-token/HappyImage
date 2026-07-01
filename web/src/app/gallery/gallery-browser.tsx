@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowRight, Copy, ImageIcon, LoaderCircle, Search } from "lucide-react";
+import { ArrowLeft, ArrowRight, Copy, ImageIcon, LoaderCircle, Search } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -245,6 +245,30 @@ export function GalleryBrowser({ embedded = false, onUsePrompt }: GalleryBrowser
           : "max-w-[1380px] pb-8",
       )}
     >
+      {!embedded ? (
+        <div className="flex items-center justify-between gap-3">
+          <Button
+            asChild
+            variant="outline"
+            className="h-9 rounded-full border-stone-200 bg-white/80 px-3 text-stone-700 shadow-sm hover:bg-white dark:border-white/10 dark:bg-white/8 dark:text-stone-200 dark:hover:bg-white/12"
+          >
+            <Link href="/">
+              <ArrowLeft className="size-4" />
+              返回首页
+            </Link>
+          </Button>
+          <Button
+            asChild
+            className="h-9 rounded-full bg-stone-950 px-3 text-white shadow-sm hover:bg-stone-800 dark:bg-stone-100 dark:text-stone-950 dark:hover:bg-stone-200"
+          >
+            <Link href="/image">
+              进入工作台
+              <ArrowRight className="size-4" />
+            </Link>
+          </Button>
+        </div>
+      ) : null}
+
       <div className="flex flex-col gap-4 rounded-lg border border-stone-200/80 bg-white/74 p-4 shadow-sm dark:border-white/10 dark:bg-stone-950/62 sm:p-5">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-3xl space-y-2">

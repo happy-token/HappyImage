@@ -1,9 +1,12 @@
 "use client";
 
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   Activity,
   ArrowLeft,
   BarChart3,
+  BookOpen,
   Check,
   Copy,
   ExternalLink,
@@ -252,6 +255,7 @@ const settingsCopy = {
     about: {
       description: "图片创作工作台和 OpenAI 兼容图片 API。",
     },
+    docs: "使用文档",
     logout: "退出登录",
     fallbackName: "我的账户",
   },
@@ -358,6 +362,7 @@ const settingsCopy = {
     about: {
       description: "Image creation workspace and OpenAI-compatible image API.",
     },
+    docs: "Docs",
     logout: "Sign out",
     fallbackName: "My account",
   },
@@ -589,6 +594,7 @@ export function AccountMenu({
   onSessionUpdate?: (session: StoredAuthSession) => void;
   usageStats?: AccountUsageStats;
 }) {
+  const pathname = usePathname();
   const [draftWatermarkLabel, setDraftWatermarkLabel] = useState(
     watermarkLabel ?? session.watermarkLabel ?? ""
   );
@@ -621,6 +627,7 @@ export function AccountMenu({
   const displayName = session.name.trim() || copy.fallbackName;
   const triggerLabel =
     session.role === "admin" ? copy.trigger.admin : copy.trigger.mine;
+  const showDocsLink = pathname !== "/docs";
   const happyTokenManagementUrl = HAPPYTOKEN_MANAGEMENT_URL;
   useEffect(() => {
     const accountTheme = session.preferences?.theme;
@@ -1732,6 +1739,15 @@ export function AccountMenu({
         </div>
 
         <div className="shrink-0 border-t border-stone-100 p-2 dark:border-white/10">
+          {showDocsLink ? (
+            <Link
+              href="/docs"
+              className="mb-1 flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm font-medium text-stone-700 transition hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-white/10"
+            >
+              <BookOpen className="size-4" />
+              {copy.docs}
+            </Link>
+          ) : null}
           <button
             type="button"
             onClick={() => void onLogout()}
