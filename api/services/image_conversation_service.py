@@ -325,6 +325,8 @@ class ImageConversationService:
                         base_url=base_url,
                         owner_id=owner,
                     )
+                    # updates 中明确传 None 的字段视为清除指令
+                    explicit_clears = {k for k, v in updates.items() if v is None}
                     for field in (
                         "taskId",
                         "status",
@@ -338,7 +340,9 @@ class ImageConversationService:
                         "path",
                         "storage",
                     ):
-                        if field in normalized_updates:
+                        if field in explicit_clears:
+                            next_image.pop(field, None)
+                        elif field in normalized_updates:
                             next_image[field] = normalized_updates[field]
                     next_images.append(next_image)
                 if turn_changed:

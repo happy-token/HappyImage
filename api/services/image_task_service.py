@@ -22,6 +22,9 @@ TASK_STATUS_ERROR = "error"
 TERMINAL_STATUSES = {TASK_STATUS_SUCCESS, TASK_STATUS_ERROR}
 UNFINISHED_STATUSES = {TASK_STATUS_QUEUED, TASK_STATUS_RUNNING}
 
+DOWNLOAD_RETRY_ATTEMPTS = 5
+DOWNLOAD_RETRY_DELAYS = [5, 15, 30, 60, 120]
+
 
 def _now_iso() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -113,32 +116,54 @@ def _download_remote_image(url: str) -> bytes:
     return payload
 
 
+def _materialize_single_image(item: dict[str, Any], *, base_url: str, owner_id: str) -> dict[str, Any]:
+    """将单张图片数据（b64/data URL/远程URL）存入本地，返回更新后的 item。
+    远程 URL 下载失败时抛出异常，由调用方决定是否重试。"""
+    item = dict(item)
+    image_data: bytes | None = None
+    b64_json = _clean(item.get("b64_json"))
+    url = _clean(item.get("url"))
+    if b64_json:
+        try:
+            image_data = base64.b64decode(b64_json)
+        except Exception as exc:
+            raise RuntimeError("gateway returned invalid base64 image data") from exc
+    elif url.startswith("data:image/"):
+        image_data = _decode_image_data_url(url)
+    elif url and _is_http_url(url) and not _is_own_image_url(url, base_url):
+        image_data = _download_remote_image(url)
+        item["source_url"] = url
+    if image_data is not None:
+        stored = image_storage_service.save(image_data, base_url=base_url, owner_id=owner_id)
+        item["url"] = stored.url
+        item["path"] = stored.rel
+        item["storage"] = stored.storage
+        item.pop("b64_json", None)
+    return item
+
+
 def _materialize_gateway_images(data: list[Any], *, base_url: str, owner_id: str) -> list[Any]:
+    """将网关返回的图片列表存入本地。远程 HTTP URL 下载失败时不抛异常，
+    改为保留原始 source_url 并打上 _download_pending 标记，由调用方安排后台重试。"""
     materialized: list[Any] = []
     for entry in data:
         if not isinstance(entry, dict):
             materialized.append(entry)
             continue
-        item = dict(entry)
-        image_data: bytes | None = None
-        b64_json = _clean(item.get("b64_json"))
-        url = _clean(item.get("url"))
-        if b64_json:
-            try:
-                image_data = base64.b64decode(b64_json)
-            except Exception as exc:
-                raise RuntimeError("gateway returned invalid base64 image data") from exc
-        elif url.startswith("data:image/"):
-            image_data = _decode_image_data_url(url)
-        elif url and _is_http_url(url) and not _is_own_image_url(url, base_url):
-            image_data = _download_remote_image(url)
-            item["source_url"] = url
-        if image_data is not None:
-            stored = image_storage_service.save(image_data, base_url=base_url, owner_id=owner_id)
-            item["url"] = stored.url
-            item["path"] = stored.rel
-            item["storage"] = stored.storage
-            item.pop("b64_json", None)
+        url = _clean(entry.get("url"))
+        is_remote_http = url and _is_http_url(url) and not _is_own_image_url(url, base_url)
+        try:
+            item = _materialize_single_image(entry, base_url=base_url, owner_id=owner_id)
+        except Exception as exc:
+            if is_remote_http:
+                # 上游已生成图片（NewAPI 已计费），下载网络抖动不应让任务失败。
+                # 保留原始 URL，后台重试下载入库。
+                item = dict(entry)
+                item["source_url"] = url
+                item["_download_pending"] = True
+                item["_download_error"] = str(exc)
+            else:
+                raise
         materialized.append(item)
     return materialized
 
@@ -191,7 +216,9 @@ def _public_task(task: dict[str, Any]) -> dict[str, Any]:
             public_data = []
             for index, entry in enumerate(data):
                 if isinstance(entry, dict):
-                    public_entry = dict(entry)
+                    public_entry = {k: v for k, v in entry.items() if not k.startswith("_")}
+                    if entry.get("_download_pending"):
+                        public_entry["download_pending"] = True
                     summary = _feedback_summary(task.get("feedback"), index)
                     if summary:
                         public_entry["feedback"] = summary
@@ -247,6 +274,8 @@ class ImageTaskService:
             changed = self._migrated_from_json or changed
             if changed:
                 self._save_locked()
+        # 服务重启后，对上次下载失败但图片已生成的任务继续重试
+        self._resume_pending_downloads()
 
     def submit_generation(
         self,
@@ -488,30 +517,42 @@ class ImageTaskService:
                 if account_email:
                     setattr(error, "account_email", account_email)
                 raise error
-            data = _materialize_gateway_images(
-                data,
-                base_url=_clean(payload.get("base_url")),
-                owner_id=_owner_id(identity),
-            )
+            base_url = _clean(payload.get("base_url"))
+            owner_id = _owner_id(identity)
+            data = _materialize_gateway_images(data, base_url=base_url, owner_id=owner_id)
             usage = result.get("usage")
             duration_ms = int((time.time() - started) * 1000)
             self._update_task(key, status=TASK_STATUS_SUCCESS, data=data, usage=usage, error="", duration_ms=duration_ms)
             with self._lock:
                 current_task = dict(self._tasks.get(key) or {})
             first = data[0] if data and isinstance(data[0], dict) else {}
-            self._update_linked_result(
-                identity,
-                current_task,
-                {
-                    "status": "success",
-                    "taskStatus": None,
-                    "progress": None,
-                    "error": None,
-                    "url": first.get("url"),
-                    "revised_prompt": first.get("revised_prompt"),
-                    "durationMs": duration_ms,
-                },
-            )
+            # 如果网关返回了 URL 但下载失败，图库里保持 loading 状态等待重试完成
+            if first.get("_download_pending"):
+                self._update_linked_result(
+                    identity,
+                    current_task,
+                    {
+                        "status": "loading",
+                        "taskStatus": "running",
+                        "progress": "image_downloading",
+                        "error": None,
+                        "durationMs": duration_ms,
+                    },
+                )
+            else:
+                self._update_linked_result(
+                    identity,
+                    current_task,
+                    {
+                        "status": "success",
+                        "taskStatus": None,
+                        "progress": None,
+                        "error": None,
+                        "url": first.get("url"),
+                        "revised_prompt": first.get("revised_prompt"),
+                        "durationMs": duration_ms,
+                    },
+                )
             self._log_call(
                 identity,
                 mode,
@@ -522,6 +563,19 @@ class ImageTaskService:
                 urls=_collect_image_urls(data),
                 account_email=account_email,
             )
+            # 如果网关返回了 URL 但下载失败（网络抖动），在后台重试入库
+            pending_indices = [
+                i for i, entry in enumerate(data)
+                if isinstance(entry, dict) and entry.get("_download_pending")
+            ]
+            if pending_indices:
+                thread = threading.Thread(
+                    target=self._retry_pending_downloads,
+                    args=(key, pending_indices, base_url, owner_id, dict(identity)),
+                    name=f"image-retry-{key[:24]}",
+                    daemon=True,
+                )
+                thread.start()
         except Exception as exc:
             from services.model_gateway_service import humanize_gateway_error
 
@@ -556,6 +610,106 @@ class ImageTaskService:
                 error=error_message,
                 account_email=account_email,
             )
+
+    def _resume_pending_downloads(self) -> None:
+        """服务启动时，扫描所有 success 任务中仍有 _download_pending 的条目，恢复后台重试。"""
+        with self._lock:
+            snapshot = list(self._tasks.items())
+        for key, task in snapshot:
+            if task.get("status") != TASK_STATUS_SUCCESS:
+                continue
+            data = task.get("data")
+            if not isinstance(data, list):
+                continue
+            pending_indices = [
+                i for i, entry in enumerate(data)
+                if isinstance(entry, dict) and entry.get("_download_pending")
+            ]
+            if not pending_indices:
+                continue
+            owner_id = _clean(task.get("owner_id")) or "anonymous"
+            base_url = ""
+            thread = threading.Thread(
+                target=self._retry_pending_downloads,
+                args=(key, pending_indices, base_url, owner_id, {"id": owner_id}),
+                name=f"image-resume-{key[:24]}",
+                daemon=True,
+            )
+            thread.start()
+
+    def _retry_pending_downloads(
+        self,
+        key: str,
+        pending_indices: list[int],
+        base_url: str,
+        owner_id: str,
+        identity: dict[str, object],
+    ) -> None:
+        """上游已成功生成图片但下载失败时，后台按指数退避重试入库。
+        每个 index 独立重试，成功一张即更新任务和图库，不等其他张。"""
+        remaining = list(pending_indices)
+        for attempt, delay in enumerate(DOWNLOAD_RETRY_DELAYS):
+            if not remaining:
+                break
+            time.sleep(delay)
+            still_pending = []
+            for idx in remaining:
+                with self._lock:
+                    task = self._tasks.get(key)
+                    if task is None:
+                        return
+                    data = task.get("data")
+                    if not isinstance(data, list) or idx >= len(data):
+                        continue
+                    entry = data[idx]
+                    if not isinstance(entry, dict) or not entry.get("_download_pending"):
+                        continue
+                    source_url = _clean(entry.get("source_url") or entry.get("url"))
+                if not source_url:
+                    continue
+                try:
+                    image_data = _download_remote_image(source_url)
+                    stored = image_storage_service.save(image_data, base_url=base_url, owner_id=owner_id)
+                except Exception:
+                    still_pending.append(idx)
+                    continue
+                # 下载成功：原子更新 data[idx]
+                with self._lock:
+                    task = self._tasks.get(key)
+                    if task is None:
+                        return
+                    data = task.get("data")
+                    if not isinstance(data, list) or idx >= len(data):
+                        continue
+                    updated_entry = dict(data[idx])
+                    updated_entry["url"] = stored.url
+                    updated_entry["path"] = stored.rel
+                    updated_entry["storage"] = stored.storage
+                    updated_entry.pop("_download_pending", None)
+                    updated_entry.pop("_download_error", None)
+                    new_data = list(data)
+                    new_data[idx] = updated_entry
+                    task["data"] = new_data
+                    task["updated_at"] = _now_iso()
+                    task["updated_ts"] = time.time()
+                    self._save_locked()
+                    current_task = dict(task)
+                # 同步更新图库中对应的 image 结果（清除 loading 状态，写入本地 url）
+                if idx == 0:
+                    self._update_linked_result(
+                        identity,
+                        current_task,
+                        {
+                            "status": "success",
+                            "taskStatus": None,
+                            "progress": None,
+                            "error": None,
+                            "url": stored.url,
+                        },
+                    )
+            remaining = still_pending
+        # 超过最大重试次数仍失败：保留 source_url，让用户知道图片原始地址
+        # 任务本身保持 success 状态，不改为 error（上游已成功计费生成）
 
     def _log_call(
         self,

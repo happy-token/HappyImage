@@ -677,5 +677,164 @@ class ImageTaskServiceTests(unittest.TestCase):
             self.assertEqual(tasks[0]["status"], "success")
 
 
+    def test_remote_url_download_failure_marks_pending_and_retries(self):
+        """下载失败时任务仍 success，后台重试成功后 url 更新为本地存储地址。"""
+        identity = {"id": "user-1", "role": "admin", **GATEWAY_FIELDS}
+        stored_after_retry = StoredImage(
+            rel="2026/06/21/retried.png",
+            url="http://api.test/images/2026/06/21/retried.png?hi_img_token=test",
+            storage="local",
+            size=8,
+        )
+        download_attempts = {"count": 0}
+
+        def flaky_download(url: str) -> bytes:
+            download_attempts["count"] += 1
+            if download_attempts["count"] < 2:
+                raise RuntimeError("network blip")
+            return b"png-data"
+
+        with patch("services.image_task_service._download_remote_image", side_effect=flaky_download):
+            with patch(
+                "services.image_task_service.image_storage_service.save",
+                side_effect=lambda *_a, **_kw: stored_after_retry,
+            ):
+                with patch("services.image_task_service.DOWNLOAD_RETRY_DELAYS", [0, 0]):
+                    service = self.make_service()
+                    # 网关返回远程 URL
+                    self._generation_handler = lambda _p: {
+                        "data": [{"url": "https://cdn.test/generated.png"}]
+                    }
+                    service.submit_generation(
+                        identity,
+                        client_task_id="download-retry-001",
+                        prompt="test",
+                        model="gpt-image-2",
+                        size=None,
+                        base_url="http://api.test",
+                    )
+                    # 任务状态应为 success（不因下载失败变 error）
+                    task = wait_for_task(service, identity, "download-retry-001", "success", timeout=3)
+                    self.assertEqual(task["status"], "success")
+
+                    # 等待后台重试完成（最多 3 秒）
+                    deadline = time.time() + 3.0
+                    while time.time() < deadline:
+                        task = service.list_tasks(identity, ["download-retry-001"])["items"][0]
+                        if not task.get("data", [{}])[0].get("download_pending"):
+                            break
+                        time.sleep(0.05)
+
+                    self.assertFalse(task["data"][0].get("download_pending"), "download_pending should clear after retry")
+                    self.assertEqual(task["data"][0]["url"], stored_after_retry.url)
+                    self.assertGreaterEqual(download_attempts["count"], 2)
+
+    def test_remote_url_download_failure_keeps_source_url_on_max_retries(self):
+        """所有重试都失败时，source_url 保留，任务仍为 success。"""
+        identity = {"id": "user-1", "role": "admin", **GATEWAY_FIELDS}
+
+        with patch(
+            "services.image_task_service._download_remote_image",
+            side_effect=RuntimeError("always fails"),
+        ):
+            with patch("services.image_task_service.DOWNLOAD_RETRY_DELAYS", [0]):
+                service = self.make_service()
+                self._generation_handler = lambda _p: {
+                    "data": [{"url": "https://cdn.test/broken.png"}]
+                }
+                service.submit_generation(
+                    identity,
+                    client_task_id="download-exhausted-001",
+                    prompt="test",
+                    model="gpt-image-2",
+                    size=None,
+                    base_url="http://api.test",
+                )
+                task = wait_for_task(service, identity, "download-exhausted-001", "success", timeout=3)
+                self.assertEqual(task["status"], "success")
+
+                # 等待重试耗尽
+                deadline = time.time() + 2.0
+                while time.time() < deadline:
+                    task = service.list_tasks(identity, ["download-exhausted-001"])["items"][0]
+                    # download_pending 在重试耗尽后依然保留（不清除），source_url 可见
+                    time.sleep(0.05)
+                    break  # DOWNLOAD_RETRY_DELAYS=[0] 重试完成很快
+
+                time.sleep(0.2)
+                task = service.list_tasks(identity, ["download-exhausted-001"])["items"][0]
+                self.assertEqual(task["status"], "success", "task must stay success even after all retries fail")
+                self.assertEqual(task["data"][0]["source_url"], "https://cdn.test/broken.png")
+
+
+    def test_conversation_gets_loading_on_pending_then_success_after_retry(self):
+        """download_pending 时图库写 loading，重试成功后图库写 success + 本地 url。
+        这是刷新后能继续轮询到图片的关键路径。"""
+        identity = {"id": "user-1", "role": "admin", **GATEWAY_FIELDS}
+        stored = StoredImage(
+            rel="2026/06/21/retried.png",
+            url="http://api.test/images/2026/06/21/retried.png?hi_img_token=x",
+            storage="local",
+            size=8,
+        )
+        conversation_updates: list[dict] = []
+        download_attempts = {"count": 0}
+
+        def capture_update_result(_identity, *, conversation_id, image_id, updates):
+            conversation_updates.append(dict(updates))
+
+        def flaky_download(url: str) -> bytes:
+            download_attempts["count"] += 1
+            if download_attempts["count"] < 2:
+                raise RuntimeError("network blip")
+            return b"png-data"
+
+        with patch(
+            "services.image_conversation_service.image_conversation_service.update_result",
+            side_effect=capture_update_result,
+        ):
+            with patch("services.image_task_service._download_remote_image", side_effect=flaky_download):
+                with patch(
+                    "services.image_task_service.image_storage_service.save",
+                    side_effect=lambda *_a, **_kw: stored,
+                ):
+                    with patch("services.image_task_service.DOWNLOAD_RETRY_DELAYS", [0, 0]):
+                        service = self.make_service()
+                        self._generation_handler = lambda _p: {
+                            "data": [{"url": "https://cdn.test/img.png"}]
+                        }
+                        service.submit_generation(
+                            identity,
+                            client_task_id="conv-pending-test",
+                            prompt="test",
+                            model="gpt-image-2",
+                            size=None,
+                            base_url="http://api.test",
+                            client_conversation_id="conv-1",
+                            client_turn_id="turn-1",
+                            client_image_id="img-1",
+                        )
+                        wait_for_task(service, identity, "conv-pending-test", "success", timeout=3)
+                        # 等待后台重试完成
+                        deadline = time.time() + 3.0
+                        while time.time() < deadline:
+                            task = service.list_tasks(identity, ["conv-pending-test"])["items"][0]
+                            if not task.get("data", [{}])[0].get("download_pending"):
+                                break
+                            time.sleep(0.05)
+
+        # 第一次图库更新必须是 loading（不是 success + CDN url）
+        first = conversation_updates[0]
+        self.assertEqual(first.get("status"), "loading", f"first update should be loading, got: {first}")
+        self.assertNotIn("url", first, "CDN url must not leak into conversation on pending")
+
+        # 最后一次图库更新必须是 success + 本地 url
+        last = conversation_updates[-1]
+        self.assertEqual(last.get("status"), "success")
+        self.assertEqual(last.get("url"), stored.url)
+        self.assertIsNone(last.get("taskStatus"))
+        self.assertIsNone(last.get("progress"))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -232,6 +232,8 @@ export type ImageTask = {
     url?: string;
     revised_prompt?: string;
     feedback?: ImageFeedbackSummary;
+    download_pending?: boolean;
+    source_url?: string;
   }>;
   error?: string;
   progress?: string;

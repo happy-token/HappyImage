@@ -84,7 +84,7 @@ def _is_retryable_gateway_error(error: Exception) -> bool:
 
 
 def _request_json(path: str, payload: dict[str, Any], gateway_payload: dict[str, Any] | None = None) -> dict[str, Any]:
-    import requests
+    from curl_cffi import requests
 
     gateway_source = gateway_payload or payload
     base_url = _gateway_base_url(gateway_source)
@@ -94,7 +94,7 @@ def _request_json(path: str, payload: dict[str, Any], gateway_payload: dict[str,
     url = f"{base_url}{path}"
     last_error: Exception | None = None
     for attempt in range(MODEL_GATEWAY_MAX_ATTEMPTS):
-        session = requests.Session()
+        session = requests.Session(impersonate="chrome")
         try:
             response = session.post(
                 url,
@@ -151,7 +151,7 @@ def generate_image(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def edit_image(payload: dict[str, Any]) -> dict[str, Any]:
-    import requests
+    from curl_cffi import requests
 
     base_url = _gateway_base_url(payload)
     api_key = _gateway_api_key(payload)
@@ -176,7 +176,7 @@ def edit_image(payload: dict[str, Any]) -> dict[str, Any]:
 
     last_error: Exception | None = None
     for attempt in range(MODEL_GATEWAY_MAX_ATTEMPTS):
-        session = requests.Session()
+        session = requests.Session(impersonate="chrome")
         try:
             response = session.post(
                 url,

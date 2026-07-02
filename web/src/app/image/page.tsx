@@ -369,6 +369,17 @@ function taskDataToStoredImage(
         error: "未返回图片数据",
       };
     }
+    // 上游已生成但本地存储尚未完成，保持 loading 继续轮询
+    if (first?.download_pending) {
+      return {
+        ...image,
+        taskId: task.id,
+        status: "loading",
+        taskStatus: "running",
+        progress: "image_downloading",
+        error: undefined,
+      };
+    }
     return {
       ...image,
       taskId: task.id,
