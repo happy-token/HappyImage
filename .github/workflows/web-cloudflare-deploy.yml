@@ -55,13 +55,18 @@ jobs:
             const path = "wrangler.jsonc";
             const backendUrl = process.env.BACKEND_URL;
             const text = fs.readFileSync(path, "utf8");
-            const next = text.replace(
-              /"BACKEND_URL":\s*"[^"]*"/,
-              `"BACKEND_URL": ${JSON.stringify(backendUrl)}`,
-            );
-            if (next === text) {
-              throw new Error("BACKEND_URL entry not found in wrangler.jsonc");
+            const replaceVar = (source, name, value) => {
+              const pattern = new RegExp(`"${name}":\\s*"[^"]*"`);
+              if (!pattern.test(source)) {
+                throw new Error(`${name} entry not found in wrangler.jsonc`);
+              }
+              return source.replace(pattern, `"${name}": ${JSON.stringify(value)}`);
             }
+            const next = replaceVar(
+              replaceVar(text, "BACKEND_URL", backendUrl),
+              "MODEL_BACKEND_URL",
+              backendUrl,
+            );
             fs.writeFileSync(path, next);
           '
           pnpm run deploy
