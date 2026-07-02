@@ -34,6 +34,22 @@ function statusLabel(status: string) {
   return "等待绑定";
 }
 
+function billingTypeLabel(value: string) {
+  return value === "per_request" ? "按次" : "按量";
+}
+
+const CNY_RATE = 7.2;
+
+function formatPrice(value?: number) {
+  if (!value) return "-";
+  return `¥${(value * CNY_RATE).toFixed(4)}`;
+}
+
+function formatQuota(value?: number) {
+  if (value == null) return "-";
+  return new Intl.NumberFormat("zh-CN").format(value);
+}
+
 export default function NewAPISettingsPage() {
   const { isCheckingAuth, session } = useAuthGuard(["user"]);
   const [data, setData] = useState<NewAPIManagementResponse | null>(null);
@@ -190,6 +206,53 @@ export default function NewAPISettingsPage() {
             </section>
 
             <section className="rounded-lg border border-stone-200 bg-white dark:border-white/10 dark:bg-white/[0.03]">
+              <div className="border-b border-stone-100 px-4 py-3 dark:border-white/10">
+                <div className="text-sm font-semibold">生图模型</div>
+                <div className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+                  默认分组 {data.group || "-"} · 价格参考汇率 1 USD = 7.2 CNY
+                </div>
+              </div>
+              <div className="divide-y divide-stone-100 dark:divide-white/10">
+                {data.models.length > 0 ? (
+                  <>
+                    <div className="grid gap-3 px-4 py-2 text-[11px] text-stone-400 dark:text-stone-500 sm:grid-cols-[minmax(0,1fr)_7rem_7rem]">
+                      <span>模型</span>
+                      <span>计费方式</span>
+                      <span>单价（¥/次）</span>
+                    </div>
+                    {data.models.map((model) => (
+                      <div
+                        key={model.model}
+                        className="grid gap-3 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_7rem_7rem]"
+                      >
+                        <div className="min-w-0">
+                          <div className="truncate font-mono text-sm font-medium">
+                            {model.model}
+                          </div>
+                          <div className="mt-1 text-[11px] text-stone-400">
+                            {model.source === "newapi"
+                              ? "来自 NewAPI pricing"
+                              : "来自 HappyImage 设置"}
+                          </div>
+                        </div>
+                        <div className="text-sm text-stone-600 dark:text-stone-300">
+                          {billingTypeLabel(model.billing_type)}
+                        </div>
+                        <div className="font-mono text-sm text-stone-900 dark:text-stone-100">
+                          {formatPrice(model.price)}
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                ) : (
+                  <div className="px-4 py-8 text-center text-sm text-stone-500 dark:text-stone-400">
+                    暂无模型配置
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section className="rounded-lg border border-stone-200 bg-white dark:border-white/10 dark:bg-white/[0.03]">
               <div className="border-b border-stone-100 px-4 py-3 text-sm font-semibold dark:border-white/10">
                 API Keys
               </div>
@@ -213,6 +276,18 @@ export default function NewAPISettingsPage() {
                               不限额度
                             </span>
                           ) : null}
+                          {token.group ? (
+                            <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[11px] text-stone-600 dark:bg-white/10 dark:text-stone-300">
+                              {token.group}
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="mt-2 grid gap-2 text-xs text-stone-500 dark:text-stone-400 sm:grid-cols-3">
+                          <span>剩余额度 {formatQuota(token.remain_quota)}</span>
+                          <span>已用 {formatQuota(token.used_quota)}</span>
+                          <span>
+                            {token.unlimited_quota ? "不限额度" : "有限额度"}
+                          </span>
                         </div>
                         <div className="mt-2 flex min-w-0 items-center gap-2">
                           <code className="min-w-0 truncate rounded bg-stone-100 px-2 py-1 text-xs dark:bg-white/10">

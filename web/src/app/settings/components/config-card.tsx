@@ -38,6 +38,44 @@ export function ConfigCard() {
     (state) => state.setModelGatewayField
   );
   const saveConfig = useSettingsStore((state) => state.saveConfig);
+  const imageModels = config?.model_gateway?.image_models?.length
+    ? config.model_gateway.image_models
+    : ["gpt-image-2", "codex-gpt-image-2"];
+  const imageModelPrices = config?.model_gateway?.image_model_prices || {};
+  const imageModelBillingTypes =
+    config?.model_gateway?.image_model_billing_types || {};
+
+  const handleImageModelsChange = (value: string) => {
+    const models = value
+      .split(/\r?\n|,/)
+      .map((model) => model.trim())
+      .filter((model, index, list) => model && list.indexOf(model) === index);
+    const nextPrices: Record<string, number> = {};
+    const nextBillingTypes: Record<string, string> = {};
+    models.forEach((model) => {
+      nextPrices[model] = Number(imageModelPrices[model] ?? 0);
+      nextBillingTypes[model] = String(
+        imageModelBillingTypes[model] || "per_request"
+      );
+    });
+    setModelGatewayField("image_models", models);
+    setModelGatewayField("image_model_prices", nextPrices);
+    setModelGatewayField("image_model_billing_types", nextBillingTypes);
+  };
+
+  const handleImageModelPriceChange = (model: string, value: string) => {
+    setModelGatewayField("image_model_prices", {
+      ...imageModelPrices,
+      [model]: Number(value) || 0,
+    });
+  };
+
+  const handleImageModelBillingTypeChange = (model: string, value: string) => {
+    setModelGatewayField("image_model_billing_types", {
+      ...imageModelBillingTypes,
+      [model]: value,
+    });
+  };
 
   if (isLoadingConfig) {
     return (
@@ -288,6 +326,78 @@ export function ConfigCard() {
                 placeholder="HappyImage Default"
                 className="h-10 rounded-xl border-stone-200 bg-white"
               />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-stone-700">
+                默认生图分组
+              </label>
+              <Input
+                value={String(config?.model_gateway?.image_group || "image")}
+                onChange={(event) =>
+                  setModelGatewayField("image_group", event.target.value)
+                }
+                placeholder="image"
+                className="h-10 rounded-xl border-stone-200 bg-white"
+              />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-sm font-medium text-stone-700">
+                默认生图模型
+              </label>
+              <Textarea
+                value={imageModels.join("\n")}
+                onChange={(event) => handleImageModelsChange(event.target.value)}
+                placeholder="每行一个模型 ID"
+                className="min-h-24 rounded-xl border-stone-200 bg-white font-mono text-xs shadow-none"
+              />
+            </div>
+            <div className="space-y-3 md:col-span-2">
+              <label className="text-sm font-medium text-stone-700">
+                模型计费与价格
+              </label>
+              <div className="grid gap-3">
+                {imageModels.map((model) => (
+                  <div
+                    key={model}
+                    className="grid gap-3 rounded-xl border border-stone-200 bg-white p-3 md:grid-cols-[minmax(0,1fr)_10rem_8rem]"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate font-mono text-sm text-stone-800">
+                        {model}
+                      </div>
+                      <div className="mt-1 text-xs text-stone-500">
+                        价格用于 NewAPI 未返回 pricing 时兜底展示
+                      </div>
+                    </div>
+                    <select
+                      value={String(
+                        imageModelBillingTypes[model] || "per_request"
+                      )}
+                      onChange={(event) =>
+                        handleImageModelBillingTypeChange(
+                          model,
+                          event.target.value
+                        )
+                      }
+                      className="h-10 rounded-xl border border-stone-200 bg-white px-3 text-sm text-stone-700"
+                    >
+                      <option value="per_request">按次</option>
+                      <option value="usage">按量</option>
+                    </select>
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      step="0.0001"
+                      min="0"
+                      value={String(imageModelPrices[model] ?? 0)}
+                      onChange={(event) =>
+                        handleImageModelPriceChange(model, event.target.value)
+                      }
+                      className="h-10 rounded-xl border-stone-200 bg-white"
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </section>

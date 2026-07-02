@@ -40,7 +40,12 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import webConfig from "@/constants/common-env";
-import { testModelProvider, updateUserProfile } from "@/lib/api";
+import {
+  fetchNewAPIManagement,
+  testModelProvider,
+  updateUserProfile,
+  type NewAPIManagementResponse,
+} from "@/lib/api";
 import {
   SUPPORT_EMAIL,
   SUPPORT_WECHAT,
@@ -87,6 +92,8 @@ const HAPPYTOKEN_PROVIDER_ID = "newapi-default";
 const HAPPYTOKEN_MANAGEMENT_URL = "/settings/newapi";
 const HAPPYTOKEN_GATEWAY_URL = "https://gateway.happy-token.cn";
 const HAPPYTOKEN_MODEL_BASE_URL = `${HAPPYTOKEN_GATEWAY_URL}/v1`;
+const HAPPYTOKEN_IMAGE_GROUP = "image";
+const HAPPYTOKEN_IMAGE_MODELS = ["gpt-image-2", "codex-gpt-image-2"];
 const HAPPYTOKEN_MANAGEMENT_ORIGINS = new Set([HAPPYTOKEN_GATEWAY_URL]);
 const OPENAI_PROTOCOL = "openai";
 const PROVIDER_PRESETS = [
@@ -152,6 +159,29 @@ function formatImageModelLabel(model: string) {
   return GEMINI_IMAGE_MODEL_LABELS[model] || model;
 }
 
+const CNY_RATE = 7.2;
+const QUOTA_PER_USD = 500_000;
+
+function formatNumber(value?: number) {
+  if (value == null || Number.isNaN(value)) return "-";
+  return new Intl.NumberFormat("zh-CN").format(value);
+}
+
+function formatCny(usd?: number) {
+  if (!usd) return "-";
+  const cny = usd * CNY_RATE;
+  if (cny < 0.01) return `¥${(cny * 100).toFixed(4)} 分`;
+  return `¥${cny.toFixed(4)}`;
+}
+
+function formatQuotaAsCny(quota?: number) {
+  if (quota == null || quota === 0) return "¥0";
+  const usd = quota / QUOTA_PER_USD;
+  const cny = usd * CNY_RATE;
+  if (cny < 0.01) return `<¥0.01`;
+  return `¥${cny.toFixed(2)}`;
+}
+
 const settingsCopy = {
   "zh-CN": {
     trigger: {
@@ -171,6 +201,15 @@ const settingsCopy = {
     account: {
       current: "当前登录账户",
       localStats: "本机历史统计",
+      newapiStats: "HappyToken 额度",
+      quota: "总余额",
+      usedQuota: "已消费",
+      remainingQuota: "剩余",
+      requestCount: "请求数",
+      modelUsage: "生图用量（参考汇率 1 USD = 7.2 CNY）",
+      modelColRequests: "次数",
+      modelColCost: "费用",
+      noModelUsage: "暂无生图记录",
       conversations: "对话",
       turns: "生成轮次",
       images: "结果图片",
@@ -277,6 +316,15 @@ const settingsCopy = {
     account: {
       current: "Current signed-in account",
       localStats: "Local history stats",
+      newapiStats: "HappyToken balance",
+      quota: "Balance",
+      usedQuota: "Spent",
+      remainingQuota: "Remaining",
+      requestCount: "Requests",
+      modelUsage: "Image usage (ref rate: 1 USD = 7.2 CNY)",
+      modelColRequests: "Runs",
+      modelColCost: "Cost",
+      noModelUsage: "No image generation yet",
       conversations: "Chats",
       turns: "Runs",
       images: "Images",
@@ -445,9 +493,10 @@ function createHappyTokenProvider(
     type: "happytoken",
     protocol: OPENAI_PROTOCOL,
     baseUrl: baseUrl || HAPPYTOKEN_MODEL_BASE_URL,
+    group: existingProvider?.group || HAPPYTOKEN_IMAGE_GROUP,
     models: existingProvider?.models?.length
       ? existingProvider.models
-      : ["gpt-image-2", "gpt-image-1.5", "gpt-image-1"],
+      : HAPPYTOKEN_IMAGE_MODELS,
     apiKeyConfigured: Boolean(
       existingProvider?.apiKeyConfigured ||
         session.newapiBindingStatus === "configured" ||
@@ -484,7 +533,8 @@ function getSessionModelProviders(
         String(session.modelProvider || "happytoken").trim() || "happytoken",
       baseUrl,
       protocol: OPENAI_PROTOCOL,
-      models: ["gpt-image-2"],
+      group: HAPPYTOKEN_IMAGE_GROUP,
+      models: HAPPYTOKEN_IMAGE_MODELS,
       apiKeyConfigured: Boolean(session.modelApiKeyConfigured),
       selected: true,
     },
@@ -617,6 +667,10 @@ export function AccountMenu({
   const [isSavingWatermarkLabel, setIsSavingWatermarkLabel] = useState(false);
   const [isSavingProvider, setIsSavingProvider] = useState(false);
   const [isTestingProvider, setIsTestingProvider] = useState(false);
+  const [newapiManagement, setNewapiManagement] =
+    useState<NewAPIManagementResponse | null>(null);
+  const [isLoadingNewapiManagement, setIsLoadingNewapiManagement] =
+    useState(false);
   const language = useLanguagePreference();
   const [themePreference, setThemePreference] =
     useState<ThemePreference>("system");
@@ -659,6 +713,34 @@ export function AccountMenu({
   useEffect(() => {
     setDraftWatermarkLabel(watermarkLabel ?? session.watermarkLabel ?? "");
   }, [session.watermarkLabel, watermarkLabel]);
+
+  useEffect(() => {
+    if (session.role !== "user") {
+      setNewapiManagement(null);
+      return;
+    }
+    let cancelled = false;
+    setIsLoadingNewapiManagement(true);
+    fetchNewAPIManagement()
+      .then((data) => {
+        if (!cancelled) {
+          setNewapiManagement(data);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setNewapiManagement(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoadingNewapiManagement(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [session.role, session.subjectId, session.newapiBindingStatus]);
 
   useEffect(() => {
     const nextProviders = getSessionModelProviders(session);
@@ -706,6 +788,7 @@ export function AccountMenu({
       type: provider.type,
       protocol: provider.protocol || OPENAI_PROTOCOL,
       base_url: provider.baseUrl,
+      group: provider.group || "",
       models: provider.models || [],
       api_key_configured: Boolean(provider.apiKeyConfigured),
       selected: Boolean(provider.selected),
@@ -1070,6 +1153,97 @@ export function AccountMenu({
               </div>
             </div>
           </div>
+          {session.role === "user" ? (
+            <div className="mt-3">
+              <div className={sectionTitleClass}>
+                {copy.account.newapiStats}
+              </div>
+              <div className="rounded-2xl border border-stone-200/80 bg-white p-3 dark:border-white/10 dark:bg-white/[0.03]">
+                {isLoadingNewapiManagement ? (
+                  <div className="flex items-center justify-center py-6">
+                    <LoaderCircle className="size-4 animate-spin text-stone-400" />
+                  </div>
+                ) : newapiManagement?.quota ? (
+                  <>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                      {[
+                        {
+                          label: copy.account.quota,
+                          value: formatQuotaAsCny(newapiManagement.quota.quota),
+                        },
+                        {
+                          label: copy.account.usedQuota,
+                          value: formatQuotaAsCny(newapiManagement.quota.used_quota),
+                        },
+                        {
+                          label: copy.account.remainingQuota,
+                          value: formatQuotaAsCny(
+                            newapiManagement.quota.remaining_quota
+                          ),
+                        },
+                        {
+                          label: copy.account.requestCount,
+                          value: formatNumber(
+                            newapiManagement.quota.request_count
+                          ),
+                        },
+                      ].map((item) => (
+                        <div
+                          key={item.label}
+                          className="rounded-xl bg-stone-50 px-3 py-2 dark:bg-white/5"
+                        >
+                          <div className="text-[11px] text-stone-500 dark:text-stone-400">
+                            {item.label}
+                          </div>
+                          <div className="mt-1 font-mono text-sm font-semibold text-stone-950 dark:text-stone-50">
+                            {item.value}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-3 text-[11px] text-stone-400 dark:text-stone-500">
+                      {copy.account.modelUsage}
+                    </div>
+                    <div className="mt-1.5 grid gap-1.5">
+                      {newapiManagement.usage_by_model?.length ? (
+                        <>
+                          <div className="grid gap-2 px-3 text-[10px] text-stone-400 dark:text-stone-500 sm:grid-cols-[minmax(0,1fr)_4rem_6rem]">
+                            <span>模型</span>
+                            <span>{copy.account.modelColRequests}</span>
+                            <span>{copy.account.modelColCost}</span>
+                          </div>
+                          {newapiManagement.usage_by_model.map((item) => (
+                            <div
+                              key={item.model}
+                              className="grid gap-2 rounded-xl bg-stone-50 px-3 py-2 text-xs dark:bg-white/5 sm:grid-cols-[minmax(0,1fr)_4rem_6rem]"
+                            >
+                              <span className="truncate font-mono text-stone-800 dark:text-stone-200">
+                                {item.model}
+                              </span>
+                              <span className="text-stone-600 dark:text-stone-300">
+                                {formatNumber(item.requests)} 次
+                              </span>
+                              <span className="font-mono text-stone-900 dark:text-stone-100">
+                                {formatCny(item.estimated_cost)}
+                              </span>
+                            </div>
+                          ))}
+                        </>
+                      ) : (
+                        <div className="rounded-xl bg-stone-50 px-3 py-3 text-center text-xs text-stone-500 dark:bg-white/5 dark:text-stone-400">
+                          {copy.account.noModelUsage}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div className="py-4 text-center text-xs text-stone-500 dark:text-stone-400">
+                    {newapiManagement?.message || copy.account.noActivity}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : null}
           {usageStats ? (
             <div className="mt-3">
               <div className={sectionTitleClass}>{copy.account.localStats}</div>

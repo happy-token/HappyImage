@@ -50,6 +50,16 @@ function defaultModelGateway(): ModelGatewaySettings {
     sql_dsn: "",
     sql_dsn_configured: false,
     token_name: "HappyImage Default",
+    image_group: "image",
+    image_models: ["gpt-image-2", "codex-gpt-image-2"],
+    image_model_prices: {
+      "gpt-image-2": 0.007,
+      "codex-gpt-image-2": 0.0139,
+    },
+    image_model_billing_types: {
+      "gpt-image-2": "per_request",
+      "codex-gpt-image-2": "per_request",
+    },
     enabled: false,
   };
 }
@@ -126,6 +136,26 @@ function normalizeConfig(config: SettingsConfig): SettingsConfig {
       sql_dsn: String(modelGateway.sql_dsn || ""),
       sql_dsn_configured: Boolean(modelGateway.sql_dsn_configured),
       token_name: String(modelGateway.token_name || "HappyImage Default"),
+      image_group: String(modelGateway.image_group || "image"),
+      image_models: Array.isArray(modelGateway.image_models)
+        ? modelGateway.image_models.map((model) => String(model).trim()).filter(Boolean)
+        : ["gpt-image-2", "codex-gpt-image-2"],
+      image_model_prices:
+        typeof modelGateway.image_model_prices === "object" &&
+        modelGateway.image_model_prices
+          ? modelGateway.image_model_prices
+          : {
+              "gpt-image-2": 0.007,
+              "codex-gpt-image-2": 0.0139,
+            },
+      image_model_billing_types:
+        typeof modelGateway.image_model_billing_types === "object" &&
+        modelGateway.image_model_billing_types
+          ? modelGateway.image_model_billing_types
+          : {
+              "gpt-image-2": "per_request",
+              "codex-gpt-image-2": "per_request",
+            },
       enabled: Boolean(modelGateway.enabled),
     },
   };
@@ -160,7 +190,7 @@ type SettingsStore = {
   ) => void;
   setModelGatewayField: (
     key: keyof ModelGatewaySettings,
-    value: string | boolean
+    value: string | boolean | string[] | Record<string, number | string>
   ) => void;
   testImageStorage: () => Promise<void>;
   syncImagesToWebDAV: () => Promise<void>;
@@ -276,6 +306,13 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
           token_name: String(
             config.model_gateway?.token_name || "HappyImage Default"
           ).trim(),
+          image_group: String(config.model_gateway?.image_group || "image").trim(),
+          image_models: (config.model_gateway?.image_models || [])
+            .map((model) => String(model).trim())
+            .filter(Boolean),
+          image_model_prices: config.model_gateway?.image_model_prices || {},
+          image_model_billing_types:
+            config.model_gateway?.image_model_billing_types || {},
         },
       });
       set({ config: normalizeConfig(data.config) });
