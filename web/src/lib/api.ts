@@ -39,6 +39,10 @@ export type ModelGatewaySettings = {
   sql_dsn?: string;
   sql_dsn_configured?: boolean;
   token_name: string;
+  image_group?: string;
+  image_models?: string[];
+  image_model_prices?: Record<string, number>;
+  image_model_billing_types?: Record<string, "usage" | "per_request">;
   enabled?: boolean;
 };
 
@@ -575,6 +579,7 @@ export type UserModelProvider = {
   type: string;
   protocol?: string;
   base_url: string;
+  group?: string;
   models?: string[];
   api_key_configured?: boolean;
   selected?: boolean;
@@ -585,6 +590,7 @@ export type UserModelProviderUpdate = {
   type?: string;
   protocol?: string;
   base_url?: string;
+  group?: string;
   models?: string[];
   api_key?: string;
   api_key_configured?: boolean;
@@ -615,6 +621,36 @@ export type NewAPIManagementToken = {
   remain_quota: number;
   unlimited_quota: boolean;
   used_quota: number;
+  group?: string;
+};
+
+export type NewAPIModelBillingType = "usage" | "per_request";
+
+export type NewAPIManagementModel = {
+  model: string;
+  group: string;
+  billing_type: NewAPIModelBillingType;
+  quota_type?: number;
+  price: number;
+  source?: "newapi" | "settings";
+};
+
+export type NewAPIQuotaSummary = {
+  quota?: number;
+  used_quota?: number;
+  remaining_quota?: number;
+  request_count?: number;
+  group?: string;
+};
+
+export type NewAPIModelUsage = {
+  model: string;
+  requests: number;
+  quota: number;
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  price?: number;
+  estimated_cost?: number;
 };
 
 export type NewAPIManagementResponse = {
@@ -623,6 +659,10 @@ export type NewAPIManagementResponse = {
   message?: string;
   management_url: string;
   newapi_user_id: string;
+  group?: string;
+  models: NewAPIManagementModel[];
+  quota?: NewAPIQuotaSummary;
+  usage_by_model?: NewAPIModelUsage[];
   tokens: NewAPIManagementToken[];
 };
 

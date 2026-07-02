@@ -224,7 +224,10 @@ def test_oidc_callback_applies_newapi_default_provider_when_binding_succeeds():
             {
                 "id": "newapi-default",
                 "type": "newapi",
+                "protocol": "openai",
                 "base_url": "https://gateway.happy-token.cn",
+                "group": "image",
+                "models": ["gpt-image-2", "codex-gpt-image-2"],
                 "api_key_configured": True,
                 "selected": True,
             }
@@ -257,6 +260,8 @@ def test_oidc_callback_applies_newapi_default_provider_when_binding_succeeds():
                 "base_url": "https://gateway.happy-token.cn",
                 "management_url": "https://gateway.happy-token.cn",
                 "token": "sk-user-token",
+                "group": "image",
+                "models": ["gpt-image-2", "codex-gpt-image-2"],
             },
         ) as ensure_token,
         mock.patch.object(
@@ -280,6 +285,8 @@ def test_oidc_callback_applies_newapi_default_provider_when_binding_succeeds():
             "user-oidc",
             base_url="https://gateway.happy-token.cn",
             api_key="sk-user-token",
+            group="image",
+            models=["gpt-image-2", "codex-gpt-image-2"],
         )
         cookie = response.headers["set-cookie"]
         token = cookie.split("happytoken_session=", 1)[1].split(";", 1)[0]
@@ -291,7 +298,10 @@ def test_oidc_callback_applies_newapi_default_provider_when_binding_succeeds():
             {
                 "id": "newapi-default",
                 "type": "newapi",
+                "protocol": "openai",
                 "base_url": "https://gateway.happy-token.cn",
+                "group": "image",
+                "models": ["gpt-image-2", "codex-gpt-image-2"],
                 "api_key_configured": True,
                 "selected": True,
             }
@@ -473,6 +483,8 @@ def test_get_session_retries_pending_newapi_binding_from_session_identity():
                 "token": "sk-recovered",
                 "base_url": "https://gateway.happy-token.cn/v1",
                 "management_url": "https://gateway.happy-token.cn",
+                "group": "image",
+                "models": ["gpt-image-2", "codex-gpt-image-2"],
             },
         ) as ensure_token,
         mock.patch.object(
@@ -500,6 +512,8 @@ def test_get_session_retries_pending_newapi_binding_from_session_identity():
         "user-oidc-session",
         base_url="https://gateway.happy-token.cn/v1",
         api_key="sk-recovered",
+        group="image",
+        models=["gpt-image-2", "codex-gpt-image-2"],
     )
     assert payload["newapi_binding_status"] == "configured"
     assert payload["newapi_management_url"] == "https://gateway.happy-token.cn"

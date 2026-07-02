@@ -636,10 +636,33 @@ def create_router(app_version: str) -> APIRouter:
                     .strip()
                     .rstrip("/")
                 )
+                protocol = str(raw_provider.get("protocol") or "openai").strip() or "openai"
+                group = str(
+                    raw_provider.get("group") or raw_provider.get("model_group") or ""
+                ).strip()
+                raw_models = raw_provider.get("models")
+                models: list[str] = []
+                if isinstance(raw_models, list):
+                    seen_models: set[str] = set()
+                    for raw_model in raw_models:
+                        model = str(raw_model or "").strip()
+                        if model and model not in seen_models:
+                            models.append(model[:100])
+                            seen_models.add(model)
                 if len(provider_type) > 32:
                     raise HTTPException(
                         status_code=400,
                         detail={"error": "供应商类型不能超过 32 个字符"},
+                    )
+                if len(protocol) > 32:
+                    raise HTTPException(
+                        status_code=400,
+                        detail={"error": "供应商协议不能超过 32 个字符"},
+                    )
+                if len(group) > 64:
+                    raise HTTPException(
+                        status_code=400,
+                        detail={"error": "供应商分组不能超过 64 个字符"},
                     )
                 if base_url and not (
                     base_url.startswith("http://") or base_url.startswith("https://")
@@ -659,7 +682,10 @@ def create_router(app_version: str) -> APIRouter:
                     {
                         "id": str(raw_provider.get("id") or "").strip(),
                         "type": provider_type,
+                        "protocol": protocol,
                         "base_url": base_url,
+                        "group": group,
+                        "models": models,
                         "api_key": str(raw_provider.get("api_key") or "").strip(),
                         "api_key_configured": bool(
                             raw_provider.get("api_key_configured")

@@ -40,7 +40,20 @@
     "provision_url": "",
     "provision_secret": "",
     "sql_dsn": "",
-    "token_name": "HappyImage Default"
+    "token_name": "HappyImage Default",
+    "image_group": "image",
+    "image_models": [
+      "gpt-image-2",
+      "codex-gpt-image-2"
+    ],
+    "image_model_prices": {
+      "gpt-image-2": 0.007,
+      "codex-gpt-image-2": 0.0139
+    },
+    "image_model_billing_types": {
+      "gpt-image-2": "per_request",
+      "codex-gpt-image-2": "per_request"
+    }
   },
   "image_parallel_generation": true,
   "image_poll_interval_secs": 10,

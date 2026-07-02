@@ -127,6 +127,24 @@ class ImageTasksApiTests(unittest.TestCase):
         self.assertEqual(self.fake_service.generation_calls[0][1]["client_turn_id"], "turn-1")
         self.assertEqual(self.fake_service.generation_calls[0][1]["client_image_id"], "image-1")
 
+    def test_create_generation_task_passes_codex_image_model(self):
+        response = self.client.post(
+            "/api/image-tasks/generations",
+            headers=AUTH_HEADERS,
+            json={
+                "client_task_id": "task-codex-model",
+                "prompt": "cat",
+                "model": "codex-gpt-image-2",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(len(self.fake_service.generation_calls), 1)
+        self.assertEqual(
+            self.fake_service.generation_calls[0][1]["model"],
+            "codex-gpt-image-2",
+        )
+
     def test_create_generation_task_rejects_reference_image_prompt(self):
         response = self.client.post(
             "/api/image-tasks/generations",

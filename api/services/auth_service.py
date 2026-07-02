@@ -65,6 +65,7 @@ class AuthService:
             protocol = self._clean(raw_provider.get("protocol"))[:32] or "openai"
             base_url = self._clean(raw_provider.get("base_url") or raw_provider.get("model_base_url")).rstrip("/")[:512]
             api_key = self._clean(raw_provider.get("api_key") or raw_provider.get("model_api_key"))
+            group = self._clean(raw_provider.get("group") or raw_provider.get("model_group"))[:64]
             raw_models = raw_provider.get("models")
             models = []
             if isinstance(raw_models, list):
@@ -84,6 +85,7 @@ class AuthService:
                     "type": provider_type,
                     "protocol": protocol,
                     "base_url": base_url,
+                    "group": group,
                     "models": models,
                     "api_key": api_key,
                     "selected": bool(raw_provider.get("selected")),
@@ -97,6 +99,7 @@ class AuthService:
                     "type": (fallback_provider[:32] or "newapi"),
                     "protocol": "openai",
                     "base_url": fallback_base_url[:512],
+                    "group": "",
                     "models": [],
                     "api_key": fallback_api_key,
                     "selected": True,
@@ -132,6 +135,7 @@ class AuthService:
                     "type": provider.get("type") or "newapi",
                     "protocol": provider.get("protocol") or "openai",
                     "base_url": provider.get("base_url") or "",
+                    "group": provider.get("group") or "",
                     "models": provider.get("models") if isinstance(provider.get("models"), list) else [],
                     "api_key_configured": bool(provider.get("api_key")),
                     "selected": bool(provider.get("selected")),
@@ -685,6 +689,8 @@ class AuthService:
         *,
         base_url: str,
         api_key: str,
+        group: str = "",
+        models: list[str] | None = None,
     ) -> dict[str, object] | None:
         normalized_id = self._clean(key_id)
         normalized_base_url = self._clean(base_url).rstrip("/")
@@ -693,10 +699,28 @@ class AuthService:
             return None
         if not normalized_base_url or not normalized_api_key:
             raise ValueError("NewAPI 默认供应商配置不完整")
+        gateway_settings = config.get_newapi_binding_settings()
+        provider_group = self._clean(group or gateway_settings.get("image_group"))[:64]
+        provider_models_source = (
+            models
+            if models is not None
+            else gateway_settings.get("image_models")
+        )
+        provider_models: list[str] = []
+        seen_models: set[str] = set()
+        if isinstance(provider_models_source, list):
+            for raw_model in provider_models_source:
+                model = self._clean(raw_model)[:100]
+                if model and model not in seen_models:
+                    provider_models.append(model)
+                    seen_models.add(model)
         provider = {
             "id": "newapi-default",
             "type": "newapi",
+            "protocol": "openai",
             "base_url": normalized_base_url[:512],
+            "group": provider_group,
+            "models": provider_models,
             "api_key": normalized_api_key,
             "selected": True,
         }

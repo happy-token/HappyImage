@@ -145,6 +145,12 @@ def _ensure_newapi_binding_for_user(
             str(user_item.get("id") or ""),
             base_url=str(binding.get("base_url") or ""),
             api_key=str(binding.get("token") or ""),
+            group=str(binding.get("group") or ""),
+            models=(
+                binding.get("models")
+                if isinstance(binding.get("models"), list)
+                else []
+            ),
         )
         if updated_user is not None:
             user_item = updated_user
@@ -248,6 +254,33 @@ def _test_model_provider_connection(body: ProviderTestRequest) -> dict[str, obje
     return {"ok": True, "models": models[:80] or configured_models[:80]}
 
 
+def _usage_with_prices(
+    usage: object, model_details: list[dict[str, object]]
+) -> list[dict[str, object]]:
+    if not isinstance(usage, list):
+        return []
+    price_by_model = {
+        str(item.get("model") or "").strip(): float(item.get("price") or 0)
+        for item in model_details
+        if str(item.get("model") or "").strip()
+    }
+    enriched = []
+    for raw_item in usage:
+        if not isinstance(raw_item, dict):
+            continue
+        item = dict(raw_item)
+        model = str(item.get("model") or "").strip()
+        price = price_by_model.get(model, 0.0)
+        try:
+            requests = int(item.get("requests") or 0)
+        except (TypeError, ValueError):
+            requests = 0
+        item["price"] = price
+        item["estimated_cost"] = round(price * requests, 6) if price else 0
+        enriched.append(item)
+    return enriched
+
+
 def create_router() -> APIRouter:
     router = APIRouter()
 
@@ -329,6 +362,12 @@ def create_router() -> APIRouter:
                     str(user_item.get("id") or ""),
                     base_url=str(binding.get("base_url") or ""),
                     api_key=str(binding.get("token") or ""),
+                    group=str(binding.get("group") or ""),
+                    models=(
+                        binding.get("models")
+                        if isinstance(binding.get("models"), list)
+                        else []
+                    ),
                 )
                 if updated_user is not None:
                     user_item = updated_user
@@ -587,6 +626,9 @@ def create_router() -> APIRouter:
         elif binding.get("message"):
             binding_status = str(binding.get("status") or "failed")
             binding_message = str(binding.get("message") or "")
+        model_details = await run_in_threadpool(
+            newapi_binding_service.get_image_model_details
+        )
 
         return {
             "ok": binding_status == "configured",
@@ -594,6 +636,12 @@ def create_router() -> APIRouter:
             "message": binding_message,
             "management_url": management_url,
             "newapi_user_id": str(binding.get("user_id") or ""),
+            "group": str(binding.get("group") or config.get_newapi_binding_settings().get("image_group") or ""),
+            "models": model_details,
+            "quota": binding.get("quota") if isinstance(binding.get("quota"), dict) else {},
+            "usage_by_model": _usage_with_prices(
+                binding.get("usage_by_model"), model_details
+            ),
             "tokens": binding.get("tokens") if isinstance(binding.get("tokens"), list) else [],
         }
 

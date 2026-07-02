@@ -1,15 +1,27 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+import json
 from pathlib import Path
 import secrets
 import time
 from typing import Any
+from urllib import request as urllib_request
 from urllib.parse import urlsplit, urlunsplit
 
 from utils.log import logger
 
 DEFAULT_NEWAPI_URL = "https://gateway.happy-token.cn"
+DEFAULT_IMAGE_GROUP = "image"
+DEFAULT_IMAGE_MODELS = ["gpt-image-2", "codex-gpt-image-2"]
+DEFAULT_IMAGE_MODEL_PRICES = {
+    "gpt-image-2": 0.007,
+    "codex-gpt-image-2": 0.0139,
+}
+DEFAULT_IMAGE_MODEL_BILLING_TYPES = {
+    "gpt-image-2": "per_request",
+    "codex-gpt-image-2": "per_request",
+}
 
 
 def _clean(value: object) -> str:
@@ -22,6 +34,64 @@ def _normalize_url(value: object, *, default: str = "") -> str:
 
 def _normalize_management_url(value: object) -> str:
     return _normalize_url(value).removesuffix("/v1")
+
+
+def _configured_image_group(settings: dict[str, object]) -> str:
+    return _clean(settings.get("image_group")) or DEFAULT_IMAGE_GROUP
+
+
+def _configured_image_models(settings: dict[str, object]) -> list[str]:
+    raw_models = settings.get("image_models")
+    source = raw_models if isinstance(raw_models, list) else DEFAULT_IMAGE_MODELS
+    models: list[str] = []
+    seen: set[str] = set()
+    for raw_model in source:
+        model = _clean(raw_model)
+        if model and model not in seen:
+            models.append(model)
+            seen.add(model)
+    return models or list(DEFAULT_IMAGE_MODELS)
+
+
+def _configured_price_map(
+    settings: dict[str, object], models: list[str]
+) -> dict[str, float]:
+    raw_prices = settings.get("image_model_prices")
+    source = raw_prices if isinstance(raw_prices, dict) else {}
+    prices: dict[str, float] = {}
+    for model in models:
+        try:
+            price = float(source.get(model, DEFAULT_IMAGE_MODEL_PRICES.get(model, 0)))
+        except (TypeError, ValueError):
+            price = float(DEFAULT_IMAGE_MODEL_PRICES.get(model, 0))
+        prices[model] = max(0.0, price)
+    return prices
+
+
+def _configured_billing_type_map(
+    settings: dict[str, object], models: list[str]
+) -> dict[str, str]:
+    raw_types = settings.get("image_model_billing_types")
+    source = raw_types if isinstance(raw_types, dict) else {}
+    billing_types: dict[str, str] = {}
+    for model in models:
+        billing_type = _clean(
+            source.get(model, DEFAULT_IMAGE_MODEL_BILLING_TYPES.get(model, "usage"))
+        )
+        billing_types[model] = (
+            billing_type if billing_type in {"usage", "per_request"} else "usage"
+        )
+    return billing_types
+
+
+def _model_settings(settings: dict[str, object]) -> tuple[str, list[str], dict[str, float], dict[str, str]]:
+    models = _configured_image_models(settings)
+    return (
+        _configured_image_group(settings),
+        models,
+        _configured_price_map(settings, models),
+        _configured_billing_type_map(settings, models),
+    )
 
 
 class NewAPIBindingService:
@@ -56,6 +126,7 @@ class NewAPIBindingService:
         )
         if not management_url:
             management_url = _normalize_management_url(base_url)
+        image_group, image_models, image_prices, image_billing_types = _model_settings(settings)
         if (
             not bool(settings.get("enabled"))
             or (not provision_url and not _clean(settings.get("sql_dsn")))
@@ -66,6 +137,10 @@ class NewAPIBindingService:
                 "message": "NewAPI provisioning endpoint is not configured",
                 "base_url": model_base_url,
                 "management_url": management_url,
+                "group": image_group,
+                "models": image_models,
+                "model_prices": image_prices,
+                "model_billing_types": image_billing_types,
             }
         if not provision_url:
             return self._ensure_default_token_via_sql(
@@ -76,6 +151,10 @@ class NewAPIBindingService:
                 name=name,
                 base_url=model_base_url,
                 management_url=management_url,
+                image_group=image_group,
+                image_models=image_models,
+                image_prices=image_prices,
+                image_billing_types=image_billing_types,
             )
         if not provision_secret:
             return {
@@ -84,6 +163,10 @@ class NewAPIBindingService:
                 "message": "NewAPI provisioning endpoint is not configured",
                 "base_url": model_base_url,
                 "management_url": management_url,
+                "group": image_group,
+                "models": image_models,
+                "model_prices": image_prices,
+                "model_billing_types": image_billing_types,
             }
 
         session = None
@@ -103,6 +186,10 @@ class NewAPIBindingService:
                     "name": _clean(name),
                     "token_name": _clean(settings.get("token_name"))
                     or "HappyImage Default",
+                    "group": image_group,
+                    "models": image_models,
+                    "model_prices": image_prices,
+                    "model_billing_types": image_billing_types,
                 },
                 timeout=20,
             )
@@ -124,6 +211,10 @@ class NewAPIBindingService:
                 "user_id": _clean(data.get("user_id")),
                 "token_id": _clean(data.get("token_id")),
                 "token": _clean(data.get("token")),
+                "group": _clean(data.get("group")) or image_group,
+                "models": image_models,
+                "model_prices": image_prices,
+                "model_billing_types": image_billing_types,
                 "base_url": _normalize_url(
                     self._normalize_model_base_url(data.get("base_url") or model_base_url),
                     default=self._normalize_model_base_url(DEFAULT_NEWAPI_URL),
@@ -144,6 +235,83 @@ class NewAPIBindingService:
                     session.close()
                 except Exception:
                     pass
+
+    def get_image_model_details(
+        self, settings: dict[str, object] | None = None
+    ) -> list[dict[str, object]]:
+        settings = settings or self._settings or self._load_settings()
+        image_group, image_models, image_prices, image_billing_types = _model_settings(settings)
+        details_by_model = {
+            model: {
+                "model": model,
+                "group": image_group,
+                "billing_type": image_billing_types.get(model, "usage"),
+                "quota_type": 1
+                if image_billing_types.get(model) == "per_request"
+                else 0,
+                "price": image_prices.get(model, 0.0),
+                "source": "settings",
+            }
+            for model in image_models
+        }
+        pricing_items = self._fetch_newapi_pricing(settings)
+        for item in pricing_items:
+            model = _clean(item.get("model_name") or item.get("model"))
+            if model not in details_by_model:
+                continue
+            enabled_groups = item.get("enable_group")
+            if (
+                image_group
+                and isinstance(enabled_groups, list)
+                and image_group not in [_clean(group) for group in enabled_groups]
+            ):
+                continue
+            quota_type = item.get("quota_type")
+            try:
+                normalized_quota_type = int(quota_type)
+            except (TypeError, ValueError):
+                normalized_quota_type = int(details_by_model[model]["quota_type"])
+            try:
+                price = float(item.get("model_price"))
+            except (TypeError, ValueError):
+                price = float(details_by_model[model]["price"])
+            details_by_model[model] = {
+                **details_by_model[model],
+                "billing_type": "per_request"
+                if normalized_quota_type == 1
+                else "usage",
+                "quota_type": normalized_quota_type,
+                "price": max(0.0, price),
+                "source": "newapi",
+            }
+        return [details_by_model[model] for model in image_models]
+
+    def _fetch_newapi_pricing(
+        self, settings: dict[str, object]
+    ) -> list[dict[str, object]]:
+        management_url = _normalize_management_url(
+            settings.get("gateway_management_url")
+            or settings.get("management_url")
+            or settings.get("gateway_api_base_url")
+            or settings.get("base_url")
+        )
+        if not management_url:
+            return []
+        try:
+            req = urllib_request.Request(
+                f"{management_url}/api/pricing",
+                headers={"Accept": "application/json"},
+                method="GET",
+            )
+            with urllib_request.urlopen(req, timeout=10) as response:
+                raw_body = response.read(1024 * 1024)
+            payload = json.loads(raw_body.decode("utf-8", "ignore"))
+        except Exception:
+            return []
+        if not isinstance(payload, dict) or payload.get("success") is False:
+            return []
+        data = payload.get("data")
+        return [item for item in data if isinstance(item, dict)] if isinstance(data, list) else []
 
     def _make_session(self) -> Any:
         if self._session_factory is not None:
@@ -173,6 +341,10 @@ class NewAPIBindingService:
         name: str,
         base_url: str,
         management_url: str,
+        image_group: str,
+        image_models: list[str],
+        image_prices: dict[str, float],
+        image_billing_types: dict[str, str],
     ) -> dict[str, object]:
         dsn = _clean(settings.get("sql_dsn"))
         if not dsn:
@@ -189,15 +361,24 @@ class NewAPIBindingService:
                         subject=subject,
                         email=email,
                         name=name,
+                        user_group=image_group,
                     )
                     token_id, token = self._find_or_create_newapi_token(
                         cursor,
                         user_id=user_id,
                         token_name=_clean(settings.get("token_name"))
                         or "HappyImage Default",
+                        token_group=image_group,
                     )
                     access_token = self._ensure_newapi_access_token(cursor, user_id)
                     tokens = self._list_newapi_tokens(cursor, user_id)
+                    user_quota = self._get_newapi_user_quota(cursor, user_id)
+                    usage_by_model = self._list_newapi_model_usage(
+                        cursor,
+                        user_id=user_id,
+                        models=image_models,
+                        group=image_group,
+                    )
             return {
                 "ok": True,
                 "status": "configured",
@@ -206,6 +387,12 @@ class NewAPIBindingService:
                 "token": f"sk-{token}",
                 "access_token": access_token,
                 "tokens": tokens,
+                "quota": user_quota,
+                "usage_by_model": usage_by_model,
+                "group": image_group,
+                "models": image_models,
+                "model_prices": image_prices,
+                "model_billing_types": image_billing_types,
                 "base_url": base_url,
                 "management_url": management_url,
             }
@@ -235,6 +422,7 @@ class NewAPIBindingService:
         subject: str,
         email: str,
         name: str,
+        user_group: str,
     ) -> int:
         provider_column = NewAPIBindingService._provider_column(provider)
         cleaned_subject = _clean(subject)
@@ -247,7 +435,9 @@ class NewAPIBindingService:
             )
             row = cursor.fetchone()
             if row:
-                return int(row[0])
+                user_id = int(row[0])
+                NewAPIBindingService._set_newapi_user_group(cursor, user_id, user_group)
+                return user_id
         if cleaned_email:
             cursor.execute(
                 "SELECT id FROM users WHERE email = %s AND deleted_at IS NULL ORDER BY id LIMIT 1",
@@ -261,6 +451,7 @@ class NewAPIBindingService:
                         f"UPDATE users SET {provider_column} = COALESCE(NULLIF({provider_column}, ''), %s) WHERE id = %s",
                         (cleaned_subject, user_id),
                     )
+                NewAPIBindingService._set_newapi_user_group(cursor, user_id, user_group)
                 return user_id
 
         username = NewAPIBindingService._newapi_username(cleaned_email, cleaned_subject)
@@ -294,7 +485,7 @@ class NewAPIBindingService:
             0,
             0,
             0,
-            "default",
+            _clean(user_group) or "default",
             now,
             now,
         ]
@@ -310,11 +501,22 @@ class NewAPIBindingService:
         return int(row[0])
 
     @staticmethod
+    def _set_newapi_user_group(cursor: Any, user_id: int, user_group: str) -> None:
+        cleaned_group = _clean(user_group)
+        if not cleaned_group:
+            return
+        cursor.execute(
+            'UPDATE users SET "group" = %s WHERE id = %s',
+            (cleaned_group, user_id),
+        )
+
+    @staticmethod
     def _find_or_create_newapi_token(
         cursor: Any,
         *,
         user_id: int,
         token_name: str,
+        token_group: str,
     ) -> tuple[int, str]:
         cursor.execute(
             """
@@ -327,7 +529,13 @@ class NewAPIBindingService:
         )
         row = cursor.fetchone()
         if row:
-            return int(row[0]), _clean(row[1])
+            token_id = int(row[0])
+            if token_group:
+                cursor.execute(
+                    'UPDATE tokens SET "group" = %s WHERE id = %s',
+                    (token_group, token_id),
+                )
+            return token_id, _clean(row[1])
 
         now = int(time.time())
         token = secrets.token_urlsafe(36)
@@ -339,10 +547,10 @@ class NewAPIBindingService:
                 model_limits_enabled, model_limits, allow_ips, used_quota,
                 "group", cross_group_retry
             )
-            VALUES (%s, %s, 1, %s, %s, %s, -1, 0, true, false, '', '', 0, '', false)
+            VALUES (%s, %s, 1, %s, %s, %s, -1, 0, true, false, '', '', 0, %s, false)
             RETURNING id
             """,
-            (user_id, token, token_name, now, now),
+            (user_id, token, token_name, now, now, token_group),
         )
         row = cursor.fetchone()
         return int(row[0]), token
@@ -366,7 +574,8 @@ class NewAPIBindingService:
         cursor.execute(
             """
             SELECT id, key, status, name, created_time, accessed_time,
-                   expired_time, remain_quota, unlimited_quota, used_quota
+                   expired_time, remain_quota, unlimited_quota, used_quota,
+                   "group"
             FROM tokens
             WHERE user_id = %s AND deleted_at IS NULL
             ORDER BY id
@@ -388,9 +597,88 @@ class NewAPIBindingService:
                     "remain_quota": int(row[7] or 0),
                     "unlimited_quota": bool(row[8]),
                     "used_quota": int(row[9] or 0),
+                    "group": _clean(row[10] if len(row) > 10 else ""),
                 }
             )
         return tokens
+
+    @staticmethod
+    def _get_newapi_user_quota(cursor: Any, user_id: int) -> dict[str, object]:
+        try:
+            cursor.execute(
+                """
+                SELECT quota, used_quota, request_count, "group"
+                FROM users
+                WHERE id = %s
+                """,
+                (user_id,),
+            )
+            row = cursor.fetchone()
+        except Exception:
+            return {}
+        if not row:
+            return {}
+        quota = int(row[0] or 0)
+        used_quota = int(row[1] or 0)
+        return {
+            "quota": quota,
+            "used_quota": used_quota,
+            "remaining_quota": max(0, quota - used_quota) if quota > 0 else 0,
+            "request_count": int(row[2] or 0),
+            "group": _clean(row[3] if len(row) > 3 else ""),
+        }
+
+    @staticmethod
+    def _list_newapi_model_usage(
+        cursor: Any,
+        *,
+        user_id: int,
+        models: list[str],
+        group: str,
+    ) -> list[dict[str, object]]:
+        if not models:
+            return []
+        params: list[object] = [user_id, models]
+        group_filter = ""
+        if group:
+            group_filter = ' AND COALESCE("group", \'\') = %s'
+            params.append(group)
+        try:
+            cursor.execute(
+                f"""
+                SELECT model_name,
+                       COUNT(*) AS request_count,
+                       COALESCE(SUM(quota), 0) AS quota,
+                       COALESCE(SUM(prompt_tokens), 0) AS prompt_tokens,
+                       COALESCE(SUM(completion_tokens), 0) AS completion_tokens
+                FROM logs
+                WHERE user_id = %s
+                  AND type = 2
+                  AND model_name = ANY(%s)
+                  {group_filter}
+                GROUP BY model_name
+                ORDER BY request_count DESC, model_name ASC
+                """,
+                tuple(params),
+            )
+            rows = cursor.fetchall()
+        except Exception:
+            return []
+        usage = []
+        for row in rows:
+            try:
+                usage.append(
+                    {
+                        "model": _clean(row[0]),
+                        "requests": int(row[1] or 0),
+                        "quota": int(row[2] or 0),
+                        "prompt_tokens": int(row[3] or 0),
+                        "completion_tokens": int(row[4] or 0),
+                    }
+                )
+            except (IndexError, TypeError, ValueError):
+                continue
+        return usage
 
     @staticmethod
     def _provider_column(provider: str) -> str:

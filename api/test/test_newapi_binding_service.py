@@ -145,6 +145,13 @@ def test_newapi_binding_settings_ignore_env_when_config_empty(tmp_path):
         "sql_dsn": "",
         "sql_dsn_configured": False,
         "token_name": "HappyImage Default",
+        "image_group": "image",
+        "image_models": ["gpt-image-2", "codex-gpt-image-2"],
+        "image_model_prices": {"gpt-image-2": 0.007, "codex-gpt-image-2": 0.0139},
+        "image_model_billing_types": {
+            "gpt-image-2": "per_request",
+            "codex-gpt-image-2": "per_request",
+        },
         "enabled": False,
     }
 
@@ -187,7 +194,8 @@ def test_apply_newapi_default_provider_sets_selected_provider(tmp_path):
                 "type": "newapi",
                 "protocol": "openai",
                 "base_url": "https://gateway.happy-token.cn",
-                "models": [],
+                "group": "image",
+                "models": ["gpt-image-2", "codex-gpt-image-2"],
                 "api_key_configured": True,
                 "selected": True,
             }
@@ -377,6 +385,13 @@ def test_newapi_binding_returns_pending_when_disabled_or_unconfigured():
         "message": "NewAPI provisioning endpoint is not configured",
         "base_url": "https://gateway.happy-token.cn/v1",
         "management_url": "https://gateway.happy-token.cn/manage",
+        "group": "image",
+        "models": ["gpt-image-2", "codex-gpt-image-2"],
+        "model_prices": {"gpt-image-2": 0.007, "codex-gpt-image-2": 0.0139},
+        "model_billing_types": {
+            "gpt-image-2": "per_request",
+            "codex-gpt-image-2": "per_request",
+        },
     }
 
     service = NewAPIBindingService(
@@ -483,8 +498,18 @@ def test_newapi_binding_direct_sql_reuses_existing_user_and_token():
                 "remain_quota": 0,
                 "unlimited_quota": True,
                 "used_quota": 0,
+                "group": "",
             }
         ],
+        "quota": {},
+        "usage_by_model": [],
+        "group": "image",
+        "models": ["gpt-image-2", "codex-gpt-image-2"],
+        "model_prices": {"gpt-image-2": 0.007, "codex-gpt-image-2": 0.0139},
+        "model_billing_types": {
+            "gpt-image-2": "per_request",
+            "codex-gpt-image-2": "per_request",
+        },
         "base_url": "https://gateway.happy-token.cn/v1",
         "management_url": "https://gateway.happy-token.cn/manage",
     }
@@ -597,6 +622,13 @@ def test_newapi_binding_pending_response_defaults_missing_urls():
         "message": "NewAPI provisioning endpoint is not configured",
         "base_url": "https://gateway.happy-token.cn/v1",
         "management_url": "https://gateway.happy-token.cn",
+        "group": "image",
+        "models": ["gpt-image-2", "codex-gpt-image-2"],
+        "model_prices": {"gpt-image-2": 0.007, "codex-gpt-image-2": 0.0139},
+        "model_billing_types": {
+            "gpt-image-2": "per_request",
+            "codex-gpt-image-2": "per_request",
+        },
     }
 
 
@@ -659,11 +691,21 @@ def test_newapi_binding_calls_configured_provisioning_endpoint_with_auth_and_pay
                 "provider": "casdoor",
                 "subject": "casdoor-sub",
                 "email": "creator@example.com",
-                "name": "Creator",
-                "token_name": "HappyImage Default",
-            },
-            "timeout": 20,
-        }
+                    "name": "Creator",
+                    "token_name": "HappyImage Default",
+                    "group": "image",
+                    "models": ["gpt-image-2", "codex-gpt-image-2"],
+                    "model_prices": {
+                        "gpt-image-2": 0.007,
+                        "codex-gpt-image-2": 0.0139,
+                    },
+                    "model_billing_types": {
+                        "gpt-image-2": "per_request",
+                        "codex-gpt-image-2": "per_request",
+                    },
+                },
+                "timeout": 20,
+            }
     ]
 
 
@@ -717,6 +759,13 @@ def test_newapi_binding_successful_response_exposes_token_and_base_url():
         "user_id": "newapi-user-id",
         "token_id": "newapi-token-id",
         "token": "sk-user-token",
+        "group": "image",
+        "models": ["gpt-image-2", "codex-gpt-image-2"],
+        "model_prices": {"gpt-image-2": 0.007, "codex-gpt-image-2": 0.0139},
+        "model_billing_types": {
+            "gpt-image-2": "per_request",
+            "codex-gpt-image-2": "per_request",
+        },
         "base_url": "https://gateway.happy-token.cn/v1",
         "management_url": "https://gateway.happy-token.cn/manage",
     }

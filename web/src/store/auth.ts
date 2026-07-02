@@ -10,6 +10,7 @@ export type StoredModelProvider = {
   type: string;
   protocol?: string;
   baseUrl: string;
+  group?: string;
   models?: string[];
   apiKeyConfigured?: boolean;
   selected?: boolean;
@@ -78,6 +79,7 @@ export function normalizeModelProviders(value: unknown): StoredModelProvider[] {
       type,
       protocol: String(candidate.protocol || "openai").trim() || "openai",
       baseUrl,
+      group: String((candidate as { group?: unknown }).group || "").trim(),
       models: Array.isArray(candidate.models)
         ? candidate.models
             .map((model) => String(model || "").trim())

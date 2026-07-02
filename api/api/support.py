@@ -147,8 +147,8 @@ def require_admin(authorization: str | None, request: Request | None = None) -> 
 
 def resolve_image_base_url(request: Request) -> str:
     return (
-        config.external_api_url
-        or config.base_url
+        getattr(config, "external_api_url", "")
+        or getattr(config, "base_url", "")
         or f"{request.url.scheme}://{request.headers.get('host', request.url.netloc)}"
     )
 

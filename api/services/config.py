@@ -24,6 +24,17 @@ DEFAULT_IMAGE_STORAGE = {
     "public_base_url": "",
 }
 
+DEFAULT_NEWAPI_IMAGE_GROUP = "image"
+DEFAULT_NEWAPI_IMAGE_MODELS = ["gpt-image-2", "codex-gpt-image-2"]
+DEFAULT_NEWAPI_IMAGE_MODEL_PRICES = {
+    "gpt-image-2": 0.007,
+    "codex-gpt-image-2": 0.0139,
+}
+DEFAULT_NEWAPI_IMAGE_MODEL_BILLING_TYPES = {
+    "gpt-image-2": "per_request",
+    "codex-gpt-image-2": "per_request",
+}
+
 
 def _normalize_bool(value: object, default: bool = False) -> bool:
     if isinstance(value, str):
@@ -94,6 +105,51 @@ def _normalize_image_storage_settings(value: object) -> dict[str, object]:
         "webdav_root_path": root_path or str(DEFAULT_IMAGE_STORAGE["webdav_root_path"]),
         "public_base_url": str(source.get("public_base_url") or "").strip().rstrip("/"),
     }
+
+
+def _normalize_string_list(value: object, default: list[str]) -> list[str]:
+    raw_items: list[object]
+    if isinstance(value, list):
+        raw_items = value
+    elif isinstance(value, str):
+        raw_items = value.replace(",", "\n").splitlines()
+    else:
+        raw_items = default
+    items: list[str] = []
+    seen: set[str] = set()
+    for raw_item in raw_items:
+        item = str(raw_item or "").strip()
+        if item and item not in seen:
+            items.append(item[:100])
+            seen.add(item)
+    return items or list(default)
+
+
+def _normalize_price_map(
+    value: object, models: list[str], default: dict[str, float]
+) -> dict[str, float]:
+    source = value if isinstance(value, dict) else {}
+    prices: dict[str, float] = {}
+    for model in models:
+        raw_price = source.get(model, default.get(model, 0))
+        try:
+            price = float(raw_price)
+        except (TypeError, ValueError):
+            price = float(default.get(model, 0))
+        prices[model] = max(0.0, price)
+    return prices
+
+
+def _normalize_billing_type_map(
+    value: object, models: list[str], default: dict[str, str]
+) -> dict[str, str]:
+    source = value if isinstance(value, dict) else {}
+    allowed = {"usage", "per_request"}
+    billing_types: dict[str, str] = {}
+    for model in models:
+        billing_type = str(source.get(model, default.get(model, "usage")) or "").strip()
+        billing_types[model] = billing_type if billing_type in allowed else "usage"
+    return billing_types
 
 
 def _normalize_oidc_settings(value: object) -> dict[str, object]:
@@ -537,6 +593,23 @@ class ConfigStore:
         provision_secret = str(source.get("provision_secret") or "").strip()
         sql_dsn = str(source.get("sql_dsn") or "").strip()
         token_name = (str(source.get("token_name") or "").strip() or "HappyImage Default")[:80]
+        image_group = (
+            str(source.get("image_group") or DEFAULT_NEWAPI_IMAGE_GROUP).strip()
+            or DEFAULT_NEWAPI_IMAGE_GROUP
+        )[:64]
+        image_models = _normalize_string_list(
+            source.get("image_models"), DEFAULT_NEWAPI_IMAGE_MODELS
+        )
+        image_model_prices = _normalize_price_map(
+            source.get("image_model_prices"),
+            image_models,
+            DEFAULT_NEWAPI_IMAGE_MODEL_PRICES,
+        )
+        image_model_billing_types = _normalize_billing_type_map(
+            source.get("image_model_billing_types"),
+            image_models,
+            DEFAULT_NEWAPI_IMAGE_MODEL_BILLING_TYPES,
+        )
         return {
             "gateway_api_base_url": api_url,
             "gateway_management_url": management_url,
@@ -544,6 +617,10 @@ class ConfigStore:
             "provision_secret": provision_secret,
             "sql_dsn": sql_dsn,
             "token_name": token_name,
+            "image_group": image_group,
+            "image_models": image_models,
+            "image_model_prices": image_model_prices,
+            "image_model_billing_types": image_model_billing_types,
         }
 
     def get_model_gateway_settings(self) -> dict[str, object]:
@@ -562,6 +639,22 @@ class ConfigStore:
         provision_url = str(normalized["provision_url"])
         provision_secret = str(normalized["provision_secret"])
         token_name = str(normalized["token_name"])
+        image_group = str(normalized["image_group"])
+        image_models = (
+            normalized["image_models"]
+            if isinstance(normalized["image_models"], list)
+            else list(DEFAULT_NEWAPI_IMAGE_MODELS)
+        )
+        image_model_prices = (
+            normalized["image_model_prices"]
+            if isinstance(normalized["image_model_prices"], dict)
+            else dict(DEFAULT_NEWAPI_IMAGE_MODEL_PRICES)
+        )
+        image_model_billing_types = (
+            normalized["image_model_billing_types"]
+            if isinstance(normalized["image_model_billing_types"], dict)
+            else dict(DEFAULT_NEWAPI_IMAGE_MODEL_BILLING_TYPES)
+        )
         return {
             "gateway_api_base_url": api_url,
             "gateway_management_url": management_url,
@@ -573,6 +666,10 @@ class ConfigStore:
             "provision_secret": provision_secret,
             "provision_secret_configured": bool(provision_secret),
             "token_name": token_name,
+            "image_group": image_group,
+            "image_models": image_models,
+            "image_model_prices": image_model_prices,
+            "image_model_billing_types": image_model_billing_types,
             "enabled": bool((provision_url and provision_secret) or sql_dsn),
         }
 
