@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import time
 from urllib.parse import urlparse
 
@@ -13,10 +14,16 @@ from services.config import config
 class ProxySettingsStore:
     def build_session_kwargs(self, account: dict | None = None, proxy: str = "", **session_kwargs) -> dict[str, object]:
         account_proxy = str((account or {}).get("proxy") or "").strip()
-        proxy = str(proxy or account_proxy or config.get_proxy_settings()).strip()
+        runtime_proxy = "" if _runtime_proxy_disabled() else config.get_proxy_settings()
+        proxy = str(proxy or account_proxy or runtime_proxy).strip()
         if proxy:
             session_kwargs["proxy"] = proxy
         return session_kwargs
+
+
+def _runtime_proxy_disabled() -> bool:
+    value = os.getenv("HAPPYIMAGE_DISABLE_RUNTIME_PROXY", "").strip().lower()
+    return value in {"1", "true", "yes", "on"}
 
 
 def _clean(value: object) -> str:
@@ -61,4 +68,3 @@ def test_proxy(url: str, *, timeout: float = 15.0) -> dict:
         session.close()
 
 proxy_settings = ProxySettingsStore()
-

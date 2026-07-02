@@ -46,8 +46,11 @@ export function humanizeRequestError(message: unknown): string {
     if (/(model not found|invalid model|does not exist|unsupported model)/i.test(text)) {
         return "当前模型不可用，请在生图页面切换可用模型后再试。";
     }
-    if (/(timeout|timed out|read timed out)/i.test(text)) {
+    if (/(timeout|timed out|read timed out|HTTP 52[234]|HTTP 524)/i.test(text)) {
         return "模型供应商响应超时，请稍后重试。";
+    }
+    if (/(HTTP 50[234]|bad gateway|service unavailable|gateway timeout|cpu overload|overloaded|rate limit|too many requests|429)/i.test(text)) {
+        return "模型供应商上游暂时不可用，请切换其他模型或稍后重试。";
     }
     if (/(curl:|tls connect error|openssl|connection closed abruptly|connection reset|empty reply from server|server disconnected|connection aborted)/i.test(text)) {
         return "连接模型供应商失败，请稍后重试；如果持续出现，请检查 Base URL 或网络代理。";

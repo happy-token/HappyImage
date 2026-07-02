@@ -26,8 +26,10 @@ def humanize_gateway_error(error: object) -> str:
         return "模型供应商 API Key 无效或已过期，请在用户设置里更新 API Key。"
     if any(marker in lowered for marker in ("model not found", "invalid model", "does not exist", "unsupported model")):
         return "当前模型不可用，请在生图页面切换可用模型后再试。"
-    if any(marker in lowered for marker in ("timeout", "timed out", "read timed out")):
+    if any(marker in lowered for marker in ("timeout", "timed out", "read timed out", "http 524", "http 523", "http 522", "(http 52")):
         return "模型供应商响应超时，请稍后重试。"
+    if any(marker in lowered for marker in ("http 502", "http 503", "http 504", "bad gateway", "service unavailable", "gateway timeout", "cpu overload", "overloaded", "system busy", "rate limit", "too many requests", "429")):
+        return "模型供应商上游暂时不可用，请切换其他模型或稍后重试。"
     if any(
         marker in lowered
         for marker in (

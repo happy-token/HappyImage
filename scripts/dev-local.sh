@@ -2,18 +2,24 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT_ENV_FILE="$ROOT_DIR/.env"
 ENV_FILE="$ROOT_DIR/scripts/dev-local.env"
 
+set -a
+if [ -f "$ROOT_ENV_FILE" ]; then
+  # shellcheck disable=SC1090
+  . "$ROOT_ENV_FILE"
+fi
 if [ -f "$ENV_FILE" ]; then
-  set -a
   # shellcheck disable=SC1090
   . "$ENV_FILE"
-  set +a
 fi
+set +a
 
 API_PORT="${HAPPYTOKEN_API_PORT:-8000}"
 WEB_PORT="${HAPPYTOKEN_WEB_PORT:-3000}"
 BACKEND_URL="${BACKEND_URL:-http://127.0.0.1:${API_PORT}}"
+export HAPPYIMAGE_DISABLE_RUNTIME_PROXY="${HAPPYIMAGE_DISABLE_RUNTIME_PROXY:-1}"
 
 TUNNEL_TARGET="${HAPPYIMAGE_TUNNEL_TARGET:-}"
 TUNNEL_PORT="${HAPPYIMAGE_TUNNEL_PORT:-15432}"
@@ -32,6 +38,46 @@ check_port_free() {
     lsof -nP -iTCP:"$1" -sTCP:LISTEN
     exit 1
   fi
+}
+
+dsn_local_port() {
+  DSN_VALUE="$1" python3 - <<'PY'
+import os
+from urllib.parse import urlsplit
+
+dsn = os.environ.get("DSN_VALUE", "")
+if not dsn:
+    raise SystemExit(0)
+try:
+    parsed = urlsplit(dsn)
+except Exception:
+    raise SystemExit(0)
+host = parsed.hostname or ""
+if host not in {"127.0.0.1", "localhost", "host.docker.internal"}:
+    raise SystemExit(0)
+if parsed.port:
+    print(parsed.port)
+PY
+}
+
+add_tunnel_port() {
+  local port="$1"
+  if [ -z "$port" ]; then
+    return 0
+  fi
+  case "$port" in
+    *[!0-9]*)
+      echo "Ignoring invalid tunnel port: $port"
+      return 0
+      ;;
+  esac
+  local existing
+  for existing in "${tunnel_ports[@]:-}"; do
+    if [ "$existing" = "$port" ]; then
+      return 0
+    fi
+  done
+  tunnel_ports+=("$port")
 }
 
 database_backend_enabled() {
@@ -121,20 +167,29 @@ check_port_free "$WEB_PORT"
 
 if [ -n "$TUNNEL_TARGET" ]; then
   require_command ssh
-  check_port_free "$TUNNEL_PORT"
-  echo "Starting DB tunnel on 127.0.0.1:${TUNNEL_PORT} -> ${TUNNEL_TARGET}:127.0.0.1:5432"
-  ssh -N \
-    -o ExitOnForwardFailure=yes \
-    -o ServerAliveInterval=30 \
-    -L "127.0.0.1:${TUNNEL_PORT}:127.0.0.1:5432" \
-    "$TUNNEL_TARGET" &
-  tunnel_pid="$!"
-  sleep 1
-  if ! kill -0 "$tunnel_pid" >/dev/null 2>&1; then
-    echo "Failed to start DB tunnel to ${TUNNEL_TARGET}."
-    echo "Check SSH access and whether local port ${TUNNEL_PORT} is available."
-    exit 1
-  fi
+  tunnel_ports=()
+  add_tunnel_port "$TUNNEL_PORT"
+  add_tunnel_port "$(dsn_local_port "${DATABASE_URL:-}")"
+  add_tunnel_port "$(dsn_local_port "${HAPPYIMAGE_NEWAPI_SQL_DSN:-}")"
+  for tunnel_port in "${tunnel_ports[@]}"; do
+    if lsof -nP -iTCP:"$tunnel_port" -sTCP:LISTEN >/dev/null 2>&1; then
+      echo "DB tunnel/local port 127.0.0.1:${tunnel_port} is already listening; reusing it."
+      continue
+    fi
+    echo "Starting DB tunnel on 127.0.0.1:${tunnel_port} -> ${TUNNEL_TARGET}:127.0.0.1:5432"
+    ssh -N \
+      -o ExitOnForwardFailure=yes \
+      -o ServerAliveInterval=30 \
+      -L "127.0.0.1:${tunnel_port}:127.0.0.1:5432" \
+      "$TUNNEL_TARGET" &
+    tunnel_pid="$!"
+    sleep 1
+    if ! kill -0 "$tunnel_pid" >/dev/null 2>&1; then
+      echo "Failed to start DB tunnel to ${TUNNEL_TARGET} on local port ${tunnel_port}."
+      echo "Check SSH access and whether local port ${tunnel_port} is available."
+      exit 1
+    fi
+  done
 fi
 
 wait_for_database
