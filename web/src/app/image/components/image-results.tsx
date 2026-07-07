@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useEffect, useRef, useState } from "react";
-import { Check, Clock3, Copy, Download, EyeOff, FolderOpen, LoaderCircle, Maximize2, Pencil, RotateCcw, Sparkles, Stamp, ThumbsDown, ThumbsUp, Trash2 } from "lucide-react";
+import { Check, Clock3, Copy, CreditCard, Download, EyeOff, ExternalLink, FolderOpen, LifeBuoy, LoaderCircle, Maximize2, Pencil, RotateCcw, Sparkles, Stamp, ThumbsDown, ThumbsUp, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { fetchAuthenticatedImageBlob } from "@/components/authenticated-image";
@@ -17,6 +17,11 @@ import {
 import { cn } from "@/lib/utils";
 import { createImageAccessLink } from "@/lib/api";
 import type { ImageFeedbackVote } from "@/lib/api";
+import {
+  buildHappyTokenTopupUrl,
+  isHappyTokenBillingError,
+} from "@/lib/happytoken";
+import { SUPPORT_EMAIL } from "@/lib/contact";
 import { buildWatermarkedFilename, createTextWatermarkedBlob, triggerBlobDownload } from "@/lib/watermark-image";
 import type { ImageConversation, ImageTurnStatus, StoredImage, StoredReferenceImage } from "@/store/image-conversations";
 
@@ -43,6 +48,7 @@ type ImageResultsProps = {
   onImageFeedback: (conversationId: string, turnId: string, imageId: string, taskId: string, vote: ImageFeedbackVote) => void | Promise<void>;
   onDismissErrors: (conversationId: string, turnId: string) => void | Promise<void>;
   formatConversationTime: (value: string) => string;
+  happyTokenManagementUrl?: string;
 };
 
 type DownloadChoice = "original" | "watermark";
@@ -63,6 +69,19 @@ function getSaveFilePicker() {
       types?: Array<{ description: string; accept: Record<string, string[]> }>;
     }) => Promise<FileSavePicker>;
   }).showSaveFilePicker;
+}
+
+function buildSupportHref(error?: string, taskId?: string) {
+  const params = new URLSearchParams({
+    subject: "HappyImage 图片生成失败",
+    body: [
+      "我在 HappyImage 生成图片时遇到失败。",
+      "",
+      `错误信息：${error || "生成失败"}`,
+      `任务 ID：${taskId || "-"}`,
+    ].join("\n"),
+  });
+  return `mailto:${SUPPORT_EMAIL}?${params.toString()}`;
 }
 
 // Blob URL 缓存：避免 base64 超长字符串在 DOM 中，改用短小的 blob: URL
@@ -266,7 +285,9 @@ export function ImageResults({
   onImageFeedback,
   onDismissErrors,
   formatConversationTime,
+  happyTokenManagementUrl,
 }: ImageResultsProps) {
+  const happyTokenTopupUrl = buildHappyTokenTopupUrl(happyTokenManagementUrl);
   const [imageDimensionsById, setImageDimensionsById] = useState<Record<string, string>>({});
   const [resolvedImageSrcById, setResolvedImageSrcById] = useState<Record<string, string>>({});
   const [currentTime, setCurrentTime] = useState(() => Date.now());
@@ -746,6 +767,11 @@ export function ImageResults({
                       }
 
                       if (image.status === "error") {
+                        const showTopupAction = isHappyTokenBillingError(image.error);
+                        const supportHref = buildSupportHref(
+                          image.error,
+                          image.taskId
+                        );
                         return (
                           <div key={image.id} className="break-inside-avoid">
                             <div
@@ -762,7 +788,7 @@ export function ImageResults({
                             <div className="flex h-full min-h-16 flex-col items-center justify-center gap-1.5 px-2 py-2 text-center text-[11px] leading-4 text-rose-600 sm:gap-3 sm:px-6 sm:py-8 sm:text-sm sm:leading-6">
                               <p className="font-medium">图片 {index + 1}/{turn.images.length}</p>
                               <span className="line-clamp-2 sm:line-clamp-none">{image.error || "生成失败"}</span>
-                              <div className="flex items-center gap-2">
+                              <div className="flex flex-wrap items-center justify-center gap-2">
                                 <button
                                   type="button"
                                   onClick={() => void onRetryImage(selectedConversation.id, turn.id, image.id)}
@@ -770,6 +796,25 @@ export function ImageResults({
                                 >
                                   重新生成这一张
                                 </button>
+                                {showTopupAction ? (
+                                  <a
+                                    href={happyTokenTopupUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-1 rounded-full bg-rose-600 px-2 py-1 text-[10px] font-medium text-white shadow-sm transition hover:bg-rose-500 sm:px-3 sm:text-xs"
+                                  >
+                                    <CreditCard className="size-3" />
+                                    去充值
+                                    <ExternalLink className="size-3" />
+                                  </a>
+                                ) : null}
+                                <a
+                                  href={supportHref}
+                                  className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-1 text-[10px] font-medium text-rose-600 shadow-sm transition hover:bg-rose-100 sm:px-3 sm:text-xs"
+                                >
+                                  <LifeBuoy className="size-3" />
+                                  联系支持
+                                </a>
                               </div>
                             </div>
                             </div>

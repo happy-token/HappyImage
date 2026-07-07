@@ -2,6 +2,7 @@
 
 import {
   Copy,
+  CreditCard,
   ExternalLink,
   LoaderCircle,
   RefreshCw,
@@ -15,6 +16,7 @@ import {
   fetchNewAPIManagement,
   type NewAPIManagementResponse,
 } from "@/lib/api";
+import { buildHappyTokenTopupUrl } from "@/lib/happytoken";
 import { useAuthGuard } from "@/lib/use-auth-guard";
 import { cn } from "@/lib/utils";
 
@@ -61,6 +63,9 @@ export default function NewAPISettingsPage() {
       data?.tokens.find((token) => token.name === "HappyImage Default") ??
       data?.tokens[0],
     [data?.tokens]
+  );
+  const topupUrl = buildHappyTokenTopupUrl(
+    data?.management_url || session?.newapiManagementUrl
   );
 
   const loadManagement = async () => {
@@ -130,6 +135,12 @@ export default function NewAPISettingsPage() {
                 <RefreshCw className="size-3.5" />
               )}
               刷新
+            </Button>
+            <Button asChild size="sm">
+              <a href={topupUrl} target="_blank" rel="noreferrer">
+                <CreditCard className="size-3.5" />
+                充值
+              </a>
             </Button>
             {data?.management_url ? (
               <Button asChild variant="outline" size="sm">

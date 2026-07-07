@@ -2495,6 +2495,7 @@ function ImagePageContent({
             onImageFeedback={handleImageFeedback}
             onDismissErrors={handleDismissErrors}
             formatConversationTime={formatConversationTime}
+            happyTokenManagementUrl={session?.newapiManagementUrl}
           />
         </div>
 

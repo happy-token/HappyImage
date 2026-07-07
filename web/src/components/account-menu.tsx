@@ -9,6 +9,7 @@ import {
   BookOpen,
   Check,
   Copy,
+  CreditCard,
   ExternalLink,
   Globe2,
   Heart,
@@ -52,6 +53,10 @@ import {
   SUPPORT_WECHAT_QR,
 } from "@/lib/contact";
 import {
+  buildHappyTokenTopupUrl,
+  HAPPYTOKEN_GATEWAY_URL,
+} from "@/lib/happytoken";
+import {
   resolveLanguage,
   saveLanguagePreference,
   useLanguagePreference,
@@ -90,7 +95,6 @@ export type AccountUsageStats = {
 const THEME_STORAGE_KEY = "happytoken-theme";
 const HAPPYTOKEN_PROVIDER_ID = "newapi-default";
 const HAPPYTOKEN_MANAGEMENT_URL = "/settings/newapi";
-const HAPPYTOKEN_GATEWAY_URL = "https://gateway.happy-token.cn";
 const HAPPYTOKEN_MODEL_BASE_URL = `${HAPPYTOKEN_GATEWAY_URL}/v1`;
 const HAPPYTOKEN_IMAGE_GROUP = "image";
 const HAPPYTOKEN_IMAGE_MODELS = ["gpt-image-2", "codex-gpt-image-2"];
@@ -202,6 +206,8 @@ const settingsCopy = {
       current: "当前登录账户",
       localStats: "本机历史统计",
       newapiStats: "HappyToken 额度",
+      topUp: "充值",
+      topUpTitle: "打开 HappyToken 充值",
       quota: "总余额",
       usedQuota: "已消费",
       remainingQuota: "剩余",
@@ -317,6 +323,8 @@ const settingsCopy = {
       current: "Current signed-in account",
       localStats: "Local history stats",
       newapiStats: "HappyToken balance",
+      topUp: "Top up",
+      topUpTitle: "Open HappyToken top-up",
       quota: "Balance",
       usedQuota: "Spent",
       remainingQuota: "Remaining",
@@ -683,6 +691,9 @@ export function AccountMenu({
     session.role === "admin" ? copy.trigger.admin : copy.trigger.mine;
   const showDocsLink = pathname !== "/docs";
   const happyTokenManagementUrl = HAPPYTOKEN_MANAGEMENT_URL;
+  const happyTokenTopupUrl = buildHappyTokenTopupUrl(
+    newapiManagement?.management_url || session.newapiManagementUrl
+  );
   useEffect(() => {
     const accountTheme = session.preferences?.theme;
     const storedTheme =
@@ -1155,8 +1166,20 @@ export function AccountMenu({
           </div>
           {session.role === "user" ? (
             <div className="mt-3">
-              <div className={sectionTitleClass}>
-                {copy.account.newapiStats}
+              <div className="flex items-center justify-between gap-2">
+                <div className={sectionTitleClass}>
+                  {copy.account.newapiStats}
+                </div>
+                <a
+                  href={happyTokenTopupUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex h-7 items-center justify-center gap-1.5 rounded-full bg-stone-950 px-3 text-[11px] font-medium text-white shadow-sm transition hover:bg-stone-700 dark:bg-stone-100 dark:text-stone-950 dark:hover:bg-stone-200"
+                  title={copy.account.topUpTitle}
+                >
+                  <CreditCard className="size-3.5" />
+                  {copy.account.topUp}
+                </a>
               </div>
               <div className="rounded-2xl border border-stone-200/80 bg-white p-3 dark:border-white/10 dark:bg-white/[0.03]">
                 {isLoadingNewapiManagement ? (
