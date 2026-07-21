@@ -37,6 +37,19 @@ class AuthService:
     def _default_name(role: object) -> str:
         return "管理员密钥" if str(role or "").strip().lower() == "admin" else "普通用户"
 
+    @classmethod
+    def _normalize_provider_api_key(
+        cls, provider_id: object, provider_type: object, value: object
+    ) -> str:
+        api_key = cls._clean(value)
+        if (
+            cls._clean(provider_id) == "newapi-default"
+            and cls._clean(provider_type).lower() == "newapi"
+        ):
+            while api_key.startswith("sk-sk-"):
+                api_key = api_key[3:]
+        return api_key
+
     def _normalize_model_providers(
         self,
         value: object,
@@ -77,6 +90,9 @@ class AuthService:
                         seen_models.add(model)
             if not api_key and bool(raw_provider.get("api_key_configured")):
                 api_key = existing_keys.get(provider_id, "")
+            api_key = self._normalize_provider_api_key(
+                provider_id, provider_type, api_key
+            )
             if not base_url:
                 continue
             providers.append(

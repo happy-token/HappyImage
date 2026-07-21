@@ -36,6 +36,13 @@ def _normalize_management_url(value: object) -> str:
     return _normalize_url(value).removesuffix("/v1")
 
 
+def _normalize_api_token(value: object) -> str:
+    token = _clean(value)
+    if not token or token.startswith("sk-"):
+        return token
+    return f"sk-{token}"
+
+
 def _configured_image_group(settings: dict[str, object]) -> str:
     return _clean(settings.get("image_group")) or DEFAULT_IMAGE_GROUP
 
@@ -210,7 +217,7 @@ class NewAPIBindingService:
                 "status": "configured",
                 "user_id": _clean(data.get("user_id")),
                 "token_id": _clean(data.get("token_id")),
-                "token": _clean(data.get("token")),
+                "token": _normalize_api_token(data.get("token")),
                 "group": _clean(data.get("group")) or image_group,
                 "models": image_models,
                 "model_prices": image_prices,
@@ -384,7 +391,7 @@ class NewAPIBindingService:
                 "status": "configured",
                 "user_id": str(user_id),
                 "token_id": str(token_id),
-                "token": f"sk-{token}",
+                "token": _normalize_api_token(token),
                 "access_token": access_token,
                 "tokens": tokens,
                 "quota": user_quota,
@@ -588,7 +595,7 @@ class NewAPIBindingService:
             tokens.append(
                 {
                     "id": int(row[0]),
-                    "key": f"sk-{key}" if key and not key.startswith("sk-") else key,
+                    "key": _normalize_api_token(key),
                     "status": int(row[2] or 0),
                     "name": _clean(row[3]),
                     "created_time": int(row[4] or 0),

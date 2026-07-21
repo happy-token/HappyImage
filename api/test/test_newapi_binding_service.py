@@ -234,6 +234,37 @@ def test_apply_newapi_default_provider_preserves_other_providers(tmp_path):
     assert [item["selected"] for item in providers] == [False, True]
 
 
+def test_auth_service_repairs_legacy_double_prefixed_newapi_token(tmp_path):
+    storage = JSONStorageBackend(tmp_path / "accounts.json")
+    service = AuthService(storage)
+    user, _raw_key = service.create_key(role="user", name="Creator Legacy")
+    service.update_key(
+        str(user["id"]),
+        {
+            "model_providers": [
+                {
+                    "id": "newapi-default",
+                    "type": "newapi",
+                    "base_url": "https://gateway.happy-token.cn/v1",
+                    "api_key": "sk-sk-existing-token",
+                    "selected": True,
+                }
+            ]
+        },
+        role="user",
+    )
+    stored_items = storage.load_auth_keys()
+    stored_provider = stored_items[0]["model_providers"][0]
+    stored_provider["api_key"] = "sk-sk-existing-token"
+    stored_items[0]["model_api_key"] = "sk-sk-existing-token"
+    storage.save_auth_keys(stored_items)
+
+    reloaded_service = AuthService(storage)
+    gateway = reloaded_service.get_model_gateway_config(str(user["id"]))
+
+    assert gateway["model_api_key"] == "sk-existing-token"
+
+
 class FakeResponse:
     def __init__(self, status_code: int, payload: dict[str, object], text: str = "{}"):
         self.status_code = status_code
@@ -515,6 +546,34 @@ def test_newapi_binding_direct_sql_reuses_existing_user_and_token():
     }
     assert connection.closed is True
     assert any("oidc_id" in query for query, _params in connection.queries)
+
+
+def test_newapi_binding_direct_sql_does_not_double_prefix_reused_token():
+    connection = FakeSQLConnection(
+        user_id=1,
+        token_id=2,
+        token="sk-existing-token",
+    )
+    service = NewAPIBindingService(
+        settings={
+            **_enabled_settings(),
+            "provision_url": "",
+            "provision_secret": "",
+            "sql_dsn": "postgresql://newapi:secret@postgres:5432/new-api",
+        },
+        sql_connect_factory=lambda dsn: connection,
+    )
+
+    result = service.ensure_default_token(
+        provider="casdoor",
+        subject="casdoor-sub",
+        email="creator@example.com",
+        name="Creator",
+    )
+
+    assert result["ok"] is True
+    assert result["token"] == "sk-existing-token"
+    assert result["tokens"][0]["key"] == "sk-existing-token"
 
 
 def test_newapi_binding_direct_sql_creates_missing_user_and_token():
