@@ -246,7 +246,7 @@ def test_auth_service_repairs_legacy_double_prefixed_newapi_token(tmp_path):
                     "id": "newapi-default",
                     "type": "newapi",
                     "base_url": "https://gateway.happy-token.cn/v1",
-                    "api_key": "sk-sk-existing-token",
+                    "api_key": "sk-sk-existingtoken",
                     "selected": True,
                 }
             ]
@@ -255,14 +255,14 @@ def test_auth_service_repairs_legacy_double_prefixed_newapi_token(tmp_path):
     )
     stored_items = storage.load_auth_keys()
     stored_provider = stored_items[0]["model_providers"][0]
-    stored_provider["api_key"] = "sk-sk-existing-token"
-    stored_items[0]["model_api_key"] = "sk-sk-existing-token"
+    stored_provider["api_key"] = "sk-sk-existingtoken"
+    stored_items[0]["model_api_key"] = "sk-sk-existingtoken"
     storage.save_auth_keys(stored_items)
 
     reloaded_service = AuthService(storage)
     gateway = reloaded_service.get_model_gateway_config(str(user["id"]))
 
-    assert gateway["model_api_key"] == "sk-existing-token"
+    assert gateway["model_api_key"] == "sk-existingtoken"
 
 
 class FakeResponse:
@@ -326,6 +326,9 @@ class FakeCursor:
             self.next_result = (self.connection.created_user_id,)
         elif "insert into tokens" in compact:
             self.next_result = (self.connection.created_token_id,)
+        elif "update tokens set key" in compact:
+            self.connection.token = str(params[0])
+            self.next_result = None
         else:
             self.next_result = None
 
@@ -492,7 +495,7 @@ def test_newapi_binding_preserves_legacy_gateway_url_aliases():
 
 
 def test_newapi_binding_direct_sql_reuses_existing_user_and_token():
-    connection = FakeSQLConnection(user_id=1, token_id=2, token="existing-token")
+    connection = FakeSQLConnection(user_id=1, token_id=2, token="existingtoken")
     service = NewAPIBindingService(
         settings={
             **_enabled_settings(),
@@ -515,12 +518,12 @@ def test_newapi_binding_direct_sql_reuses_existing_user_and_token():
         "status": "configured",
         "user_id": "1",
         "token_id": "2",
-        "token": "sk-existing-token",
+        "token": "sk-existingtoken",
         "access_token": "newapi-access-token",
         "tokens": [
             {
                 "id": 2,
-                "key": "sk-existing-token",
+                "key": "sk-existingtoken",
                 "status": 1,
                 "name": "HappyImage Default",
                 "created_time": 100,
@@ -552,7 +555,7 @@ def test_newapi_binding_direct_sql_does_not_double_prefix_reused_token():
     connection = FakeSQLConnection(
         user_id=1,
         token_id=2,
-        token="sk-existing-token",
+        token="sk-existingtoken",
     )
     service = NewAPIBindingService(
         settings={
@@ -572,8 +575,44 @@ def test_newapi_binding_direct_sql_does_not_double_prefix_reused_token():
     )
 
     assert result["ok"] is True
-    assert result["token"] == "sk-existing-token"
-    assert result["tokens"][0]["key"] == "sk-existing-token"
+    assert result["token"] == "sk-existingtoken"
+    assert result["tokens"][0]["key"] == "sk-existingtoken"
+
+
+def test_newapi_binding_direct_sql_rotates_reused_token_with_separator():
+    connection = FakeSQLConnection(
+        user_id=1,
+        token_id=2,
+        token="invalid-token-with-separator",
+    )
+    service = NewAPIBindingService(
+        settings={
+            **_enabled_settings(),
+            "provision_url": "",
+            "provision_secret": "",
+            "sql_dsn": "postgresql://newapi:secret@postgres:5432/new-api",
+        },
+        sql_connect_factory=lambda dsn: connection,
+    )
+
+    with mock.patch(
+        "services.newapi_binding_service.secrets.token_hex",
+        return_value="a" * 48,
+    ):
+        result = service.ensure_default_token(
+            provider="casdoor",
+            subject="casdoor-sub",
+            email="creator@example.com",
+            name="Creator",
+        )
+
+    assert result["ok"] is True
+    assert result["token"] == "sk-" + ("a" * 48)
+    assert result["tokens"][0]["key"] == "sk-" + ("a" * 48)
+    assert any(
+        "update tokens set key" in " ".join(query.split()).lower()
+        for query, _params in connection.queries
+    )
 
 
 def test_newapi_binding_direct_sql_creates_missing_user_and_token():

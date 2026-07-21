@@ -43,6 +43,13 @@ def _normalize_api_token(value: object) -> str:
     return f"sk-{token}"
 
 
+def is_valid_api_token(value: object) -> bool:
+    token = _clean(value)
+    if token.startswith("sk-"):
+        token = token[3:]
+    return bool(token) and token.isascii() and token.isalnum()
+
+
 def _configured_image_group(settings: dict[str, object]) -> str:
     return _clean(settings.get("image_group")) or DEFAULT_IMAGE_GROUP
 
@@ -537,15 +544,22 @@ class NewAPIBindingService:
         row = cursor.fetchone()
         if row:
             token_id = int(row[0])
+            token = _clean(row[1])
+            if not is_valid_api_token(token):
+                token = secrets.token_hex(24)
+                cursor.execute(
+                    "UPDATE tokens SET key = %s WHERE id = %s",
+                    (token, token_id),
+                )
             if token_group:
                 cursor.execute(
                     'UPDATE tokens SET "group" = %s WHERE id = %s',
                     (token_group, token_id),
                 )
-            return token_id, _clean(row[1])
+            return token_id, token
 
         now = int(time.time())
-        token = secrets.token_urlsafe(36)
+        token = secrets.token_hex(24)
         cursor.execute(
             """
             INSERT INTO tokens (

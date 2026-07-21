@@ -521,6 +521,23 @@ def test_get_session_retries_pending_newapi_binding_from_session_identity():
     assert payload["user"]["newapi_management_url"] == "https://gateway.happy-token.cn"
 
 
+def test_stored_newapi_binding_retries_token_with_separator():
+    user_item = {
+        "id": "user-invalid-token",
+        "model_provider": "newapi",
+        "model_api_key_configured": True,
+    }
+
+    with mock.patch.object(
+        auth_oidc_api.auth_service,
+        "get_model_gateway_config",
+        return_value={"model_api_key": "sk-invalid-token-with-separator"},
+    ):
+        fields = auth_oidc_api._stored_newapi_binding_fields(user_item)
+
+    assert fields == {}
+
+
 def test_get_session_ignores_newapi_cookie_fields_from_different_user():
     app = FastAPI()
     app.include_router(auth_oidc_api.create_router())

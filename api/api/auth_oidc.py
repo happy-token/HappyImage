@@ -19,7 +19,7 @@ from pydantic import BaseModel
 from services.auth_service import auth_service
 from services.config import config
 from services import model_gateway_service
-from services.newapi_binding_service import newapi_binding_service
+from services.newapi_binding_service import is_valid_api_token, newapi_binding_service
 from services.oidc_service import OIDCError, oidc_service
 from services.web_session_service import web_session_service
 from api.support import resolve_identity_for_request
@@ -116,6 +116,9 @@ def _newapi_binding_identity_fields(identity: dict[str, object]) -> dict[str, ob
 def _stored_newapi_binding_fields(user_item: dict[str, object]) -> dict[str, object]:
     provider = str(user_item.get("model_provider") or "").strip().lower()
     if provider != "newapi" or not bool(user_item.get("model_api_key_configured")):
+        return {}
+    gateway = auth_service.get_model_gateway_config(str(user_item.get("id") or ""))
+    if not is_valid_api_token(gateway.get("model_api_key")):
         return {}
     return {
         "newapi_binding_status": "configured",
