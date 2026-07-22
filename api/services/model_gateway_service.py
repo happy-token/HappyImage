@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 MODEL_GATEWAY_MAX_ATTEMPTS = 2
+RETRYABLE_GATEWAY_STATUS_CODES = frozenset({429, 502, 503, 504, 522, 523, 524})
 
 
 class ModelGatewayConfigurationError(RuntimeError):
@@ -83,6 +84,13 @@ def _is_retryable_gateway_error(error: Exception) -> bool:
     )
 
 
+def _is_retryable_gateway_status(status_code: object) -> bool:
+    try:
+        return int(status_code) in RETRYABLE_GATEWAY_STATUS_CODES
+    except (TypeError, ValueError):
+        return False
+
+
 def _request_json(path: str, payload: dict[str, Any], gateway_payload: dict[str, Any] | None = None) -> dict[str, Any]:
     from curl_cffi import requests
 
@@ -106,6 +114,11 @@ def _request_json(path: str, payload: dict[str, Any], gateway_payload: dict[str,
                 json=payload,
                 timeout=300,
             )
+            if (
+                attempt < MODEL_GATEWAY_MAX_ATTEMPTS - 1
+                and _is_retryable_gateway_status(response.status_code)
+            ):
+                continue
             try:
                 data = response.json() if response.text else {}
             except ValueError as exc:
@@ -191,6 +204,11 @@ def edit_image(payload: dict[str, Any]) -> dict[str, Any]:
                 ],
                 timeout=300,
             )
+            if (
+                attempt < MODEL_GATEWAY_MAX_ATTEMPTS - 1
+                and _is_retryable_gateway_status(response.status_code)
+            ):
+                continue
             try:
                 result = response.json() if response.text else {}
             except ValueError as exc:

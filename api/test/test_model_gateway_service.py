@@ -16,6 +16,9 @@ class _GatewayResponse:
 class _GatewaySession:
     attempts = 0
 
+    def __init__(self, *args, **kwargs):
+        pass
+
     def post(self, *args, **kwargs):
         type(self).attempts += 1
         if type(self).attempts == 1:
@@ -29,10 +32,69 @@ class _GatewaySession:
         pass
 
 
+class _UnavailableGatewayResponse:
+    status_code = 503
+    text = '{"error":{"message":"service unavailable"}}'
+
+    def json(self):
+        return {"error": {"message": "service unavailable"}}
+
+
+class _TransientStatusGatewaySession:
+    attempts = 0
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def post(self, *args, **kwargs):
+        type(self).attempts += 1
+        if type(self).attempts == 1:
+            return _UnavailableGatewayResponse()
+        return _GatewayResponse()
+
+    def close(self):
+        pass
+
+
+def test_generate_image_retries_transient_gateway_status():
+    _TransientStatusGatewaySession.attempts = 0
+
+    with mock.patch("curl_cffi.requests.Session", side_effect=_TransientStatusGatewaySession):
+        result = model_gateway_service.generate_image(
+            {
+                "model_gateway_base_url": "https://gateway.example.test/v1",
+                "model_gateway_api_key": "sk-test",
+                "model": "gpt-image-2",
+                "prompt": "cat",
+            }
+        )
+
+    assert _TransientStatusGatewaySession.attempts == 2
+    assert result["data"][0]["url"] == "https://example.test/image.png"
+
+
+def test_edit_image_retries_transient_gateway_status():
+    _TransientStatusGatewaySession.attempts = 0
+
+    with mock.patch("curl_cffi.requests.Session", side_effect=_TransientStatusGatewaySession):
+        result = model_gateway_service.edit_image(
+            {
+                "model_gateway_base_url": "https://gateway.example.test/v1",
+                "model_gateway_api_key": "sk-test",
+                "model": "gpt-image-2",
+                "prompt": "edit",
+                "images": [(b"fake", "image.png", "image/png")],
+            }
+        )
+
+    assert _TransientStatusGatewaySession.attempts == 2
+    assert result["data"][0]["url"] == "https://example.test/image.png"
+
+
 def test_edit_image_retries_retryable_gateway_disconnect():
     _GatewaySession.attempts = 0
 
-    with mock.patch("requests.Session", side_effect=_GatewaySession):
+    with mock.patch("curl_cffi.requests.Session", side_effect=_GatewaySession):
         result = model_gateway_service.edit_image(
             {
                 "model_gateway_base_url": "https://gateway.example.test/v1",
@@ -60,7 +122,7 @@ def test_edit_image_retries_tls_connect_error():
                 )
             return _GatewayResponse()
 
-    with mock.patch("requests.Session", side_effect=_TLSGatewaySession):
+    with mock.patch("curl_cffi.requests.Session", side_effect=_TLSGatewaySession):
         result = model_gateway_service.edit_image(
             {
                 "model_gateway_base_url": "https://gateway.example.test/v1",
