@@ -24,6 +24,7 @@ import {
 } from "@/app/image/components/image-sidebar";
 import { GalleryBrowser } from "@/app/gallery/gallery-browser";
 import { UserGalleryPanel } from "@/app/image/components/user-gallery-panel";
+import { beginFreshDraftHistoryState } from "@/app/image/draft-history";
 import { AccountMenu } from "@/components/account-menu";
 import { fetchAuthenticatedImageBlob } from "@/components/authenticated-image";
 import { ImageLightbox } from "@/components/image-lightbox";
@@ -1564,6 +1565,12 @@ function ImagePageContent({
   }, [clearComposerInputs]);
 
   const handleCreateDraft = useCallback(() => {
+    const draftHistoryState = beginFreshDraftHistoryState({
+      historyLoadInFlight: loadHistoryInFlightRef.current,
+      skipNextHistoryRestore: skipNextHistoryConversationRestoreRef.current,
+    });
+    skipNextHistoryConversationRestoreRef.current =
+      draftHistoryState.skipNextHistoryRestore;
     shouldStickToBottomRef.current = true;
     const btn = scrollToLatestBtnRef.current;
     if (btn) btn.style.display = "none";
