@@ -2591,7 +2591,7 @@ function ImagePageContent({
   return (
     <>
       <section
-        className="happytoken-workspace relative left-1/2 grid h-screen min-h-0 w-screen -translate-x-1/2 grid-cols-1 gap-0 overflow-hidden bg-zinc-50 px-0 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] dark:bg-[#171717] sm:-mt-2 sm:grid-cols-[var(--happytoken-sidebar-track)_minmax(0,1fr)] sm:pb-0"
+        className="happytoken-workspace grid h-full min-h-0 w-full grid-cols-1 gap-0 overflow-hidden bg-zinc-50 px-0 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] dark:bg-[#171717] sm:grid-cols-[var(--happytoken-sidebar-track)_minmax(0,1fr)] sm:pb-0"
         style={workspaceStyle}
       >
         <div className="relative hidden h-full min-h-0 border-r border-zinc-200/70 bg-zinc-50 px-2 py-2 dark:border-zinc-800 dark:bg-[#171717] sm:block">

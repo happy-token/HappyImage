@@ -47,6 +47,7 @@ NEXT_PUBLIC_API_BASE_URL=https://api.example.com pnpm run dev
 | `BACKEND_URL` | Next.js middleware 的服务端转发目标；代理 `/api/*`、`/images/*`、`/image-thumbnails/*` 和 `/health` |
 | `NEXT_PUBLIC_API_BASE_URL` | 浏览器直连 API 地址；同源代理部署保持为空 |
 | `NEXT_PUBLIC_APP_VERSION` | 前端展示版本号 |
+| `NEXT_PUBLIC_HAPPYTOKEN_HOME_URL` | 产品导航中的 HappyToken 主站地址；默认 `https://happy-token.cn` |
 | `NEXT_PUBLIC_SUPPORT_EMAIL` | “联系我们”里的邮箱 |
 | `NEXT_PUBLIC_SUPPORT_WECHAT` | “联系我们”里的微信号 |
 
@@ -114,6 +115,7 @@ docker login ghcr.io
 ```bash
 docker build \
   --build-arg NEXT_PUBLIC_API_BASE_URL="" \
+  --build-arg NEXT_PUBLIC_HAPPYTOKEN_HOME_URL="https://happy-token.cn" \
   -t happyimage-web .
 
 docker run -p 3000:3000 \

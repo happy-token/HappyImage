@@ -14,7 +14,8 @@
 	"vars": {
 		"BACKEND_URL": "https://image-b.happy-token.cn",
 		"MODEL_BACKEND_URL": "https://image-b.happy-token.cn",
-		"NEXT_PUBLIC_API_BASE_URL": ""
+		"NEXT_PUBLIC_API_BASE_URL": "",
+		"NEXT_PUBLIC_HAPPYTOKEN_HOME_URL": "https://happy-token.cn"
 	},
 	"services": [
 		{

@@ -9,6 +9,7 @@ import type { ReactNode } from "react";
 import { AccountMenu } from "@/components/account-menu";
 import { getAdminNavigationItems } from "@/components/admin-navigation";
 import { ImageWorkspaceNav } from "@/components/image-workspace-nav";
+import { ProductNavigation } from "@/components/product-navigation";
 import { TopNav } from "@/components/top-nav";
 import { getValidatedAuthSession, logoutCurrentSession } from "@/lib/auth-session";
 import { useEffectiveLanguage } from "@/lib/language";
@@ -127,9 +128,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     </div>
   ) : null;
 
+  if (isImageWorkspacePath(pathname)) {
+    return (
+      <div className="fixed inset-0 z-40 flex h-dvh min-h-0 w-screen flex-col overflow-hidden bg-zinc-50 dark:bg-[#171717]">
+        <ProductNavigation
+          variant="workspace"
+          session={session}
+          onLogout={handleLogout}
+          onSessionUpdate={setSession}
+        />
+        <div className="min-h-0 flex-1">{children}</div>
+      </div>
+    );
+  }
+
   return (
     <>
-      {isImageWorkspacePath(pathname) || showAdminSidebar ? null : <TopNav session={session} onSessionUpdate={setSession} hideAccountMenu={showAdminSidebar} />}
+      {showAdminSidebar ? null : <TopNav session={session} onSessionUpdate={setSession} hideAccountMenu={showAdminSidebar} />}
       {showAdminSidebar ? (
         <div className="happytoken-workspace relative left-1/2 grid h-screen min-h-0 w-screen -translate-x-1/2 grid-cols-[3.75rem_minmax(0,1fr)] gap-0 overflow-hidden bg-zinc-50 px-0 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] dark:bg-[#171717] sm:-mt-2 sm:grid-cols-[200px_minmax(0,1fr)] sm:pb-0 xl:grid-cols-[240px_minmax(0,1fr)]">
           <AdminSidebar accountFooter={adminAccountFooter} />

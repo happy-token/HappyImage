@@ -6,7 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { HeaderActions } from "@/components/header-actions";
+import { ProductNavigation } from "@/components/product-navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import webConfig from "@/constants/common-env";
@@ -1215,7 +1215,9 @@ export default function HomePage() {
   const [total, setTotal] = useState(0);
   const [categoryCount, setCategoryCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
-  const [session, setSession] = useState<StoredAuthSession | null>(null);
+  const [session, setSession] = useState<
+    StoredAuthSession | null | undefined
+  >(undefined);
   const [activeGalleryKey, setActiveGalleryKey] = useState("home");
   const [isGalleryNavVisible, setIsGalleryNavVisible] = useState(false);
   const galleryNavHideTimeoutRef = useRef<number | null>(null);
@@ -1538,25 +1540,7 @@ export default function HomePage() {
 
   return (
     <section id="home" className="mx-auto flex w-full max-w-[1380px] flex-1 flex-col gap-5 pb-8 scroll-mt-4">
-      <header className="flex min-h-12 items-center justify-between px-1 py-2 sm:px-3">
-        <Link
-          href="/"
-          className="flex shrink-0 items-center gap-2 text-base font-bold tracking-tight text-stone-950 transition hover:text-stone-700 dark:text-stone-50 dark:hover:text-white"
-        >
-          <Image
-            src="/happy-token-logo.svg"
-            alt="Happy Token"
-            width={30}
-            height={30}
-            priority
-            className="size-7 rounded-md shadow-[0_8px_20px_-14px_rgba(161,98,7,0.8)] sm:size-[30px]"
-          />
-          <span>Happy Token</span>
-        </Link>
-        <div className="flex items-center gap-2">
-          <HeaderActions />
-        </div>
-      </header>
+      <ProductNavigation variant="public" session={session} />
 
       <FloatingGalleryNav
         sections={gallerySections}
