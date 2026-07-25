@@ -71,10 +71,14 @@ export function useAuthGuard(allowedRoles?: AuthRole[]): UseAuthGuardResult {
   return { isCheckingAuth, session };
 }
 
-export function useRedirectIfAuthenticated(options?: { forceLogin?: boolean }) {
+export function useRedirectIfAuthenticated(options?: {
+  forceLogin?: boolean;
+  syncLogin?: boolean;
+}) {
   const router = useRouter();
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const forceLogin = Boolean(options?.forceLogin);
+  const syncLogin = Boolean(options?.syncLogin);
 
   useEffect(() => {
     let active = true;
@@ -85,6 +89,11 @@ export function useRedirectIfAuthenticated(options?: { forceLogin?: boolean }) {
         if (active) {
           setIsCheckingAuth(false);
         }
+        return;
+      }
+
+      if (syncLogin) {
+        setIsCheckingAuth(false);
         return;
       }
 
@@ -106,7 +115,7 @@ export function useRedirectIfAuthenticated(options?: { forceLogin?: boolean }) {
     return () => {
       active = false;
     };
-  }, [forceLogin, router]);
+  }, [forceLogin, router, syncLogin]);
 
   return { isCheckingAuth };
 }

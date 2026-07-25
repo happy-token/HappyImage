@@ -4,23 +4,19 @@ Handles OIDC discovery, PKCE authorize URL construction, token exchange,
 id_token claim validation, and userinfo retrieval. This service is for
 Happy Token web user login — it is separate from the OpenAI account OAuth
 import flow.
-
-Note: Full JWT signature verification requires a crypto library (e.g.
-jwcrypto, pyjwt). For the first version, id_token claims are validated
-(iss, aud, exp, nonce) based on the payload. Signature verification
-will be added in a follow-up.
 """
 
 from __future__ import annotations
 
-import base64
-import json
 import secrets
 import threading
 import time
 import uuid
 from typing import Any
 from urllib.parse import urlencode
+
+import jwt
+from jwt import InvalidTokenError, PyJWK
 
 from services.config import config
 
@@ -35,11 +31,14 @@ class OIDCService:
     _TRANSACTION_TTL_SECONDS = 10 * 60  # user has 10 min to complete login
     _MAX_TRANSACTIONS = 128
     _DISCOVERY_CACHE_TTL_SECONDS = 3600  # cache discovery doc for 1 hour
+    _JWKS_CACHE_TTL_SECONDS = 3600
+    _ALLOWED_ID_TOKEN_ALGORITHMS = ("RS256",)
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._transactions: dict[str, dict[str, Any]] = {}
         self._discovery_cache: tuple[dict[str, Any], float] | None = None
+        self._jwks_cache: tuple[dict[str, Any], float] | None = None
 
     # ------------------------------------------------------------------
     # Configuration helpers
@@ -173,7 +172,6 @@ class OIDCService:
             "scope": scopes,
             "state": state,
             "nonce": nonce,
-            "prompt": "login",
             "code_challenge": challenge,
             "code_challenge_method": "S256",
         }
@@ -285,6 +283,11 @@ class OIDCService:
                 # userinfo is supplementary; don't fail login if it's unavailable
                 pass
 
+        token_subject = str(claims.get("sub") or "").strip()
+        userinfo_subject = str(userinfo_claims.get("sub") or "").strip()
+        if userinfo_subject and userinfo_subject != token_subject:
+            raise OIDCError("userinfo 用户与 id_token 用户不一致")
+
         merged = {**claims, **userinfo_claims}
 
         # Enforce email domain allowlist
@@ -382,72 +385,114 @@ class OIDCService:
         return data
 
     # ------------------------------------------------------------------
-    # ID token claim validation (payload only; signature deferred)
+    # ID token signature and claim validation
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _decode_jwt_payload(jwt_raw: str) -> dict[str, Any]:
-        """Base64url-decode the payload segment of a JWT without verifying."""
-        parts = jwt_raw.split(".")
-        if len(parts) < 2:
-            raise OIDCError("id_token 格式无效：JWT 必须包含至少两段")
-        try:
-            # Add padding for base64url decoding
-            payload_b64 = parts[1]
-            padding = 4 - len(payload_b64) % 4
-            if padding != 4:
-                payload_b64 += "=" * padding
-            payload_bytes = base64.urlsafe_b64decode(payload_b64)
-            claims = json.loads(payload_bytes.decode("utf-8"))
-        except Exception as exc:
-            raise OIDCError(f"无法解析 id_token payload: {exc}") from exc
-        if not isinstance(claims, dict):
-            raise OIDCError("id_token payload 格式异常")
-        return claims
+    def _fetch_jwks(self, *, force_refresh: bool = False) -> dict[str, Any]:
+        with self._lock:
+            cached = self._jwks_cache
+        if (
+            not force_refresh
+            and cached
+            and (time.time() - cached[1]) < self._JWKS_CACHE_TTL_SECONDS
+        ):
+            return cached[0]
 
-    @classmethod
+        jwks_uri = self._get_provider_endpoint("jwks_uri")
+        from curl_cffi import requests
+        from services.proxy_service import proxy_settings
+
+        kwargs = proxy_settings.build_session_kwargs(impersonate="chrome", verify=True)
+        session = requests.Session(**kwargs)
+        try:
+            response = session.get(jwks_uri, timeout=15)
+            if response.status_code != 200:
+                raise OIDCError(
+                    f"无法获取 OIDC 签名密钥 (HTTP {response.status_code})"
+                )
+            jwks = response.json()
+            if not isinstance(jwks, dict) or not isinstance(jwks.get("keys"), list):
+                raise OIDCError("OIDC 签名密钥格式异常")
+        except OIDCError:
+            raise
+        except Exception as exc:
+            raise OIDCError(f"获取 OIDC 签名密钥失败: {exc}") from exc
+        finally:
+            session.close()
+
+        with self._lock:
+            self._jwks_cache = (jwks, time.time())
+        return jwks
+
+    def _find_signing_key(self, *, key_id: str, algorithm: str) -> object:
+        for force_refresh in (False, True):
+            jwks = self._fetch_jwks(force_refresh=force_refresh)
+            for candidate in jwks.get("keys", []):
+                if not isinstance(candidate, dict):
+                    continue
+                if str(candidate.get("kid") or "") != key_id:
+                    continue
+                if str(candidate.get("kty") or "") != "RSA":
+                    continue
+                if str(candidate.get("use") or "sig") != "sig":
+                    continue
+                candidate_alg = str(candidate.get("alg") or algorithm)
+                if candidate_alg != algorithm:
+                    continue
+                try:
+                    return PyJWK.from_dict(candidate, algorithm=algorithm).key
+                except Exception as exc:
+                    raise OIDCError("OIDC 签名密钥无效") from exc
+        raise OIDCError("id_token 使用了未知的签名密钥")
+
     def _validate_id_token_claims(
-        cls,
+        self,
         *,
         id_token_raw: str,
         client_id: str,
         issuer: str,
         nonce: str,
     ) -> dict[str, Any]:
-        """Validate id_token claims: issuer, audience, nonce, expiry."""
-        claims = cls._decode_jwt_payload(id_token_raw)
+        """Verify the ID token signature and required OIDC claims."""
+        try:
+            header = jwt.get_unverified_header(id_token_raw)
+        except InvalidTokenError as exc:
+            raise OIDCError("id_token 格式无效") from exc
 
-        # Validate issuer
-        token_iss = str(claims.get("iss") or "").strip()
-        if token_iss.rstrip("/") != issuer.rstrip("/"):
-            raise OIDCError(
-                f"id_token issuer 不匹配: {token_iss} != {issuer}"
+        algorithm = str(header.get("alg") or "")
+        if algorithm not in self._ALLOWED_ID_TOKEN_ALGORITHMS:
+            raise OIDCError("id_token 使用了不允许的签名算法")
+        key_id = str(header.get("kid") or "").strip()
+        if not key_id:
+            raise OIDCError("id_token 缺少签名密钥标识")
+
+        signing_key = self._find_signing_key(key_id=key_id, algorithm=algorithm)
+        try:
+            claims = jwt.decode(
+                id_token_raw,
+                key=signing_key,
+                algorithms=list(self._ALLOWED_ID_TOKEN_ALGORITHMS),
+                audience=client_id,
+                issuer=issuer,
+                leeway=30,
+                options={
+                    "require": ["aud", "exp", "iat", "iss", "sub"],
+                },
             )
+        except InvalidTokenError as exc:
+            raise OIDCError("id_token 签名或声明验证失败") from exc
+        if not isinstance(claims, dict):
+            raise OIDCError("id_token payload 格式异常")
 
-        # Validate audience
-        aud = claims.get("aud")
-        if isinstance(aud, list):
-            if client_id not in aud:
-                raise OIDCError("id_token audience 不包含当前 client_id")
-        elif str(aud or "").strip() != client_id:
-            raise OIDCError("id_token audience 不匹配")
-
-        # Validate nonce
         token_nonce = str(claims.get("nonce") or "").strip()
-        if token_nonce != nonce:
+        if not token_nonce or token_nonce != nonce:
             raise OIDCError("id_token nonce 不匹配")
 
-        # Validate expiry (30s clock skew tolerance)
-        exp = claims.get("exp")
-        if isinstance(exp, (int, float)):
-            if time.time() > exp + 30:
-                raise OIDCError("id_token 已过期")
-
-        # Validate iat if present (5 min max age from issue)
         iat = claims.get("iat")
-        if isinstance(iat, (int, float)):
-            if time.time() > iat + 600:  # 10 min max id_token age
-                raise OIDCError("id_token 签发时间过早")
+        if not isinstance(iat, (int, float)) or time.time() > iat + 600:
+            raise OIDCError("id_token 签发时间过早")
+        if not str(claims.get("sub") or "").strip():
+            raise OIDCError("id_token 缺少用户标识")
 
         return claims
 

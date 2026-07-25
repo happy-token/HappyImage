@@ -1,16 +1,23 @@
 from __future__ import annotations
 
+import base64
+import json
+import time
 from contextlib import contextmanager
 from unittest import mock
 from urllib.parse import parse_qs, urlsplit
 
+import pytest
+import jwt
+from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from jwt.algorithms import RSAAlgorithm
 from starlette.requests import Request
 
 import api.auth_oidc as auth_oidc_api
 from services.config import config
-from services.oidc_service import OIDCService
+from services.oidc_service import OIDCError, OIDCService
 from services.web_session_service import web_session_service
 
 
@@ -66,6 +73,45 @@ def _request(
     )
 
 
+def _encode_jwt_part(value: object) -> str:
+    raw = json.dumps(value, separators=(",", ":")).encode("utf-8")
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+
+
+def _signed_id_token(
+    *,
+    private_key,
+    key_id: str,
+    **claim_overrides: object,
+) -> str:
+    now = int(time.time())
+    claims = {
+        "iss": "https://issuer.example",
+        "aud": "happytoken",
+        "sub": "creator-1",
+        "nonce": "expected-nonce",
+        "iat": now,
+        "exp": now + 300,
+        **claim_overrides,
+    }
+    return jwt.encode(
+        claims,
+        private_key,
+        algorithm="RS256",
+        headers={"kid": key_id},
+    )
+
+
+def _public_jwk(private_key, *, key_id: str) -> dict[str, object]:
+    value = RSAAlgorithm.to_jwk(private_key.public_key(), as_dict=True)
+    return {
+        **value,
+        "alg": "RS256",
+        "kid": key_id,
+        "use": "sig",
+    }
+
+
 def test_oidc_authorize_and_callback_reuse_absolute_redirect_uri():
     service = OIDCService()
     with (
@@ -92,7 +138,7 @@ def test_oidc_authorize_and_callback_reuse_absolute_redirect_uri():
         assert query["redirect_uri"] == [
             "https://api.example.com/api/auth/oidc/callback"
         ]
-        assert query["prompt"] == ["login"]
+        assert "prompt" not in query
 
         captured = {}
 
@@ -115,6 +161,181 @@ def test_oidc_authorize_and_callback_reuse_absolute_redirect_uri():
         )
         assert claims["sub"] == "oidc-sub"
         assert claims["email"] == "creator@example.com"
+
+
+def test_oidc_rejects_userinfo_for_a_different_subject():
+    service = OIDCService()
+    with (
+        mock.patch.dict(config.data, {"oidc": _oidc_settings()}, clear=False),
+        mock.patch.object(
+            service,
+            "_fetch_discovery",
+            return_value={
+                "authorization_endpoint": "https://issuer.example/authorize",
+                "token_endpoint": "https://issuer.example/token",
+                "userinfo_endpoint": "https://issuer.example/userinfo",
+            },
+        ),
+        mock.patch.object(
+            service,
+            "_exchange_code",
+            return_value={
+                "access_token": "access",
+                "id_token": "header.payload.signature",
+            },
+        ),
+        mock.patch.object(
+            service,
+            "_validate_id_token_claims",
+            return_value={"sub": "subject-1"},
+        ),
+        mock.patch.object(
+            service,
+            "_fetch_userinfo",
+            return_value={"sub": "subject-2", "email": "creator@example.com"},
+        ),
+    ):
+        start = service.build_authorize_url(next_path="/image")
+        state = parse_qs(urlsplit(start["authorize_url"]).query)["state"][0]
+        with pytest.raises(OIDCError):
+            service.handle_callback(code="code", state=state)
+
+
+def test_oidc_rejects_id_token_without_a_verifiable_signature():
+    now = int(time.time())
+    token = ".".join(
+        [
+            _encode_jwt_part({"alg": "RS256", "kid": "forged-key", "typ": "JWT"}),
+            _encode_jwt_part(
+                {
+                    "iss": "https://issuer.example",
+                    "aud": "happytoken",
+                    "sub": "attacker",
+                    "nonce": "expected-nonce",
+                    "iat": now,
+                    "exp": now + 300,
+                }
+            ),
+            _encode_jwt_part("forged-signature"),
+        ]
+    )
+    service = OIDCService()
+
+    with mock.patch.object(
+        service,
+        "_fetch_jwks",
+        return_value={"keys": []},
+        create=True,
+    ):
+        with pytest.raises(OIDCError):
+            service._validate_id_token_claims(
+                id_token_raw=token,
+                client_id="happytoken",
+                issuer="https://issuer.example",
+                nonce="expected-nonce",
+            )
+
+
+def test_oidc_accepts_a_valid_signed_id_token():
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    token = _signed_id_token(private_key=private_key, key_id="key-1")
+    service = OIDCService()
+
+    with mock.patch.object(
+        service,
+        "_fetch_jwks",
+        return_value={"keys": [_public_jwk(private_key, key_id="key-1")]},
+    ):
+        claims = service._validate_id_token_claims(
+            id_token_raw=token,
+            client_id="happytoken",
+            issuer="https://issuer.example",
+            nonce="expected-nonce",
+        )
+
+    assert claims["sub"] == "creator-1"
+
+
+def test_oidc_rejects_a_token_signed_by_an_untrusted_key():
+    trusted_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    attacker_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    token = _signed_id_token(private_key=attacker_key, key_id="key-1")
+    service = OIDCService()
+
+    with mock.patch.object(
+        service,
+        "_fetch_jwks",
+        return_value={"keys": [_public_jwk(trusted_key, key_id="key-1")]},
+    ):
+        with pytest.raises(OIDCError):
+            service._validate_id_token_claims(
+                id_token_raw=token,
+                client_id="happytoken",
+                issuer="https://issuer.example",
+                nonce="expected-nonce",
+            )
+
+
+def test_oidc_refreshes_jwks_once_for_key_rotation():
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    token = _signed_id_token(private_key=private_key, key_id="rotated-key")
+    service = OIDCService()
+
+    with mock.patch.object(
+        service,
+        "_fetch_jwks",
+        side_effect=[
+            {"keys": []},
+            {"keys": [_public_jwk(private_key, key_id="rotated-key")]},
+        ],
+    ) as fetch_jwks:
+        claims = service._validate_id_token_claims(
+            id_token_raw=token,
+            client_id="happytoken",
+            issuer="https://issuer.example",
+            nonce="expected-nonce",
+        )
+
+    assert claims["sub"] == "creator-1"
+    assert fetch_jwks.call_args_list == [
+        mock.call(force_refresh=False),
+        mock.call(force_refresh=True),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("claim_overrides", "nonce"),
+    [
+        ({"iss": "https://attacker.example"}, "expected-nonce"),
+        ({"aud": "other-client"}, "expected-nonce"),
+        ({"exp": 0}, "expected-nonce"),
+        ({}, "wrong-nonce"),
+    ],
+)
+def test_oidc_rejects_invalid_required_claims(
+    claim_overrides: dict[str, object],
+    nonce: str,
+):
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    token = _signed_id_token(
+        private_key=private_key,
+        key_id="key-1",
+        **claim_overrides,
+    )
+    service = OIDCService()
+
+    with mock.patch.object(
+        service,
+        "_fetch_jwks",
+        return_value={"keys": [_public_jwk(private_key, key_id="key-1")]},
+    ):
+        with pytest.raises(OIDCError):
+            service._validate_id_token_claims(
+                id_token_raw=token,
+                client_id="happytoken",
+                issuer="https://issuer.example",
+                nonce=nonce,
+            )
 
 
 def test_oidc_callback_base_url_prefers_external_api_url_runtime_setting():

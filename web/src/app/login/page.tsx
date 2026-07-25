@@ -5,6 +5,7 @@ import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import { startOIDCLogin } from "@/lib/api";
+import { resolveLoginMode } from "@/lib/login-mode";
 import { useRedirectIfAuthenticated } from "@/lib/use-auth-guard";
 import { normalizePostAuthRedirectPath } from "@/store/auth";
 
@@ -17,18 +18,20 @@ function getNextPathFromLocation() {
   );
 }
 
-function shouldForceLoginFromLocation() {
+function getLoginModeFromLocation() {
   if (typeof window === "undefined") {
-    return false;
+    return resolveLoginMode("");
   }
-  return new URLSearchParams(window.location.search).get("force") === "1";
+  return resolveLoginMode(window.location.search);
 }
 
 export default function LoginPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const hasStartedLoginRef = useRef(false);
+  const loginMode = getLoginModeFromLocation();
   const { isCheckingAuth } = useRedirectIfAuthenticated({
-    forceLogin: shouldForceLoginFromLocation(),
+    forceLogin: loginMode === "force",
+    syncLogin: loginMode === "sync",
   });
 
   useEffect(() => {
