@@ -164,6 +164,7 @@ def generate_image(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def edit_image(payload: dict[str, Any]) -> dict[str, Any]:
+    import curl_cffi
     from curl_cffi import requests
 
     base_url = _gateway_base_url(payload)
@@ -190,7 +191,19 @@ def edit_image(payload: dict[str, Any]) -> dict[str, Any]:
     last_error: Exception | None = None
     for attempt in range(MODEL_GATEWAY_MAX_ATTEMPTS):
         session = requests.Session(impersonate="chrome")
+        multipart = None
         try:
+            multipart = curl_cffi.CurlMime.from_list(
+                [
+                    {
+                        "name": "image",
+                        "content_type": mime_type or "application/octet-stream",
+                        "filename": filename,
+                        "data": content,
+                    }
+                    for content, filename, mime_type in images
+                ]
+            )
             response = session.post(
                 url,
                 headers={
@@ -198,10 +211,7 @@ def edit_image(payload: dict[str, Any]) -> dict[str, Any]:
                     "Accept": "application/json",
                 },
                 data=fields,
-                files=[
-                    ("image", (filename, content, mime_type or "application/octet-stream"))
-                    for content, filename, mime_type in images
-                ],
+                multipart=multipart,
                 timeout=300,
             )
             if (
@@ -225,6 +235,8 @@ def edit_image(payload: dict[str, Any]) -> dict[str, Any]:
             if attempt >= MODEL_GATEWAY_MAX_ATTEMPTS - 1 or not _is_retryable_gateway_error(exc):
                 raise RuntimeError(humanize_gateway_error(exc)) from exc
         finally:
+            if multipart is not None:
+                multipart.close()
             session.close()
     else:
         raise last_error or RuntimeError("model gateway request failed")

@@ -56,6 +56,34 @@ class _TransientStatusGatewaySession:
         pass
 
 
+class _RecordingGatewaySession:
+    post_kwargs = None
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def post(self, *args, **kwargs):
+        type(self).post_kwargs = kwargs
+        return _GatewayResponse()
+
+    def close(self):
+        pass
+
+
+class _TrackingMultipart:
+    parts = None
+    closed = False
+
+    @classmethod
+    def from_list(cls, parts):
+        cls.parts = parts
+        cls.closed = False
+        return cls()
+
+    def close(self):
+        type(self).closed = True
+
+
 def test_generate_image_retries_transient_gateway_status():
     _TransientStatusGatewaySession.attempts = 0
 
@@ -89,6 +117,37 @@ def test_edit_image_retries_transient_gateway_status():
 
     assert _TransientStatusGatewaySession.attempts == 2
     assert result["data"][0]["url"] == "https://example.test/image.png"
+
+
+def test_edit_image_uses_multipart_and_closes_form():
+    _RecordingGatewaySession.post_kwargs = None
+
+    with (
+        mock.patch("curl_cffi.requests.Session", side_effect=_RecordingGatewaySession),
+        mock.patch("curl_cffi.CurlMime.from_list", side_effect=_TrackingMultipart.from_list),
+    ):
+        model_gateway_service.edit_image(
+            {
+                "model_gateway_base_url": "https://gateway.example.test/v1",
+                "model_gateway_api_key": "sk-test",
+                "model": "gpt-image-2",
+                "prompt": "edit",
+                "images": [(b"fake", "image.png", "image/png")],
+            }
+        )
+
+    assert _RecordingGatewaySession.post_kwargs is not None
+    assert "files" not in _RecordingGatewaySession.post_kwargs
+    assert isinstance(_RecordingGatewaySession.post_kwargs["multipart"], _TrackingMultipart)
+    assert _TrackingMultipart.parts == [
+        {
+            "name": "image",
+            "content_type": "image/png",
+            "filename": "image.png",
+            "data": b"fake",
+        }
+    ]
+    assert _TrackingMultipart.closed is True
 
 
 def test_edit_image_retries_retryable_gateway_disconnect():
