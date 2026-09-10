@@ -97,7 +97,12 @@ const HAPPYTOKEN_PROVIDER_ID = "newapi-default";
 const HAPPYTOKEN_MANAGEMENT_URL = "/settings/newapi";
 const HAPPYTOKEN_MODEL_BASE_URL = `${HAPPYTOKEN_GATEWAY_URL}/v1`;
 const HAPPYTOKEN_IMAGE_GROUP = "image";
-const HAPPYTOKEN_IMAGE_MODELS = ["gpt-image-2", "codex-gpt-image-2"];
+const HAPPYTOKEN_IMAGE_MODELS = [
+  "gpt-image-2",
+  "codex-gpt-image-2",
+  "gpt-image-2.5-flare",
+  "gpt-image-2.5-sunburst",
+];
 const HAPPYTOKEN_MANAGEMENT_ORIGINS = new Set([HAPPYTOKEN_GATEWAY_URL]);
 const OPENAI_PROTOCOL = "openai";
 const PROVIDER_PRESETS = [
@@ -106,7 +111,13 @@ const PROVIDER_PRESETS = [
     name: "OpenAI",
     protocol: OPENAI_PROTOCOL,
     baseUrl: "https://api.openai.com/v1",
-    models: ["gpt-image-2", "gpt-image-1.5", "gpt-image-1"],
+    models: [
+      "gpt-image-2.5-flare",
+      "gpt-image-2.5-sunburst",
+      "gpt-image-2",
+      "gpt-image-1.5",
+      "gpt-image-1",
+    ],
   },
   {
     id: "volcengine",

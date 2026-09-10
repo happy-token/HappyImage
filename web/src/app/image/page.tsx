@@ -95,6 +95,8 @@ const DEFAULT_IMAGE_COUNT = "1";
 const DEFAULT_IMAGE_MODELS: ImageModel[] = [
   "gpt-image-2",
   "codex-gpt-image-2",
+  "gpt-image-2.5-flare",
+  "gpt-image-2.5-sunburst",
 ];
 const SIDEBAR_WIDTH_STORAGE_KEY = "happytoken:image_sidebar_width";
 const SIDEBAR_COLLAPSED_STORAGE_KEY = "happytoken:image_sidebar_collapsed";
