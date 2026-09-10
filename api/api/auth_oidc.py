@@ -13,7 +13,7 @@ from urllib import request as urllib_request
 
 from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel
 
 from services.auth_service import auth_service
@@ -585,6 +585,18 @@ def create_router() -> APIRouter:
         except ValueError as exc:
             raise HTTPException(status_code=400, detail={"error": str(exc)}) from exc
 
+    @router.get("/api/auth/image-models")
+    async def image_models(
+        request: Request,
+        refresh: bool = False,
+        authorization: str | None = Header(default=None),
+    ):
+        resolve_identity_for_request(request, authorization)
+        catalog = await run_in_threadpool(
+            newapi_binding_service.get_image_model_catalog, refresh=refresh
+        )
+        return JSONResponse(catalog, headers={"Cache-Control": "private, no-store"})
+
     @router.get("/api/auth/newapi-management")
     async def newapi_management(
         request: Request,
@@ -651,7 +663,6 @@ def create_router() -> APIRouter:
     @router.post("/api/auth/logout")
     async def logout():
         """Clear the web session cookie and return provider logout if available."""
-        from fastapi.responses import JSONResponse
 
         cookie = web_session_service.make_clear_cookie_header()
         logout_url = await run_in_threadpool(

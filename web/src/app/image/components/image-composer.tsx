@@ -44,6 +44,9 @@ type ImageComposerProps = {
   imageQuality: string;
   imageModel: ImageModel;
   imageModels: ImageModel[];
+  modelCatalog?: Array<{ model: string; billing_type: string; price: number }>;
+  modelsRefreshing?: boolean;
+  onRefreshModels?: () => void;
   activeTaskCount: number;
   referenceImages: Array<{ name: string; dataUrl?: string; url?: string }>;
   textareaRef: RefObject<HTMLTextAreaElement | null>;
@@ -222,6 +225,9 @@ export function ImageComposer({
   imageQuality,
   imageModel,
   imageModels,
+  modelCatalog = [],
+  modelsRefreshing = false,
+  onRefreshModels,
   activeTaskCount,
   referenceImages,
   textareaRef,
@@ -261,8 +267,9 @@ export function ImageComposer({
       imageModels.map((model) => ({
         value: model,
         label: formatImageModelLabel(model),
+        price: modelCatalog.find((item) => item.model === model),
       })),
-    [imageModels]
+    [imageModels, modelCatalog]
   );
   const qualityLabel =
     qualityOptions.find((option) => option.value === imageQuality)?.label ||
@@ -540,8 +547,15 @@ export function ImageComposer({
                           图像设置
                         </h3>
                         <div className="mb-3">
-                          <div className="mb-2 text-sm font-medium text-stone-900">
-                            模型
+                          <div className="mb-2 flex items-center justify-between text-sm font-medium text-stone-900">
+                            <span>模型</span>
+                            {onRefreshModels && (
+                              <button type="button" disabled={modelsRefreshing}
+                                onClick={onRefreshModels}
+                                className="text-xs text-stone-500 hover:text-stone-900 disabled:opacity-50">
+                                {modelsRefreshing ? "刷新中…" : "刷新模型"}
+                              </button>
+                            )}
                           </div>
                           <Select
                             value={imageModel}
@@ -576,6 +590,13 @@ export function ImageComposer({
                                   }}
                                 >
                                   {option.label}
+                                  {option.price && (
+                                    <span className="ml-2 text-xs text-stone-500">
+                                      {option.price.billing_type === "per_request"
+                                        ? `$${option.price.price}/次`
+                                        : "按量计费"}
+                                    </span>
+                                  )}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -734,7 +755,7 @@ export function ImageComposer({
                 <button
                   type="button"
                   onClick={() => void onSubmit()}
-                  disabled={!prompt.trim()}
+                  disabled={!prompt.trim() || imageModels.length === 0}
                   className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-white shadow-sm transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:bg-zinc-300 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200 dark:disabled:bg-zinc-700 dark:disabled:text-zinc-400 sm:size-10"
                   aria-label={
                     referenceImages.length > 0 ? "编辑图片" : "生成图片"

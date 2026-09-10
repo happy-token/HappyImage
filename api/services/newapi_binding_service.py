@@ -6,10 +6,10 @@ from pathlib import Path
 import secrets
 import time
 from typing import Any
-from urllib import request as urllib_request
 from urllib.parse import urlsplit, urlunsplit
 
 from utils.log import logger
+from services.image_model_catalog import ImageModelCatalog
 
 DEFAULT_NEWAPI_URL = "https://gateway.happy-token.cn"
 DEFAULT_IMAGE_GROUP = "image"
@@ -116,6 +116,7 @@ class NewAPIBindingService:
         session_factory: Callable[[], Any] | None = None,
         sql_connect_factory: Callable[[str], Any] | None = None,
     ) -> None:
+        self._catalog = ImageModelCatalog()
         self._settings = settings
         self._session_factory = session_factory
         self._sql_connect_factory = sql_connect_factory
@@ -250,82 +251,21 @@ class NewAPIBindingService:
                 except Exception:
                     pass
 
+    def get_image_model_catalog(self, *, refresh: bool = False,
+                                settings: dict[str, object] | None = None) -> dict:
+        settings = settings or self._settings or self._load_settings()
+        group, models, prices, billing_types = _model_settings(settings)
+        fallback = [{"model": model, "group": group,
+                     "billing_type": billing_types.get(model, "usage"),
+                     "quota_type": 1 if billing_types.get(model) == "per_request" else 0,
+                     "price": prices.get(model, 0.0), "source": "settings"}
+                    for model in models]
+        return self._catalog.get(settings, fallback, refresh=refresh)
+
     def get_image_model_details(
         self, settings: dict[str, object] | None = None
     ) -> list[dict[str, object]]:
-        settings = settings or self._settings or self._load_settings()
-        image_group, image_models, image_prices, image_billing_types = _model_settings(settings)
-        details_by_model = {
-            model: {
-                "model": model,
-                "group": image_group,
-                "billing_type": image_billing_types.get(model, "usage"),
-                "quota_type": 1
-                if image_billing_types.get(model) == "per_request"
-                else 0,
-                "price": image_prices.get(model, 0.0),
-                "source": "settings",
-            }
-            for model in image_models
-        }
-        pricing_items = self._fetch_newapi_pricing(settings)
-        for item in pricing_items:
-            model = _clean(item.get("model_name") or item.get("model"))
-            if model not in details_by_model:
-                continue
-            enabled_groups = item.get("enable_group")
-            if (
-                image_group
-                and isinstance(enabled_groups, list)
-                and image_group not in [_clean(group) for group in enabled_groups]
-            ):
-                continue
-            quota_type = item.get("quota_type")
-            try:
-                normalized_quota_type = int(quota_type)
-            except (TypeError, ValueError):
-                normalized_quota_type = int(details_by_model[model]["quota_type"])
-            try:
-                price = float(item.get("model_price"))
-            except (TypeError, ValueError):
-                price = float(details_by_model[model]["price"])
-            details_by_model[model] = {
-                **details_by_model[model],
-                "billing_type": "per_request"
-                if normalized_quota_type == 1
-                else "usage",
-                "quota_type": normalized_quota_type,
-                "price": max(0.0, price),
-                "source": "newapi",
-            }
-        return [details_by_model[model] for model in image_models]
-
-    def _fetch_newapi_pricing(
-        self, settings: dict[str, object]
-    ) -> list[dict[str, object]]:
-        management_url = _normalize_management_url(
-            settings.get("gateway_management_url")
-            or settings.get("management_url")
-            or settings.get("gateway_api_base_url")
-            or settings.get("base_url")
-        )
-        if not management_url:
-            return []
-        try:
-            req = urllib_request.Request(
-                f"{management_url}/api/pricing",
-                headers={"Accept": "application/json"},
-                method="GET",
-            )
-            with urllib_request.urlopen(req, timeout=10) as response:
-                raw_body = response.read(1024 * 1024)
-            payload = json.loads(raw_body.decode("utf-8", "ignore"))
-        except Exception:
-            return []
-        if not isinstance(payload, dict) or payload.get("success") is False:
-            return []
-        data = payload.get("data")
-        return [item for item in data if isinstance(item, dict)] if isinstance(data, list) else []
+        return self.get_image_model_catalog(settings=settings)["models"]
 
     def _make_session(self) -> Any:
         if self._session_factory is not None:

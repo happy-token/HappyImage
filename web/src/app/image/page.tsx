@@ -43,12 +43,14 @@ import {
   createImageGenerationTask,
   deleteServerImageConversation,
   fetchImageConversations,
+  fetchImageModelCatalog,
   fetchImageTasks,
   updateImageConversationResult,
   updateImageConversationTurn,
   updateImageTaskFeedback,
   updateUserProfile,
   upsertImageConversation,
+  type NewAPIManagementModel,
   type ImageFeedbackVote,
   type ImageModel,
   type ImageTask,
@@ -271,15 +273,7 @@ function getSessionProviderImageModels(
     .filter((model, index, list) => model && list.indexOf(model) === index);
 }
 
-function mergeImageModels(...groups: ImageModel[][]): ImageModel[] {
-  const merged: ImageModel[] = [];
-  groups.flat().forEach((model) => {
-    if (model && !merged.includes(model)) {
-      merged.push(model);
-    }
-  });
-  return merged.length > 0 ? merged : [...DEFAULT_IMAGE_MODELS];
-}
+
 
 function buildReferenceImageFromResult(
   image: StoredImage,
@@ -680,6 +674,13 @@ function ImagePageContent({
   const [imageModel, setImageModel] = useState<ImageModel>(
     DEFAULT_IMAGE_MODELS[0]
   );
+  const [modelRefreshVersion, setModelRefreshVersion] = useState(0);
+  const [modelsRefreshing, setModelsRefreshing] = useState(false);
+  const [modelCatalog, setModelCatalog] = useState<NewAPIManagementModel[]>([]);
+  const selectedProvider = session?.modelProviders?.find((provider) => provider.selected);
+  const usesSharedModels = selectedProvider
+    ? selectedProvider.id === "newapi-default"
+    : session?.modelProvider === "newapi";
   const [imageModels, setImageModels] = useState<ImageModel[]>([
     ...DEFAULT_IMAGE_MODELS,
   ]);
@@ -1187,7 +1188,28 @@ function ImagePageContent({
 
     const loadImageModels = async () => {
       const providerModels = getSessionProviderImageModels(session);
-      const available = mergeImageModels(providerModels, DEFAULT_IMAGE_MODELS);
+      let available = providerModels.length ? providerModels : DEFAULT_IMAGE_MODELS;
+      if (usesSharedModels) {
+        setModelsRefreshing(true);
+        try {
+          const catalog = await fetchImageModelCatalog(modelRefreshVersion > 0);
+          if (cancelled) return;
+          available = catalog.models.map((item) => item.model);
+          setModelCatalog(catalog.models);
+          if (catalog.stale) {
+            toast.warning("模型目录暂时无法同步，正在使用上次列表或默认配置");
+          } else if (modelRefreshVersion > 0) {
+            toast.success("模型列表和价格已刷新");
+          }
+        } catch {
+          if (!cancelled) toast.error("模型列表刷新失败，请稍后重试");
+          return;
+        } finally {
+          if (!cancelled) setModelsRefreshing(false);
+        }
+      } else {
+        setModelCatalog([]);
+      }
       const storedModel =
         session?.preferences?.imageModel ||
         (typeof window !== "undefined"
@@ -1207,7 +1229,7 @@ function ImagePageContent({
         if (available.includes(current)) {
           return current;
         }
-        return normalizeStoredImageModel(storedModel, available);
+        return available.length ? normalizeStoredImageModel(storedModel, available) : "";
       });
     };
 
@@ -1215,7 +1237,7 @@ function ImagePageContent({
     return () => {
       cancelled = true;
     };
-  }, [session, session?.preferences?.imageModel]);
+  }, [session, session?.preferences?.imageModel, usesSharedModels, modelRefreshVersion]);
 
   // 切换会话时保存旧会话滚动位置，并隐藏容器防止闪烁
   useLayoutEffect(() => {
@@ -2391,6 +2413,11 @@ function ImagePageContent({
       return;
     }
 
+    if (!imageModels.includes(imageModel)) {
+      toast.error("当前没有可用的所选模型，请刷新模型列表");
+      return;
+    }
+
     const hasReferenceImage =
       referenceImages.length > 0 || referenceImageFiles.length > 0;
     const effectiveImageMode: ImageConversationMode = hasReferenceImage
@@ -2529,6 +2556,9 @@ function ImagePageContent({
         imageQuality={imageQuality}
         imageModel={imageModel}
         imageModels={imageModels}
+        modelCatalog={usesSharedModels ? modelCatalog : []}
+        modelsRefreshing={modelsRefreshing}
+        onRefreshModels={usesSharedModels ? () => setModelRefreshVersion((value) => value + 1) : undefined}
         activeTaskCount={activeTaskCount}
         referenceImages={referenceImages}
         textareaRef={textareaRef}

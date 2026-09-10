@@ -828,6 +828,16 @@ export async function testModelProvider(body: ProviderTestRequest) {
   });
 }
 
+export async function fetchImageModelCatalog(refresh = false) {
+  return httpRequest<{
+    models: NewAPIManagementModel[];
+    stale: boolean;
+    updated_at: number | null;
+  }>(`/api/auth/image-models?refresh=${refresh}`, {
+    redirectOnUnauthorized: false,
+  });
+}
+
 export async function fetchNewAPIManagement() {
   return httpRequest<NewAPIManagementResponse>("/api/auth/newapi-management", {
     redirectOnUnauthorized: false,
