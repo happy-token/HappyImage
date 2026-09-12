@@ -591,11 +591,13 @@ def create_router() -> APIRouter:
         refresh: bool = False,
         authorization: str | None = Header(default=None),
     ):
-        resolve_identity_for_request(request, authorization)
+        identity = resolve_identity_for_request(request, authorization)
         catalog = await run_in_threadpool(
             newapi_binding_service.get_image_model_catalog, refresh=refresh
         )
-        return JSONResponse(catalog, headers={"Cache-Control": "private, no-store"})
+        from services.image_model_health import image_model_health
+
+        return JSONResponse(image_model_health.annotate(identity, catalog), headers={"Cache-Control": "private, no-store"})
 
     @router.get("/api/auth/newapi-management")
     async def newapi_management(

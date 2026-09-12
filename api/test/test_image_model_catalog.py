@@ -27,7 +27,7 @@ def test_ttl_refresh_removal_and_outage_retains_empty_success():
     catalog = ImageModelCatalog()
     with patch.object(catalog, "_fetch", side_effect=[[{"model": "new"}], [], OSError("offline")]) as fetch, patch("services.image_model_catalog.time.monotonic", return_value=0) as clock:
         first = catalog.get(SETTINGS, [])
-        clock.return_value = 30
+        clock.return_value = 10
         assert catalog.get(SETTINGS, []) == first
         assert fetch.call_count == 1
         assert catalog.get(SETTINGS, [], refresh=True)["models"] == []

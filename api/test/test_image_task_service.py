@@ -97,6 +97,47 @@ class ImageTaskServiceTests(unittest.TestCase):
             retention_days_getter=lambda: 30,
         )
 
+    def test_health_blocks_repeat_charge_but_preserves_idempotency(self):
+        from services.image_model_health import ImageModelHealth
+        identity = {**OWNER, "model_providers": [{"id": "newapi-default", "selected": True}]}
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            health = ImageModelHealth(Path(tmp_dir) / "health.json")
+            def failing(_payload):
+                raise RuntimeError("unsupported model")
+            service = self.make_service(Path(tmp_dir) / "tasks.json", generation_handler=failing)
+            with patch("services.image_task_service.image_model_health", health):
+                args = dict(client_task_id="first", prompt="test", model="m", size=None)
+                service.submit_generation(identity, **args)
+                wait_for_task(service, identity, "first", "error")
+                self.assertEqual(service.submit_generation(identity, **args)["status"], "error")
+                with self.assertRaises(ValueError):
+                    service.submit_generation(identity, **{**args, "client_task_id": "second"})
+                self.assertEqual(health.get(identity, "m", "edit")["status"], "unknown")
+
+    def test_empty_upstream_result_disables_model_temporarily(self):
+        from services.image_model_health import ImageModelHealth
+        identity = {**OWNER, "model_providers": [{"id": "newapi-default", "selected": True}]}
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            health = ImageModelHealth(Path(tmp_dir) / "health.json")
+            service = self.make_service(Path(tmp_dir) / "tasks.json", generation_handler=lambda _: {"data": [{}]})
+            with patch("services.image_task_service.image_model_health", health):
+                service.submit_generation(identity, client_task_id="empty", prompt="test", model="m", size=None)
+                wait_for_task(service, identity, "empty", "error")
+                self.assertEqual(health.get(identity, "m", "generate")["status"], "unavailable")
+
+    def test_local_storage_failure_does_not_disable_upstream(self):
+        from services.image_model_health import ImageModelHealth
+        identity = {**OWNER, "model_providers": [{"id": "newapi-default", "selected": True}]}
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            health = ImageModelHealth(Path(tmp_dir) / "health.json")
+            service = self.make_service(Path(tmp_dir) / "tasks.json")
+            with patch("services.image_task_service.image_model_health", health), patch(
+                "services.image_task_service._materialize_gateway_images", side_effect=RuntimeError("disk full")
+            ):
+                service.submit_generation(identity, client_task_id="local-failure", prompt="test", model="m", size=None)
+                wait_for_task(service, identity, "local-failure", "error")
+                self.assertEqual(health.get(identity, "m", "generate")["status"], "available")
+
     def test_submit_generation_returns_prompt_and_client_task_metadata(self):
         identity = {"id": "user-1", "role": "admin", **GATEWAY_FIELDS}
 

@@ -33,7 +33,7 @@ class ImageModelCatalog:
                 self._stale = True
             now = time.monotonic()
             # Bound manual refreshes too, so every page click cannot hit NewAPI.
-            ttl = 5 if refresh else 60
+            ttl = 5 if refresh else 15
             if self._checked_at is None or now - self._checked_at >= ttl:
                 try:
                     models = self._fetch(url, group)

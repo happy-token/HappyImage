@@ -628,6 +628,13 @@ export type NewAPIManagementToken = {
 
 export type NewAPIModelBillingType = "usage" | "per_request";
 
+export type ImageModelAvailability = {
+  status: "unknown" | "available" | "unavailable";
+  reason: string;
+  checked_at?: number;
+  expires_at?: number;
+};
+
 export type NewAPIManagementModel = {
   model: string;
   group: string;
@@ -635,6 +642,7 @@ export type NewAPIManagementModel = {
   quota_type?: number;
   price: number;
   source?: "newapi" | "settings";
+  availability?: Partial<Record<"generate" | "edit", ImageModelAvailability>>;
 };
 
 export type NewAPIQuotaSummary = {

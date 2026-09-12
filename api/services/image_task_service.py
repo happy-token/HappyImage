@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 from services.config import DATA_DIR, config
 from services.content_filter import request_text
 from services.image_storage_service import image_storage_service
+from services.image_model_health import image_model_health
 from services.image_task_store import ImageTaskStore, JSONImageTaskStore, create_image_task_store
 from services.log_service import LOG_TYPE_CALL, log_service
 
@@ -431,6 +432,7 @@ class ImageTaskService:
                 if cleaned:
                     self._save_locked()
                 return _public_task(task)
+            image_model_health.require_available(identity, _clean(payload.get("model"), "gpt-image-2"), mode)
             task = {
                 "id": task_id,
                 "owner_id": owner,
@@ -498,16 +500,25 @@ class ImageTaskService:
             gateway_base_url = _clean(payload_with_progress.get("model_gateway_base_url"))
             gateway_api_key = _clean(payload_with_progress.get("model_gateway_api_key"))
             model_gateway_service.ensure_available(gateway_base_url, gateway_api_key)
-            result = (
-                model_gateway_service.edit_image(payload_with_progress)
-                if mode == "edit"
-                else model_gateway_service.generate_image(payload_with_progress)
-            )
+            image_model_health.require_available(identity, model, mode)
+            try:
+                result = (
+                    model_gateway_service.edit_image(payload_with_progress)
+                    if mode == "edit"
+                    else model_gateway_service.generate_image(payload_with_progress)
+                )
+            except Exception as exc:
+                image_model_health.record(identity, model, mode, exc)
+                raise
             if not isinstance(result, dict):
                 raise RuntimeError("image task returned streaming result unexpectedly")
             data = result.get("data")
             account_email = _clean(result.get("_account_email") or result.get("account_email"))
-            if not isinstance(data, list) or not data:
+            if not isinstance(data, list) or not any(
+                isinstance(item, dict) and any(isinstance(item.get(field), str) and item[field].strip()
+                                             for field in ("url", "b64_json"))
+                for item in data
+            ):
                 upstream = _clean(result.get("message"))
                 if upstream:
                     message = upstream
@@ -516,7 +527,9 @@ class ImageTaskService:
                 error = RuntimeError(message)
                 if account_email:
                     setattr(error, "account_email", account_email)
+                image_model_health.record(identity, model, mode, error if upstream else RuntimeError("没有返回图片"))
                 raise error
+            image_model_health.record(identity, model, mode)
             base_url = _clean(payload.get("base_url"))
             owner_id = _owner_id(identity)
             data = _materialize_gateway_images(data, base_url=base_url, owner_id=owner_id)

@@ -55,6 +55,7 @@ import {
   type ImageModel,
   type ImageTask,
 } from "@/lib/api";
+import { isImageModelUnavailable } from "@/lib/image-model-availability";
 import { consumeGalleryPromptIntent } from "@/lib/gallery-intent";
 import {
   getValidatedAuthSession,
@@ -1188,25 +1189,29 @@ function ImagePageContent({
   useEffect(() => {
     let cancelled = false;
 
-    const loadImageModels = async () => {
+    let loading = false;
+    const loadImageModels = async (background = false) => {
+      if (loading || (background && document.visibilityState !== "visible")) return;
+      loading = true;
       const providerModels = getSessionProviderImageModels(session);
       let available = providerModels.length ? providerModels : DEFAULT_IMAGE_MODELS;
       if (usesSharedModels) {
         setModelsRefreshing(true);
         try {
-          const catalog = await fetchImageModelCatalog(modelRefreshVersion > 0);
+          const catalog = await fetchImageModelCatalog(!background && modelRefreshVersion > 0);
           if (cancelled) return;
           available = catalog.models.map((item) => item.model);
           setModelCatalog(catalog.models);
-          if (catalog.stale) {
+          if (catalog.stale && !background) {
             toast.warning("模型目录暂时无法同步，正在使用上次列表或默认配置");
-          } else if (modelRefreshVersion > 0) {
+          } else if (modelRefreshVersion > 0 && !background) {
             toast.success("模型列表和价格已刷新");
           }
         } catch {
-          if (!cancelled) toast.error("模型列表刷新失败，请稍后重试");
+          if (!cancelled && !background) toast.error("模型列表刷新失败，请稍后重试");
           return;
         } finally {
+          loading = false;
           if (!cancelled) setModelsRefreshing(false);
         }
       } else {
@@ -1225,6 +1230,7 @@ function ImagePageContent({
 
       setImageModels(available);
       setImageModel((current) => {
+        if (background) return available.includes(current) ? current : "";
         if (storedModel && available.includes(storedModel)) {
           return storedModel;
         }
@@ -1236,8 +1242,17 @@ function ImagePageContent({
     };
 
     void loadImageModels();
+    const refreshVisible = () => { void loadImageModels(true); };
+    const timer = usesSharedModels ? window.setInterval(refreshVisible, 15_000) : undefined;
+    if (usesSharedModels) {
+      window.addEventListener("focus", refreshVisible);
+      document.addEventListener("visibilitychange", refreshVisible);
+    }
     return () => {
       cancelled = true;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refreshVisible);
+      document.removeEventListener("visibilitychange", refreshVisible);
     };
   }, [session, session?.preferences?.imageModel, usesSharedModels, modelRefreshVersion]);
 
@@ -2415,7 +2430,9 @@ function ImagePageContent({
       return;
     }
 
-    if (!imageModels.includes(imageModel)) {
+    if (!imageModels.includes(imageModel) || isImageModelUnavailable(
+      modelCatalog, imageModel, referenceImages.length || referenceImageFiles.length ? "edit" : "generate",
+    )) {
       toast.error("当前没有可用的所选模型，请刷新模型列表");
       return;
     }

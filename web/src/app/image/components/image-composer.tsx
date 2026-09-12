@@ -31,7 +31,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import type { ImageModel } from "@/lib/api";
+import type { ImageModel, NewAPIManagementModel } from "@/lib/api";
+import { imageModelState, isImageModelUnavailable } from "@/lib/image-model-availability";
 import { cn } from "@/lib/utils";
 
 type ImageComposerProps = {
@@ -44,7 +45,7 @@ type ImageComposerProps = {
   imageQuality: string;
   imageModel: ImageModel;
   imageModels: ImageModel[];
-  modelCatalog?: Array<{ model: string; billing_type: string; price: number }>;
+  modelCatalog?: NewAPIManagementModel[];
   modelsRefreshing?: boolean;
   onRefreshModels?: () => void;
   activeTaskCount: number;
@@ -262,14 +263,17 @@ export function ImageComposer({
       })),
     [referenceImages]
   );
+  const modelMode = referenceImages.length ? "edit" : "generate";
+  const selectedUnavailable = isImageModelUnavailable(modelCatalog, imageModel, modelMode);
   const modelOptions = useMemo(
     () =>
       imageModels.map((model) => ({
         value: model,
         label: formatImageModelLabel(model),
         price: modelCatalog.find((item) => item.model === model),
+        state: imageModelState(modelCatalog, model, modelMode),
       })),
-    [imageModels, modelCatalog]
+    [imageModels, modelCatalog, modelMode]
   );
   const qualityLabel =
     qualityOptions.find((option) => option.value === imageQuality)?.label ||
@@ -581,6 +585,8 @@ export function ImageComposer({
                                 <SelectItem
                                   key={option.value}
                                   value={option.value}
+                                  disabled={option.state?.status === "unavailable"}
+                                  title={option.state?.reason}
                                   className="pl-10"
                                   style={{
                                     backgroundImage: "url('/openai.svg')",
@@ -590,6 +596,11 @@ export function ImageComposer({
                                   }}
                                 >
                                   {option.label}
+                                  {option.state && (
+                                    <span className="ml-2 text-xs">
+                                      {option.state.status === "unavailable" ? "暂不可用" : option.state.status === "available" ? "最近调用成功" : "待验证"}
+                                    </span>
+                                  )}
                                   {option.price && (
                                     <span className="ml-2 text-xs text-stone-500">
                                       {option.price.billing_type === "per_request"
@@ -755,7 +766,8 @@ export function ImageComposer({
                 <button
                   type="button"
                   onClick={() => void onSubmit()}
-                  disabled={!prompt.trim() || imageModels.length === 0}
+                  disabled={!prompt.trim() || !imageModels.includes(imageModel) || selectedUnavailable}
+                  title={selectedUnavailable ? imageModelState(modelCatalog, imageModel, modelMode)?.reason : undefined}
                   className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-white shadow-sm transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:bg-zinc-300 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200 dark:disabled:bg-zinc-700 dark:disabled:text-zinc-400 sm:size-10"
                   aria-label={
                     referenceImages.length > 0 ? "编辑图片" : "生成图片"
