@@ -410,6 +410,7 @@ class NewAPIBindingService:
 
         username = NewAPIBindingService._newapi_username(cleaned_email, cleaned_subject)
         display_name = cleaned_name or username
+        initial_quota = NewAPIBindingService._get_newapi_new_user_quota(cursor)
         now = int(time.time())
         password = secrets.token_urlsafe(32)
         access_token = secrets.token_hex(16)
@@ -436,7 +437,7 @@ class NewAPIBindingService:
             1,
             cleaned_email,
             access_token,
-            0,
+            initial_quota,
             0,
             0,
             _clean(user_group) or "default",
@@ -453,6 +454,23 @@ class NewAPIBindingService:
         )
         row = cursor.fetchone()
         return int(row[0])
+
+    @staticmethod
+    def _get_newapi_new_user_quota(cursor: Any) -> int:
+        cursor.execute(
+            "SELECT value FROM options WHERE key = %s",
+            ("QuotaForNewUser",),
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise ValueError("NewAPI QuotaForNewUser option is missing")
+        try:
+            quota = int(_clean(row[0]))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("NewAPI QuotaForNewUser option is invalid") from exc
+        if quota < 0:
+            raise ValueError("NewAPI QuotaForNewUser option cannot be negative")
+        return quota
 
     @staticmethod
     def _set_newapi_user_group(cursor: Any, user_id: int, user_group: str) -> None:
