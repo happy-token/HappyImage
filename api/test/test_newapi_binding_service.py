@@ -324,6 +324,8 @@ class FakeCursor:
             self.next_result = (self.connection.access_token,)
         elif "insert into users" in compact:
             self.next_result = (self.connection.created_user_id,)
+        elif "select value from options where key" in compact:
+            self.next_result = (str(self.connection.new_user_quota),)
         elif "insert into tokens" in compact:
             self.next_result = (self.connection.created_token_id,)
         elif "update tokens set key" in compact:
@@ -361,10 +363,12 @@ class FakeSQLConnection:
         user_id: int | None = 10,
         token_id: int | None = 20,
         token: str = "raw-token",
+        new_user_quota: int = 2_500_000,
     ) -> None:
         self.user_id = user_id
         self.token_id = token_id
         self.token = token
+        self.new_user_quota = new_user_quota
         self.access_token = "newapi-access-token"
         self.created_user_id = 11
         self.created_token_id = 21
@@ -643,6 +647,12 @@ def test_newapi_binding_direct_sql_creates_missing_user_and_token():
     assert isinstance(result["tokens"], list)
     assert any("insert into users" in query.lower() for query, _params in connection.queries)
     assert any("insert into tokens" in query.lower() for query, _params in connection.queries)
+    insert_params = next(
+        params
+        for query, params in connection.queries
+        if "insert into users" in query.lower()
+    )
+    assert insert_params[7] == 2_500_000
 
 
 def _failing_host_docker_sql_service() -> NewAPIBindingService:
