@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useEffect, useRef, useState } from "react";
-import { Check, Clock3, Copy, CreditCard, Download, EyeOff, ExternalLink, FolderOpen, LifeBuoy, LoaderCircle, Maximize2, Pencil, RotateCcw, Sparkles, Stamp, ThumbsDown, ThumbsUp, Trash2 } from "lucide-react";
+import { Check, Clock3, Copy, CreditCard, Download, EyeOff, ExternalLink, FolderOpen, LoaderCircle, Maximize2, Pencil, RotateCcw, Sparkles, Stamp, ThumbsDown, ThumbsUp, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { fetchAuthenticatedImageBlob } from "@/components/authenticated-image";
@@ -21,7 +21,7 @@ import {
   buildHappyTokenTopupUrl,
   isHappyTokenBillingError,
 } from "@/lib/happytoken";
-import { SUPPORT_EMAIL } from "@/lib/contact";
+import { ErrorContactHelp } from "@/app/image/components/error-contact-help";
 import { buildWatermarkedFilename, createTextWatermarkedBlob, triggerBlobDownload } from "@/lib/watermark-image";
 import type { ImageConversation, ImageTurnStatus, StoredImage, StoredReferenceImage } from "@/store/image-conversations";
 
@@ -69,19 +69,6 @@ function getSaveFilePicker() {
       types?: Array<{ description: string; accept: Record<string, string[]> }>;
     }) => Promise<FileSavePicker>;
   }).showSaveFilePicker;
-}
-
-function buildSupportHref(error?: string, taskId?: string) {
-  const params = new URLSearchParams({
-    subject: "HappyImage 图片生成失败",
-    body: [
-      "我在 HappyImage 生成图片时遇到失败。",
-      "",
-      `错误信息：${error || "生成失败"}`,
-      `任务 ID：${taskId || "-"}`,
-    ].join("\n"),
-  });
-  return `mailto:${SUPPORT_EMAIL}?${params.toString()}`;
 }
 
 // Blob URL 缓存：避免 base64 超长字符串在 DOM 中，改用短小的 blob: URL
@@ -768,10 +755,6 @@ export function ImageResults({
 
                       if (image.status === "error") {
                         const showTopupAction = isHappyTokenBillingError(image.error);
-                        const supportHref = buildSupportHref(
-                          image.error,
-                          image.taskId
-                        );
                         return (
                           <div key={image.id} className="break-inside-avoid">
                             <div
@@ -808,14 +791,8 @@ export function ImageResults({
                                     <ExternalLink className="size-3" />
                                   </a>
                                 ) : null}
-                                <a
-                                  href={supportHref}
-                                  className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-1 text-[10px] font-medium text-rose-600 shadow-sm transition hover:bg-rose-100 sm:px-3 sm:text-xs"
-                                >
-                                  <LifeBuoy className="size-3" />
-                                  联系支持
-                                </a>
                               </div>
+                              <ErrorContactHelp error={image.error} taskId={image.taskId} />
                             </div>
                             </div>
                             <div className="flex flex-col gap-1 px-0.5 py-1 text-[10px] sm:flex-row sm:items-center sm:justify-between sm:gap-2 sm:px-3 sm:py-3 sm:text-xs">
